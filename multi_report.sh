@@ -12,8 +12,8 @@
 ### Version v1.4, v1.5, v1.6 FreeNAS/TrueNAS (joeschmuck)
 
 ### Changelog:
-# v1.6d (17 September 2022)
-#   - Thanks goes out to ChrisRJ for offering some great suggestions to enhance and optimize the script.  Maybe we can get him to take the script over?
+# v1.6d (18 September 2022)
+#   - Thanks goes out to ChrisRJ for offering some great suggestions to enhance and optimize the script.
 #   - Updated gptid text and help text areas (clarifing inforamtion)
 #   - Updated the -dump parameter to -dump [all] and included non-SMART attachments.
 #   - Added Automatic UDMA_CRC, MultiZone, and Reallocated Sector Compensation to -config advanced option K.
@@ -22,7 +22,7 @@
 #   - Added Raw Read Error Rates chart column.
 #   - Added compensation for Seagate Seek Error Rates and Raw Read Error Rates.
 #   - Added Automatic Configuration File Update feature.
-#   ---- Clean Up Code
+#
 #
 # v1.6c (28 August 2022)
 #   - Supports external configuration file (but not required).
@@ -419,7 +419,7 @@ NVM_Wear_Level_Title="Wear Level"
 #  from other systems and they will not have any effect on a system where the drive does not exist.  This is great
 #  to have one configuration file that can be used on several systems.
 #
-# Live Example: Ignore_Drives="VMWare,1JUMLBD,21HNSAFC21410E"
+# Example: Ignore_Drives="VMWare,1JUMLBD,21HNSAFC21410E"
  
 Ignore_Drives="none"
 
@@ -447,7 +447,7 @@ Ignore_Drives="none"
 #
 # The below example shows drive WD-WMC4N2578099 has 1 UDMA_CRC_Error, drive S2X1J90CA48799 has 2 errors.
 #
-# Live Example: "WD-WMC4N2578099:1,S2X1J90CA48799:2,P02618119268:1"
+# Example: "WD-WMC4N2578099:1,S2X1J90CA48799:2,P02618119268:1"
  
 CRC_Errors="none"
 
@@ -477,7 +477,8 @@ Multi_Zone="none"
 #   Use same format as CRC_Errors (see above).
  
 Bad_Sectors="none"
- 
+
+
 ####### Warranty Expiration Date
 # What does it do:
 # This section is used to add warranty expirations for designated drives and to create an alert when they expire.
@@ -528,13 +529,14 @@ logfile_messages="/tmp/smart_report_messages.tmp"
 boundary="gc0p4Jq0M2Yt08jU534c0p"
 
 if [[ $softver != "Linux" ]]; then
-programver="Multi-Report v1.6d-beta3 dtd:2022-09-17 (TrueNAS Core "$(cat /etc/version | cut -d " " -f1 | sed 's/TrueNAS-//')")"
+programver="Multi-Report v1.6d-beta3 dtd:2022-09-18 (TrueNAS Core "$(cat /etc/version | cut -d " " -f1 | sed 's/TrueNAS-//')")"
 else
-programver="Multi-Report v1.6d-beta3 dtd:2022-09-17 (TrueNAS Scale "$(cat /etc/version)")"
+programver="Multi-Report v1.6d-beta3 dtd:2022-09-18 (TrueNAS Scale "$(cat /etc/version)")"
 fi
 
-#If the config file format changes, this is the latest working date, anything older must be updated.
-valid_config_version_date="2022-09-17"
+# This date denotes the earliest multi_report_config.txt format that works correctly with the
+# script. This is the latest working date, anything earlier must be updated.
+valid_config_version_date="2022-09-18"
 
 ##########################
 ##########################
@@ -562,10 +564,14 @@ load_config () {
 if test -e "$Config_File_Name"; then
 . "$Config_File_Name"
 
-# Lets test if the config file needs to be updated first.
-config_version_date="$(cat "$Config_File_Name" | grep "dtd" | cut -d ':' -f 2 | cut -d ' ' -f 1 )"
-echo "Configuration File Version Date: "$config_version_date
-if [[ $config_version_date < $valid_config_version_date ]]; then echo "Found Old Configuration File"; echo "Automatically updating configuration file..."; update_config_file; echo "Running normal script"; fi
+   # Lets test if the config file needs to be updated first.
+   config_version_date="$(cat "$Config_File_Name" | grep "dtd" | cut -d ':' -f 2 | cut -d ' ' -f 1 )"
+   echo "Configuration File Version Date: "$config_version_date
+   if [[ $config_version_date < $valid_config_version_date ]]; then
+      echo "Found Old Configuration File"
+      echo "Automatically updating configuration file..."
+      update_config_file; echo "Running normal script"
+   fi
    . "$Config_File_Name"
 else
    echo "No Config File Exists"
@@ -592,48 +598,44 @@ purge_exportdata () {
 
 # Delete temp file if it exists
 if test -e "/tmp/temp_purge_file.csv"; then
-rm "/tmp/temp_purge_file.csv"
-# Create the header
+   rm "/tmp/temp_purge_file.csv"
+   # Create the header
   printf "Date,Time,Device ID,Drive Type,Serial Number,SMART Status,Temp,Power On Hours,Wear Level,Start Stop Count,Load Cycle,Spin Retry,Reallocated Sectors,\
 ReAllocated Sector Events,Pending Sectors,Offline Uncorrectable,UDMA CRC Errors,Seek Error Rate,Multi Zone Errors,Read Error Rate,Helium Level\n" > "/tmp/temp_purge_file.csv"
 fi
 
- {
+   {
+   input="$statistical_data_file"
 
-input="$statistical_data_file"
+   if [ $softver != "Linux" ]; then
+      expireDate=$(date -v -"$expDataPurge"d +%Y/%m/%d)
+   else
+      expireDate=$(date -d "$expDataPurge days ago" +%Y/%m/%d) 
+   fi
 
-if [ $softver != "Linux" ]; then
-   expireDate=$(date -v -"$expDataPurge"d +%Y/%m/%d)
-else
-   expireDate=$(date -d "$expDataPurge days ago" +%Y/%m/%d) 
-fi
+   awk -v expireDate="$expireDate" '
+   BEGIN {
+      FS=OFS=","
+      FPAT = "([^,]+)|(\"[^\"]+\")"
+      count=0
+   }
 
-awk -v expireDate="$expireDate" '
-BEGIN {
-  FS=OFS=","
-  FPAT = "([^,]+)|(\"[^\"]+\")"
-    count=0
- }
+   data=$1
 
-data=$1
+   {
+   FS=OFS=" "
 
-     {
-FS=OFS=" "
+   if (count !=0) if ($1 >= expireDate) {
+      printf ("%s\n", data) >> "/tmp/temp_purge_file.csv"
+      }
+   ++count
+   }
 
-if (count !=0) if ($1 >= expireDate) {
-  printf ("%s\n", data) >> "/tmp/temp_purge_file.csv"
-  }
- ++count
-     }
-
-END {
-    }
-' $input >/dev/null
-
-}
- 
+   END {
+       }
+   ' $input >/dev/null
+   }
 cp -R "/tmp/temp_purge_file.csv" "$statistical_data_file"
-
 }
 
 
