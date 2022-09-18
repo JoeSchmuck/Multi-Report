@@ -23,9 +23,15 @@
 #   - Added compensation for Seagate Seek Error Rates and Raw Read Error Rates.
 #   - Added Automatic Configuration File Update feature.
 #   ---- Cleaning/Optimizing Code In Progress
-#   ---- Can we add a routine to verify a file is not open before writing to it?  If not then delay until it is closed?
-#   ------- Fuser is available in both TrueNAS versions and does seem to work.  Maybe a routine to check for a file
-#   ------- open and wait until it is closed before proceeding?  I like this option so far.  Need to test it out.
+#   --- Future Thoughts - Periodically the chart will fail to be formatted correctly.  I think this is due
+#   ----- to so many writes to /tmp, in spite of it being all in RAM.
+#   ---- Added new routine called check_open_file and called with filename.  This will check to see if
+#   ------ the file is open and delay running the next instruction up to 60 seconds if needed.
+#   ------ I still don't know how I will call this routine, most of my file writes are pipes.
+#   ------ I could check the file before the routine starts, that "should" work.
+#   ------ But I did add this routine for several locations for the main log file, not sure I like this though.
+#   ---- I should probably use variables for the warning and critical log files since I write to these files a lot,
+#   ------ this will make things hopefully work smoother.  Fewer writes to /tmp space.
 #
 #
 # v1.6c (28 August 2022)
@@ -589,6 +595,25 @@ else
 fi
 }
 
+
+#################### CHECK OPEN FILE #####################
+# Checks if trhe file is open before continuing.
+# Passes $1=filename
+# Loop for up to 60 seconds waiting for the file to close.
+
+check_open_file () {
+for (( y=1; y<=60; y++ ))
+do
+   check_file=$1
+   result=`fuser -f $check_file 2>&1`
+   pid=`echo $result | cut -d ':' -f 2`
+   if [ -z "$pid" ]; then return; fi
+   echo "File $1 Open - Delayed"
+   y++
+   sleep .5
+done
+}
+
 #################### PURGE EXPORT DATA CSV FILE #######################
 
 purge_exportdata () {
@@ -601,7 +626,8 @@ rm "/tmp/temp_purge_file.csv"
   printf "Date,Time,Device ID,Drive Type,Serial Number,SMART Status,Temp,Power On Hours,Wear Level,Start Stop Count,Load Cycle,Spin Retry,Reallocated Sectors,\
 ReAllocated Sector Events,Pending Sectors,Offline Uncorrectable,UDMA CRC Errors,Seek Error Rate,Multi Zone Errors,Read Error Rate,Helium Level\n" > "/tmp/temp_purge_file.csv"
 fi
-
+check_open_file "/tmp/temp_purge_file.csv"
+check_open_file "$statistical_data_file"
  {
   input="$statistical_data_file"
 
@@ -830,6 +856,7 @@ if [ "$configBackup" == "true" ]; then
     filename2="Stat_Data"
     ### Test config integrity
 
+
     if ! [ "$(sqlite3 /data/freenas-v1.db "pragma integrity_check;")" == "ok" ]; then
         # Config integrity check failed, set MIME content type to html and print warning
         (
@@ -839,7 +866,7 @@ if [ "$configBackup" == "true" ]; then
             echo "<b>You should correct this problem as soon as possible!</b>"
             echo "<br>"
         ) >> "$logfile"
-
+check_open_file $logfile
     else
         # Config integrity check passed; copy config db, generate checksums, make .tar.gz archive
         cp /data/freenas-v1.db "/tmp/${filename}.db"
@@ -885,7 +912,7 @@ else
         echo "--${boundary}"
         echo "Content-Type: text/html"
     ) >> "$logfile"
-
+check_open_file $logfile
   fi
 
 else
@@ -895,7 +922,7 @@ else
         echo "--${boundary}"
         echo "Content-Type: text/html"
     ) >> "$logfile"
-
+check_open_file $logfile
 fi
 
 }
@@ -928,7 +955,7 @@ echo $programver"<br>Report Run "$(date +%d-%b-%Y)" @ "$timestamp
     echo "  <th style=\"text-align:center; width:80px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$Zpool_Scrub_Duration_Title"</th>"
     echo "</tr>"
 ) >> "$logfile"
-
+check_open_file $logfile
 pools=$(zpool list -H -o name)
 poolNum=0
 for pool in $pools; do
@@ -1074,7 +1101,7 @@ fi
     if [ "$scrubErrors" != "$non_exist_value" ] && [ "$scrubErrors" != "0" ]; then scrubErrorsColor="$warnColor"; echo "$pool - Scrub Errors<br>" >> "$logfile_critical"; else scrubErrorsColor="$bgColor"; fi
     if [ "$(echo "$scrubAge" | awk '{print int($1)}')" -gt "$scrubAgeWarn" ]; then scrubAgeColor="$warnColor"; echo "$pool - Scrub Age" >> "$logfile_warning"; else scrubAgeColor="$bgColor"; fi
     if [ "$scrubAge" == "In Progress" ]; then scrubAgeColor="$blueColor"; fi
-
+check_open_file $logfile
     (
         # Use the information gathered above to write the date to the current table row
         printf "<tr style=\"background-color:%s;\">
@@ -1093,7 +1120,7 @@ fi
         </tr>\\n" "$bgColor" "$pool" "$statusColor" "$status" "$pool_size" "$pool_free" "$usedColor" "$used" "$readErrorsColor" "$readErrors" "$writeErrorsColor" "$writeErrors" "$cksumErrorsColor" \
         "$cksumErrors" "$scrubRepBytesColor" "$scrubRepBytes" "$scrubErrorsColor" "$scrubErrors" "$scrubAgeColor" "$scrubAge" "$scrubTime"
     ) >> "$logfile"
-
+check_open_file $logfile
 done
 # End of zpool status table
 echo "</table>" >> "$logfile"
@@ -1416,7 +1443,7 @@ if [[ "$1" == "NVM" ]] && [[ "$NVM_Power_On_Hours" == "true" ]]; then ((Columns=
 if [[ "$1" == "NVM" ]] && [[ "$NVM_Wear_Level" == "true" ]]; then ((Columns=Columns+1)); fi;
 
 #echo "Columns="$Columns
-
+check_open_file $logfile
 (
     # Write HTML table headers to log file
     echo "<br><br>"
@@ -1507,7 +1534,7 @@ if [[ "$1" == "NVM" ]] && [[ "$NVM_Wear_Level" == "true" ]]; then ((Columns=Colu
 # Call function with end_table "HDD|SSD|NVM"
 
 write_table () {
-
+check_open_file $logfile
 (
 printf "<tr style=\"background-color:%s;\">\n" $bgColor;
 if [[ "$1" == "HDD" ]] && [[ "$HDD_Device_ID" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">/dev/%s</td>\n" "$deviceStatusColor" "$drive"; fi
@@ -1592,7 +1619,7 @@ if [[ "$1" == "SSD" ]] && [[ "$SSD_Last_Test_Type" == "true" ]]; then printf "<t
 #############################  END THE TABLE ###########################
 
 end_table () {
-
+check_open_file $logfile
 (
     echo "</tr>"
  echo "</table>"
@@ -1607,20 +1634,20 @@ detailed_report () {
 
 ###### Detailed Report Section (monospace text)
 testfile=$1
-
+check_open_file $logfile
 (
 
 echo "<pre style=\"font-size:20px\">"
 echo "<b>Multi-Report Text Section</b>"
 echo "<pre style=\"font-size:14px\">"
 ) >> "$logfile"
-
+check_open_file $logfile
 if test -e "$Config_File_Name"; then
 echo "<b>External Configuration File in Use</b><br>" >> "$logfile"
 else
 echo "<b>No External Configuration File Exists</b><br>" >> "$logfile"
 fi
-
+check_open_file $logfile
 if [[ $expDataEnable == "true" ]]; then
 if [[ "$(echo $statistical_data_file | grep "/tmp/")" ]]; then
  echo "<b><span style='color:darkred;'>The Statistical Data File is located in the /tmp directory and is not permanent.<br>Recommend changing to a proper dataset.</span></b><br>" >> "$logfile"; fi
@@ -1634,6 +1661,7 @@ if [[ $statistical_data_file_created == "1" ]]; then echo "Statistical Data File
 fi
 
 ### Lets write out the error messages if there are any, Critical first followed by Warning
+check_open_file $logfile
 (
 
 if test -e "$logfile_messages"; then
@@ -1678,6 +1706,7 @@ else
 drives_in_zpool=$(zpool status -P "$pool" | grep "/dev/disk" | awk -F '[/]' '{print $5}' | cut -d " " -f1)
 fi
 driveit=0
+check_open_file $logfile
     (
       # Create a simple header and drop the output of zpool status -v
         echo "<b>########## ZPool status report for ${pool} ##########</b>"
@@ -1708,7 +1737,7 @@ done
   fi
 ### SMART status for each drive - SMART Enabled
  for drive in $drives; do
-
+check_open_file $logfile
 if [[ $drive == "ada50" || $drive == "nvme50"  ]] ; then
     brand="$(cat "$testfile" | grep "Model Family" | awk '{print $3, $4, $5}')"
     serial="$(cat "$testfile" | grep "Serial Number" | awk '{print $3}')"
@@ -1737,7 +1766,7 @@ else
         echo "<br>"
     ) >> "$logfile"
 
-      
+ check_open_file $logfile     
  # SCT Error Recovery Control Report
        scterc="$(smartctl -l scterc /dev/"$drive" | tail -3 | head -2)"
     (
@@ -1757,7 +1786,7 @@ non_smart_report () {
 # I don't particularly use this but some folks might find it useful.
 # To activate it, in the variables set reportnonSMART=true.
 # It will list all drives where Non-SMART is true and remove devices starting with "cd", for example "cd0"
-
+check_open_file $logfile
 drives=$nonsmartdrives
 if [ $reportnonSMART == "true" ]; then 
 for drive in $drives; do
@@ -1791,7 +1820,7 @@ fi
 ############################## REMOVE UN-NEEDED JUNK AND FINALIZE EMAIL MESSAGE END #####################
 
 remove_junk_report () {
-
+check_open_file $logfile
 ### Remove some un-needed junk from the output
 sed -i -e '/smartctl/d' "$logfile"
 sed -i -e '/Copyright/d' "$logfile"
@@ -1814,6 +1843,7 @@ done
 for drive in $nonsmartdrives; do
   dump_drive_data
 done
+check_open_file $logfile
 (
   # Write MIME section header for file attachment (encoded with base64)
   echo "--${boundary}"
@@ -1834,7 +1864,7 @@ done
  ) >> "$logfile"
 
 fi
-
+check_open_file $logfile
 ### End details section, close MIME section
 (
     echo "</pre>"
