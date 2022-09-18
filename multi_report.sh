@@ -22,6 +22,10 @@
 #   - Added Raw Read Error Rates chart column.
 #   - Added compensation for Seagate Seek Error Rates and Raw Read Error Rates.
 #   - Added Automatic Configuration File Update feature.
+#   ---- Cleaning/Optimizing Code In Progress
+#   ---- Can we add a routine to verify a file is not open before writing to it?  If not then delay until it is closed?
+#   ------- Fuser is available in both TrueNAS versions and does seem to work.  Maybe a routine to check for a file
+#   ------- open and wait until it is closed before proceeding?  I like this option so far.  Need to test it out.
 #
 #
 # v1.6c (28 August 2022)
@@ -419,7 +423,7 @@ NVM_Wear_Level_Title="Wear Level"
 #  from other systems and they will not have any effect on a system where the drive does not exist.  This is great
 #  to have one configuration file that can be used on several systems.
 #
-# Example: Ignore_Drives="VMWare,1JUMLBD,21HNSAFC21410E"
+# Live Example: Ignore_Drives="VMWare,1JUMLBD,21HNSAFC21410E"
  
 Ignore_Drives="none"
 
@@ -447,7 +451,7 @@ Ignore_Drives="none"
 #
 # The below example shows drive WD-WMC4N2578099 has 1 UDMA_CRC_Error, drive S2X1J90CA48799 has 2 errors.
 #
-# Example: "WD-WMC4N2578099:1,S2X1J90CA48799:2,P02618119268:1"
+# Live Example: "WD-WMC4N2578099:1,S2X1J90CA48799:2,P02618119268:1"
  
 CRC_Errors="none"
 
@@ -477,8 +481,7 @@ Multi_Zone="none"
 #   Use same format as CRC_Errors (see above).
  
 Bad_Sectors="none"
-
-
+ 
 ####### Warranty Expiration Date
 # What does it do:
 # This section is used to add warranty expirations for designated drives and to create an alert when they expire.
@@ -534,9 +537,8 @@ else
 programver="Multi-Report v1.6d-beta3 dtd:2022-09-18 (TrueNAS Scale "$(cat /etc/version)")"
 fi
 
-# This date denotes the earliest multi_report_config.txt format that works correctly with the
-# script. This is the latest working date, anything earlier must be updated.
-valid_config_version_date="2022-09-18"
+#If the config file format changes, this is the latest working date, anything older must be updated.
+valid_config_version_date="2022-09-17"
 
 ##########################
 ##########################
@@ -564,14 +566,10 @@ load_config () {
 if test -e "$Config_File_Name"; then
 . "$Config_File_Name"
 
-   # Lets test if the config file needs to be updated first.
-   config_version_date="$(cat "$Config_File_Name" | grep "dtd" | cut -d ':' -f 2 | cut -d ' ' -f 1 )"
-   echo "Configuration File Version Date: "$config_version_date
-   if [[ $config_version_date < $valid_config_version_date ]]; then
-      echo "Found Old Configuration File"
-      echo "Automatically updating configuration file..."
-      update_config_file; echo "Running normal script"
-   fi
+# Lets test if the config file needs to be updated first.
+config_version_date="$(cat "$Config_File_Name" | grep "dtd" | cut -d ':' -f 2 | cut -d ' ' -f 1 )"
+echo "Configuration File Version Date: "$config_version_date
+if [[ $config_version_date < $valid_config_version_date ]]; then echo "Found Old Configuration File"; echo "Automatically updating configuration file..."; update_config_file; echo "Running normal script"; fi
    . "$Config_File_Name"
 else
    echo "No Config File Exists"
@@ -598,43 +596,41 @@ purge_exportdata () {
 
 # Delete temp file if it exists
 if test -e "/tmp/temp_purge_file.csv"; then
-   rm "/tmp/temp_purge_file.csv"
-   # Create the header
+rm "/tmp/temp_purge_file.csv"
+# Create the header
   printf "Date,Time,Device ID,Drive Type,Serial Number,SMART Status,Temp,Power On Hours,Wear Level,Start Stop Count,Load Cycle,Spin Retry,Reallocated Sectors,\
 ReAllocated Sector Events,Pending Sectors,Offline Uncorrectable,UDMA CRC Errors,Seek Error Rate,Multi Zone Errors,Read Error Rate,Helium Level\n" > "/tmp/temp_purge_file.csv"
 fi
 
-   {
-   input="$statistical_data_file"
+ {
+  input="$statistical_data_file"
 
-   if [ $softver != "Linux" ]; then
-      expireDate=$(date -v -"$expDataPurge"d +%Y/%m/%d)
-   else
-      expireDate=$(date -d "$expDataPurge days ago" +%Y/%m/%d) 
-   fi
+  if [ $softver != "Linux" ]; then
+     expireDate=$(date -v -"$expDataPurge"d +%Y/%m/%d)
+  else
+     expireDate=$(date -d "$expDataPurge days ago" +%Y/%m/%d) 
+  fi
 
-   awk -v expireDate="$expireDate" '
-   BEGIN {
-      FS=OFS=","
-      FPAT = "([^,]+)|(\"[^\"]+\")"
-      count=0
-   }
+  awk -v expireDate="$expireDate" '
+  BEGIN {
+    FS=OFS=","
+    FPAT = "([^,]+)|(\"[^\"]+\")"
+    count=0
+    }
+data=$1
+    {
+    FS=OFS=" "
 
-   data=$1
+    if (count !=0) if ($1 >= expireDate) {
+       printf ("%s\n", data) >> "/tmp/temp_purge_file.csv"
+    }
+    ++count
+    }
 
-   {
-   FS=OFS=" "
-
-   if (count !=0) if ($1 >= expireDate) {
-      printf ("%s\n", data) >> "/tmp/temp_purge_file.csv"
-      }
-   ++count
-   }
-
-   END {
-       }
-   ' $input >/dev/null
-   }
+END {
+    }
+' $input >/dev/null
+ }
 cp -R "/tmp/temp_purge_file.csv" "$statistical_data_file"
 }
 
@@ -644,52 +640,55 @@ cp -R "/tmp/temp_purge_file.csv" "$statistical_data_file"
 email_datafile () {
 
 if [ "$expDataEmail" == "true" ]; then
-Now=$(date +"%a")
-doit="false"
-  case $expDataEmailSend in
-    All)
-      doit="true"
-      ;;
-    Mon|Tue|Wed|Thu|Fri|Sat|Sun)
-      if [[ "$expDataEmailSend" == "$Now" ]]; then
+   Now=$(date +"%a")
+   doit="false"
+     case $expDataEmailSend in
+       All)
          doit="true"
-      fi
-      ;;
-    Month)
-      if [[ $(date +"%d") == "01" ]]; then
-         doit="true"
-      fi
-      ;;
-    *)
-      ;;
-  esac
+       ;;
+       Mon|Tue|Wed|Thu|Fri|Sat|Sun)
+         if [[ "$expDataEmailSend" == "$Now" ]]; then doit="true"; fi
+       ;;
+       Month)
+         if [[ $(date +"%d") == "01" ]]; then doit="true"; fi
+       ;;
+       *)
+       ;;
+     esac
 
-  if [[ "$doit" == "true" ]]; then
- (
-  # Write MIME section header for file attachment (encoded with base64)
-  echo "--${boundary}"
-  echo "Content-Type: text/csv"
-  echo "Content-Transfer-Encoding: base64"
-  echo "Content-Disposition: attachment; filename=Statistical_Data.csv"
-  base64 "$statistical_data_file"
-  if [[ "$dump_all" == "1" || "$dump_all" == "2" ]]; then echo "--${boundary}"; else echo "--${boundary}--"; fi
- ) >> "$logfile"
-  fi
+   if [[ "$doit" == "true" ]]; then
+      (
+      # Write MIME section header for file attachment (encoded with base64)
+      echo "--${boundary}"
+      echo "Content-Type: text/csv"
+      echo "Content-Transfer-Encoding: base64"
+      echo "Content-Disposition: attachment; filename=Statistical_Data.csv"
+      base64 "$statistical_data_file"
+      if [[ "$dump_all" == "1" || "$dump_all" == "2" ]]; then echo "--${boundary}"; else echo "--${boundary}--"; fi
+      ) >> "$logfile"
+   fi
 
 fi
-
 }
+
+##################### IGNORE DRIVES ROUTINE #################
+
+process_ignore_drives () {
+         targument="$(smartctl -i /dev/"${drive}" | grep "Serial Number:" | awk '{print $3}')";
+
+### Process Ignore List ###
+         s="0"
+         IFS=',' read -ra ADDR <<< "$Ignore_Drives"
+           for i in "${ADDR[@]}"; do
+             if [[ $i == $targument ]]; then s="1"; continue; fi
+           done
+         if [[ $s == "0" ]]; then printf "%s " "${drive}"; fi
+}
+
 
 #################### GET SMART HARD DRIVES ############################
 
 get_smartHDD_listings () {
-### GET non-SSD listing - MUST support SMART
-# smartdrives= All Drives that are SMART
-# smartdrivesSSD = SSD all SMART
-# nonsmartdrives = Any drive not supporting SMART
-# nvmedrives = Any drive which contains "NVM"
-
-# Get Hard Drive listing - MUST support SMART
 # variable smartdrives
 
 if [[ "$testfile" != "" ]]; then
@@ -699,56 +698,21 @@ return
 fi
 
 if [ $softver != "Linux" ]; then
-
     smartdrives=$(for drive in $(sysctl -n kern.disks); do
-      if [ "$(smartctl -i /dev/"${drive}" | grep "SMART support is:.\s*Enabled")" ] && ! [ "$(smartctl -i /dev/"${drive}" | grep "Solid State Device")" ]; then
-
-         targument="$(smartctl -i /dev/"${drive}" | grep "Serial Number:" | awk '{print $3}')";
-
-### Process Ignore List ###
-         s="0"
-         IFS=',' read -ra ADDR <<< "$Ignore_Drives"
-           for i in "${ADDR[@]}"; do
-             if [[ $i == $targument ]]; then
-                s="1"
-                continue
-             fi
-           done
-         if [[ $s == "0" ]]; then
-           printf "%s " "${drive}"
-         fi
-      fi
+      if [ "$(smartctl -i /dev/"${drive}" | grep "SMART support is:.\s*Enabled")" ] && ! [ "$(smartctl -i /dev/"${drive}" | grep "Solid State Device")" ]; then process_ignore_drives; fi
     done | awk '{for (i=NF; i!=0 ; i--) print $i }' | tr ' ' '\n' | sort | tr '\n' ' ')
 else
     smartdrives=$(for drive in $(fdisk -l | grep "Disk /dev/sd" | cut -c 11-13 | tr '\n' ' '); do
-        if [ "$(smartctl -i /dev/"${drive}" | grep "SMART support is:.\s*Enabled")" ] && ! [ "$(smartctl -i /dev/"${drive}" | grep "Solid State Device")" ]; then
-            targument="$(smartctl -i /dev/"${drive}" | grep "Serial Number:" | awk '{print $3}')";
-### Process Ignore List ###
-         s="0"
-         IFS=',' read -ra ADDR <<< "$Ignore_Drives"
-           for i in "${ADDR[@]}"; do
-             if [[ $i == $targument ]]; then
-                s="1"
-                continue
-             fi
-           done
-         if [[ $s == "0" ]]; then
-           printf "%s " "${drive}"
-         fi
-       fi
+        if [ "$(smartctl -i /dev/"${drive}" | grep "SMART support is:.\s*Enabled")" ] && ! [ "$(smartctl -i /dev/"${drive}" | grep "Solid State Device")" ]; then process_ignore_drives; fi
     done | awk '{for (i=NF; i!=0 ; i--) print $i }' | tr ' ' '\n' | sort | tr '\n' ' ')
 fi
-
 }
 
 
 ########################## GET SMART SOLID DISK DRIVES ################################
 
 get_smartSSD_listings () {
-
-# Get SSD listing - MUST suport SMART
 # variable smartdrivesSSD
-NVME_Present="false"
 
 if [[ "$testfile" != "" ]]; then
 echo "SSD TEST FILE ROUTINE"
@@ -758,40 +722,11 @@ fi
 
   if [ $softver != "Linux" ]; then
    smartdrivesSSD=$(for drive in $(sysctl -n kern.disks); do
-        if [ "$(smartctl -i /dev/"${drive}" | grep "SMART support is:.\s*Enabled")" ] && [ "$(smartctl -i /dev/"${drive}" | grep "Solid State Device")" ]; then
-            targument="$(smartctl -i /dev/"${drive}" | grep "Serial Number:" | awk '{print $3}')";
-
-### Process Ignore List ###
-         s="0"
-         IFS=',' read -ra ADDR <<< "$Ignore_Drives"
-           for i in "${ADDR[@]}"; do
-             if [[ $i == $targument ]]; then
-                s="1"
-                continue
-             fi
-           done
-         if [[ $s == "0" ]]; then
-           printf "%s " "${drive}"
-         fi
-        fi
+        if [ "$(smartctl -i /dev/"${drive}" | grep "SMART support is:.\s*Enabled")" ] && [ "$(smartctl -i /dev/"${drive}" | grep "Solid State Device")" ]; then process_ignore_drives; fi
     done | awk '{for (i=NF; i!=0 ; i--) print $i }' | tr ' ' '\n' | sort | tr '\n' ' ')
   else
    smartdrivesSSD=$(for drive in $(fdisk -l | grep "Disk /dev/sd" | cut -c 11-13 | tr '\n' ' '); do
-        if [ "$(smartctl -i /dev/"${drive}" | grep "SMART support is:.\s*Enabled")" ] && [ "$(smartctl -i /dev/"${drive}" | grep "Solid State Device")" ]; then
-            targument="$(smartctl -i /dev/"${drive}" | grep "Serial Number:" | awk '{print $3}')";
-### Process Ignore List ###
-         s="0"
-         IFS=',' read -ra ADDR <<< "$Ignore_Drives"
-           for i in "${ADDR[@]}"; do
-             if [[ $i == $targument ]]; then
-                s="1"
-                continue
-             fi
-           done
-         if [[ $s == "0" ]]; then
-           printf "%s " "${drive}"
-         fi
-        fi
+        if [ "$(smartctl -i /dev/"${drive}" | grep "SMART support is:.\s*Enabled")" ] && [ "$(smartctl -i /dev/"${drive}" | grep "Solid State Device")" ]; then process_ignore_drives; fi
     done | awk '{for (i=NF; i!=0 ; i--) print $i }' | tr ' ' '\n' | sort | tr '\n' ' ')
   fi
 }
@@ -799,53 +734,21 @@ fi
 ########################## GET NVMe DRIVES ################################
 
 get_smartNVM_listings () {
-
-# Get NVM listing
 # variable smartdrivesNVM
 
 if [[ "$testfile" != "" ]]; then
 echo "NVM TEST FILE ROUTINE"
 smartdrivesNVM="nvme50"
-echo "NVME List: " $smartdrivesNVM
 return
 fi
 
   if [ $softver != "Linux" ]; then
    smartdrivesNVM=$(for drive in $(sysctl -n kern.disks); do
-        if [ "$(smartctl -i /dev/"${drive}" | grep "NVM")" ]; then
-            targument="$(smartctl -i /dev/"${drive}" | grep "Serial Number:" | awk '{print $3}')";
-
-### Process Ignore List ###
-         s="0"
-         IFS=',' read -ra ADDR <<< "$Ignore_Drives"
-           for i in "${ADDR[@]}"; do
-             if [[ $i == $targument ]]; then
-                s="1"
-                continue
-             fi
-           done
-         if [[ $s == "0" ]]; then
-           printf "%s " "${drive}"
-         fi
-        fi
+        if [ "$(smartctl -i /dev/"${drive}" | grep "NVM")" ]; then process_ignore_drives; fi
     done | awk '{for (i=NF; i!=0 ; i--) print $i }' | tr ' ' '\n' | sort | tr '\n' ' ')
   else
 smartdrivesNVM=$(for drive in $(fdisk -l | grep "Disk /dev/nvm" | cut -d ':' -f 1 | cut -d '/' -f 3 | tr '\n' ' '); do
-         if [ "$(smartctl -i /dev/"${drive}" | grep "NVM")" ]; then
-            targument="$(smartctl -i /dev/"${drive}" | grep "Serial Number:" | awk '{print $3}')";
-### Process Ignore List ###
-         s="0"
-         IFS=',' read -ra ADDR <<< "$Ignore_Drives"
-           for i in "${ADDR[@]}"; do
-             if [[ $i == $targument ]]; then
-                s="1"
-                continue
-             fi
-           done
-         if [[ $s == "0" ]]; then
-           printf "%s " "${drive}"
-         fi
-        fi
+         if [ "$(smartctl -i /dev/"${drive}" | grep "NVM")" ]; then process_ignore_drives; fi
     done | awk '{for (i=NF; i!=0 ; i--) print $i }' | tr ' ' '\n' | sort | tr '\n' ' ')
   fi
 
@@ -865,42 +768,13 @@ nonsmartdrives="ada50"
 return
 fi
 
-
   if [ $softver != "Linux" ]; then
    nonsmartdrives=$(for drive in $(sysctl -n kern.disks); do
-        if [ ! "$(smartctl -i /dev/"${drive}" | grep "SMART support is:.\s*Enabled")" ] && [ ! "$(smartctl -i /dev/"${drive}" | grep "NVM")" ]; then
-              targument="$(smartctl -i /dev/"${drive}" | grep "Serial Number:" | awk '{print $3}')";
-### Process Ignore List ###
-         s="0"
-         IFS=',' read -ra ADDR <<< "$Ignore_Drives"
-           for i in "${ADDR[@]}"; do
-             if [[ $i == $targument ]]; then
-                s="1"
-                continue
-             fi
-           done
-         if [[ $s == "0" ]]; then
-           printf "%s " "${drive}"
-         fi
-        fi
+        if [ ! "$(smartctl -i /dev/"${drive}" | grep "SMART support is:.\s*Enabled")" ] && [ ! "$(smartctl -i /dev/"${drive}" | grep "NVM")" ]; then process_ignore_drives; fi
     done | awk '{for (i=NF; i!=0 ; i--) print $i }' | tr ' ' '\n' | sort | tr '\n' ' ')
   else
    nonsmartdrives=$(for drive in $(fdisk -l | grep "Disk /dev/sd" | cut -c 11-13 | tr '\n' ' '); do
-        if [ ! "$(smartctl -i /dev/"${drive}" | grep "SMART support is: Enabled")" ]; then
-                  targument="$(smartctl -i /dev/"${drive}" | grep "Serial Number:" | awk '{print $3}')";
-### Process Ignore List ###
-         s="0"
-         IFS=',' read -ra ADDR <<< "$Ignore_Drives"
-           for i in "${ADDR[@]}"; do
-             if [[ $i == $targument ]]; then
-                s="1"
-                continue
-             fi
-           done
-         if [[ $s == "0" ]]; then
-           printf "%s " "${drive}"
-         fi
-        fi
+        if [ ! "$(smartctl -i /dev/"${drive}" | grep "SMART support is: Enabled")" ]; then process_ignore_drives; fi
     done | awk '{for (i=NF; i!=0 ; i--) print $i }' | tr ' ' '\n' | sort | tr '\n' ' ')
   fi
 }
@@ -4821,6 +4695,7 @@ if [[ "$1" == "HDD" ]]; then
 testfile="$2"
 echo "HDD Test File"
 fi
+
 
 get_smartHDD_listings
 testfile=""
