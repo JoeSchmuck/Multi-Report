@@ -12,7 +12,7 @@
 ### Version v1.4, v1.5, v1.6 FreeNAS/TrueNAS (joeschmuck)
 
 ### Changelog:
-# v1.6d (18 September 2022)
+# v1.6d (20 September 2022)
 #   - Thanks goes out to ChrisRJ for offering some great suggestions to enhance and optimize the script.
 #   - Updated gptid text and help text areas (clarifing inforamtion)
 #   - Updated the -dump parameter to -dump [all] and included non-SMART attachments.
@@ -22,16 +22,15 @@
 #   - Added Raw Read Error Rates chart column.
 #   - Added compensation for Seagate Seek Error Rates and Raw Read Error Rates.
 #   - Added Automatic Configuration File Update feature.
+#   - Added ZFS Pool Size becasue it's representative of the actual storage capacity.
 #   ---- Cleaning/Optimizing Code In Progress
 #   --- Future Thoughts - Periodically the chart will fail to be formatted correctly.  I think this is due
-#   ----- to so many writes to /tmp, in spite of it being all in RAM.
-#   ---- Added new routine called check_open_file and called with filename.  This will check to see if
-#   ------ the file is open and delay running the next instruction up to 60 seconds if needed.
-#   ------ I still don't know how I will call this routine, most of my file writes are pipes.
-#   ------ I could check the file before the routine starts, that "should" work.
-#   ------ But I did add this routine for several locations for the main log file, not sure I like this though.
-#   ---- I should probably use variables for the warning and critical log files since I write to these files a lot,
-#   ------ this will make things hopefully work smoother.  Fewer writes to /tmp space.
+#   ----- to so many writes to /tmp, in spite of it being all RAM FS.
+#   ---- I should probably use variables for the logfile, warning and critical log files since I write to these files a lot,
+#   ------ this will make things hopefully work smoother and no more chart issues.  Fewer writes to /tmp space.
+#   --------- logfile_warranty=Done (this was simple), logfile = not complete (this is the main one that needs to be done),
+#   --------- logfile_warning = not complete, logfile_critical = not complete, logfile_messages=Done.
+#   --------- And which files should I save for troubleshooting at the end of the script?
 #
 #
 # v1.6c (28 August 2022)
@@ -299,6 +298,9 @@ Zpool_Status_Title="Status"
 Zpool_Pool_Size_Title="Pool Size"
 Zpool_Free_Space_Title="Free Space"
 Zpool_Used_Space_Title="Space Used"
+Zfs_Pool_Size_Title="^Actual Pool Size"
+Zfs_Free_Space_Title="^Actual Free Space"
+Zfs_Used_Space_Title="^Actual Used Space"
 Zpool_Read_Errors_Title="Read Errors"
 Zpool_Write_Errors_Title="Write Errors"
 Zpool_Checksum_Errors_Title="Cksum Errors"
@@ -529,22 +531,24 @@ yellowColor="#f1ffad"   # Hex code for pale yellow.
 softver=$(uname -s)
 host=$(hostname -s)
 truenas_ver=$(cat /etc/version)
+
+### temp files have beed converted to variable stored, not stored in /tmp/ as a file. ###
 logfile="/tmp/smart_report_body.tmp"
 logfile_header="/tmp/smart_report_header.tmp"
 logfile_warning="/tmp/smart_report_warning_flag.tmp"
 logfile_critical="/tmp/smart_report_critical_flag.tmp"
-logfile_warranty="/tmp/smart_report_warranty_flag.tmp"
-logfile_messages="/tmp/smart_report_messages.tmp"
+logfile_warranty_temp="/tmp/smart_report_warranty_flag.tmp"
+logfile_messages_temp="/tmp/smart_report_messages.tmp"
 boundary="gc0p4Jq0M2Yt08jU534c0p"
 
 if [[ $softver != "Linux" ]]; then
-programver="Multi-Report v1.6d-beta3 dtd:2022-09-18 (TrueNAS Core "$(cat /etc/version | cut -d " " -f1 | sed 's/TrueNAS-//')")"
+programver="Multi-Report v1.6d-beta3 dtd:2022-09-20 (TrueNAS Core "$(cat /etc/version | cut -d " " -f1 | sed 's/TrueNAS-//')")"
 else
-programver="Multi-Report v1.6d-beta3 dtd:2022-09-18 (TrueNAS Scale "$(cat /etc/version)")"
+programver="Multi-Report v1.6d-beta3 dtd:2022-09-20 (TrueNAS Scale "$(cat /etc/version)")"
 fi
 
 #If the config file format changes, this is the latest working date, anything older must be updated.
-valid_config_version_date="2022-09-17"
+valid_config_version_date="2022-09-20"
 
 ##########################
 ##########################
@@ -609,7 +613,6 @@ do
    pid=`echo $result | cut -d ':' -f 2`
    if [ -z "$pid" ]; then return; fi
    echo "File $1 Open - Delayed"
-   y++
    sleep .5
 done
 }
@@ -626,8 +629,7 @@ rm "/tmp/temp_purge_file.csv"
   printf "Date,Time,Device ID,Drive Type,Serial Number,SMART Status,Temp,Power On Hours,Wear Level,Start Stop Count,Load Cycle,Spin Retry,Reallocated Sectors,\
 ReAllocated Sector Events,Pending Sectors,Offline Uncorrectable,UDMA CRC Errors,Seek Error Rate,Multi Zone Errors,Read Error Rate,Helium Level\n" > "/tmp/temp_purge_file.csv"
 fi
-check_open_file "/tmp/temp_purge_file.csv"
-check_open_file "$statistical_data_file"
+
  {
   input="$statistical_data_file"
 
@@ -683,7 +685,7 @@ if [ "$expDataEmail" == "true" ]; then
      esac
 
    if [[ "$doit" == "true" ]]; then
-      (
+   (
       # Write MIME section header for file attachment (encoded with base64)
       echo "--${boundary}"
       echo "Content-Type: text/csv"
@@ -866,7 +868,7 @@ if [ "$configBackup" == "true" ]; then
             echo "<b>You should correct this problem as soon as possible!</b>"
             echo "<br>"
         ) >> "$logfile"
-check_open_file $logfile
+
     else
         # Config integrity check passed; copy config db, generate checksums, make .tar.gz archive
         cp /data/freenas-v1.db "/tmp/${filename}.db"
@@ -912,7 +914,7 @@ else
         echo "--${boundary}"
         echo "Content-Type: text/html"
     ) >> "$logfile"
-check_open_file $logfile
+
   fi
 
 else
@@ -922,7 +924,7 @@ else
         echo "--${boundary}"
         echo "Content-Type: text/html"
     ) >> "$logfile"
-check_open_file $logfile
+
 fi
 
 }
@@ -939,13 +941,16 @@ zpool_report () {
 echo $programver"<br>Report Run "$(date +%d-%b-%Y)" @ "$timestamp
     echo "<br><br>"
     echo "<table style=\"border: 1px solid black; border-collapse: collapse;\">"
-    echo "<tr><th colspan=\"12\" style=\"text-align:center; font-size:20px; height:40px; font-family:courier;\"><span style='color:gray;'>*</span>ZPool Status Report Summary</th></tr>"
+    echo "<tr><th colspan=\"15\" style=\"text-align:center; font-size:20px; height:40px; font-family:courier;\"><span style='color:gray;'>*</span>ZPool Status Report Summary</th></tr>"
     echo "<tr>"
     echo "  <th style=\"text-align:center; width:130px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$Zpool_Pool_Name_Title"</th>"
     echo "  <th style=\"text-align:center; width:80px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$Zpool_Status_Title"</th>"
     echo "  <th style=\"text-align:center; width:80px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$Zpool_Pool_Size_Title"</th>"
     echo "  <th style=\"text-align:center; width:80px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$Zpool_Free_Space_Title"</th>"
     echo "  <th style=\"text-align:center; width:80px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$Zpool_Used_Space_Title"</th>"
+    echo "  <th style=\"text-align:center; width:80px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$Zfs_Pool_Size_Title"</th>"
+    echo "  <th style=\"text-align:center; width:80px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$Zfs_Free_Space_Title"</th>"
+    echo "  <th style=\"text-align:center; width:80px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$Zfs_Used_Space_Title"</th>"
     echo "  <th style=\"text-align:center; width:80px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$Zpool_Read_Errors_Title"</th>"
     echo "  <th style=\"text-align:center; width:80px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$Zpool_Write_Errors_Title"</th>"
     echo "  <th style=\"text-align:center; width:80px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$Zpool_Checksum_Errors_Title"</th>"
@@ -955,7 +960,7 @@ echo $programver"<br>Report Run "$(date +%d-%b-%Y)" @ "$timestamp
     echo "  <th style=\"text-align:center; width:80px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$Zpool_Scrub_Duration_Title"</th>"
     echo "</tr>"
 ) >> "$logfile"
-check_open_file $logfile
+
 pools=$(zpool list -H -o name)
 poolNum=0
 for pool in $pools; do
@@ -994,6 +999,15 @@ for pool in $pools; do
     if [ "$writeErrors" -gt 999 ]; then writeErrors=">1K"; fi
     if [ "$cksumErrors" -gt 999 ]; then cksumErrors=">1K"; fi
 
+    # Get ZFS capacity (the real capacity)
+    zfs_pool_used="$(zfs list $pool | awk '{print $2}' | sed -e '/USED/d')"
+    zfs_pool_avail="$(zfs list $pool | awk '{print $3}' | sed -e '/AVAIL/d')"
+
+    if [[ $zfs_pool_used == *"T"* ]] || [[ zfs_pool_avail == *"T"* ]]; then
+       zfs_pool_size="$(echo "scale=2; (($zfs_pool_used + $zfs_pool_avail) * 100) / 100" | bc)T"
+    else
+       zfs_pool_size="$(echo "scale=2; (($zfs_pool_used + $zfs_pool_avail) * 100) / 100" | bc)G"
+    fi
 
     # Get used capacity percentage of the zpool
     used="$(zpool list -H -p -o capacity "$pool")"
@@ -1101,7 +1115,7 @@ fi
     if [ "$scrubErrors" != "$non_exist_value" ] && [ "$scrubErrors" != "0" ]; then scrubErrorsColor="$warnColor"; echo "$pool - Scrub Errors<br>" >> "$logfile_critical"; else scrubErrorsColor="$bgColor"; fi
     if [ "$(echo "$scrubAge" | awk '{print int($1)}')" -gt "$scrubAgeWarn" ]; then scrubAgeColor="$warnColor"; echo "$pool - Scrub Age" >> "$logfile_warning"; else scrubAgeColor="$bgColor"; fi
     if [ "$scrubAge" == "In Progress" ]; then scrubAgeColor="$blueColor"; fi
-check_open_file $logfile
+
     (
         # Use the information gathered above to write the date to the current table row
         printf "<tr style=\"background-color:%s;\">
@@ -1110,6 +1124,9 @@ check_open_file $logfile
             <td style=\"text-align:center; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>
             <td style=\"text-align:center; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>
             <td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s%%</td>
+            <td style=\"text-align:center; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>
+            <td style=\"text-align:center; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>
+            <td style=\"text-align:center; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>
             <td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>
             <td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>
             <td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>
@@ -1117,14 +1134,14 @@ check_open_file $logfile
             <td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>
             <td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>
             <td style=\"text-align:center; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>
-        </tr>\\n" "$bgColor" "$pool" "$statusColor" "$status" "$pool_size" "$pool_free" "$usedColor" "$used" "$readErrorsColor" "$readErrors" "$writeErrorsColor" "$writeErrors" "$cksumErrorsColor" \
+        </tr>\\n" "$bgColor" "$pool" "$statusColor" "$status" "$pool_size" "$pool_free" "$usedColor" "$used" "$zfs_pool_size" "$zfs_pool_avail" "$zfs_pool_used" "$readErrorsColor" "$readErrors" "$writeErrorsColor" "$writeErrors" "$cksumErrorsColor" \
         "$cksumErrors" "$scrubRepBytesColor" "$scrubRepBytes" "$scrubErrorsColor" "$scrubErrors" "$scrubAgeColor" "$scrubAge" "$scrubTime"
     ) >> "$logfile"
-check_open_file $logfile
+ 
 done
 # End of zpool status table
 echo "</table>" >> "$logfile"
-echo "<br><span style='color:gray;'>*Data obtained from zpool command</span>" >> "$logfile"
+echo "<br><span style='color:gray;'>*Data obtained from zpool command  ---  ^Data obtained from zfs command</span>" >> "$logfile"
 }
 
 ######################### GET DRIVE DATA #############################
@@ -1443,7 +1460,7 @@ if [[ "$1" == "NVM" ]] && [[ "$NVM_Power_On_Hours" == "true" ]]; then ((Columns=
 if [[ "$1" == "NVM" ]] && [[ "$NVM_Wear_Level" == "true" ]]; then ((Columns=Columns+1)); fi;
 
 #echo "Columns="$Columns
-check_open_file $logfile
+ 
 (
     # Write HTML table headers to log file
     echo "<br><br>"
@@ -1534,7 +1551,7 @@ check_open_file $logfile
 # Call function with end_table "HDD|SSD|NVM"
 
 write_table () {
-check_open_file $logfile
+ 
 (
 printf "<tr style=\"background-color:%s;\">\n" $bgColor;
 if [[ "$1" == "HDD" ]] && [[ "$HDD_Device_ID" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">/dev/%s</td>\n" "$deviceStatusColor" "$drive"; fi
@@ -1619,7 +1636,7 @@ if [[ "$1" == "SSD" ]] && [[ "$SSD_Last_Test_Type" == "true" ]]; then printf "<t
 #############################  END THE TABLE ###########################
 
 end_table () {
-check_open_file $logfile
+ 
 (
     echo "</tr>"
  echo "</table>"
@@ -1634,20 +1651,20 @@ detailed_report () {
 
 ###### Detailed Report Section (monospace text)
 testfile=$1
-check_open_file $logfile
+ 
 (
 
 echo "<pre style=\"font-size:20px\">"
 echo "<b>Multi-Report Text Section</b>"
 echo "<pre style=\"font-size:14px\">"
 ) >> "$logfile"
-check_open_file $logfile
+ 
 if test -e "$Config_File_Name"; then
 echo "<b>External Configuration File in Use</b><br>" >> "$logfile"
 else
 echo "<b>No External Configuration File Exists</b><br>" >> "$logfile"
 fi
-check_open_file $logfile
+ 
 if [[ $expDataEnable == "true" ]]; then
 if [[ "$(echo $statistical_data_file | grep "/tmp/")" ]]; then
  echo "<b><span style='color:darkred;'>The Statistical Data File is located in the /tmp directory and is not permanent.<br>Recommend changing to a proper dataset.</span></b><br>" >> "$logfile"; fi
@@ -1661,12 +1678,13 @@ if [[ $statistical_data_file_created == "1" ]]; then echo "Statistical Data File
 fi
 
 ### Lets write out the error messages if there are any, Critical first followed by Warning
-check_open_file $logfile
+ 
 (
 
-if test -e "$logfile_messages"; then
+#if test -e "$logfile_messages"; then
+if [[ ! $logfile_messages == "" ]]; then
 echo "<b>MESSAGES LOG FILE"
-cat $logfile_messages
+echo $logfile_messages
 echo "<br>END<br></b>"
 fi
 
@@ -1690,8 +1708,9 @@ fi
 
 
 if [[ $Fun == "1" ]]; then echo "Have a Happy April Fools Day!"; fi
-if test -e "$logfile_warranty"; then
-  cat $logfile_warranty
+if [[ ! $logfile_warranty == "" ]]; then 
+#if test -e "$logfile_warranty"; then
+  echo $logfile_warranty
   echo "</b><br>"
 fi
 ) >> "$logfile"
@@ -1706,7 +1725,7 @@ else
 drives_in_zpool=$(zpool status -P "$pool" | grep "/dev/disk" | awk -F '[/]' '{print $5}' | cut -d " " -f1)
 fi
 driveit=0
-check_open_file $logfile
+ 
     (
       # Create a simple header and drop the output of zpool status -v
         echo "<b>########## ZPool status report for ${pool} ##########</b>"
@@ -1737,7 +1756,7 @@ done
   fi
 ### SMART status for each drive - SMART Enabled
  for drive in $drives; do
-check_open_file $logfile
+ 
 if [[ $drive == "ada50" || $drive == "nvme50"  ]] ; then
     brand="$(cat "$testfile" | grep "Model Family" | awk '{print $3, $4, $5}')"
     serial="$(cat "$testfile" | grep "Serial Number" | awk '{print $3}')"
@@ -1766,7 +1785,7 @@ else
         echo "<br>"
     ) >> "$logfile"
 
- check_open_file $logfile     
+       
  # SCT Error Recovery Control Report
        scterc="$(smartctl -l scterc /dev/"$drive" | tail -3 | head -2)"
     (
@@ -1786,7 +1805,7 @@ non_smart_report () {
 # I don't particularly use this but some folks might find it useful.
 # To activate it, in the variables set reportnonSMART=true.
 # It will list all drives where Non-SMART is true and remove devices starting with "cd", for example "cd0"
-check_open_file $logfile
+ 
 drives=$nonsmartdrives
 if [ $reportnonSMART == "true" ]; then 
 for drive in $drives; do
@@ -1820,7 +1839,7 @@ fi
 ############################## REMOVE UN-NEEDED JUNK AND FINALIZE EMAIL MESSAGE END #####################
 
 remove_junk_report () {
-check_open_file $logfile
+ 
 ### Remove some un-needed junk from the output
 sed -i -e '/smartctl/d' "$logfile"
 sed -i -e '/Copyright/d' "$logfile"
@@ -1843,7 +1862,7 @@ done
 for drive in $nonsmartdrives; do
   dump_drive_data
 done
-check_open_file $logfile
+ 
 (
   # Write MIME section header for file attachment (encoded with base64)
   echo "--${boundary}"
@@ -1864,7 +1883,7 @@ check_open_file $logfile
  ) >> "$logfile"
 
 fi
-check_open_file $logfile
+ 
 ### End details section, close MIME section
 (
     echo "</pre>"
@@ -1883,7 +1902,8 @@ if test -e "$logfile_critical"; then
 elif test -e "$logfile_warning"; then
  subject="*WARNING*  SMART Testing Results for ${host}  *WARNING*"
 elif [[ $disableWarranty == "false" ]]; then
-	if test -e "$logfile_warranty"; then
+      if [[ ! $logfile_warranty == "" ]]; then
+#	if test -e "$logfile_warranty"; then
 	subject="*Drive Warranty Expired* - SMART Testing Results for ${host}"
 	else
 	subject="SMART Testing Results for ${host} - All is Good"
@@ -1961,7 +1981,8 @@ IFS=',' read -ra ADDR <<< "$Drive_Warranty"
    done
  if [[ $s != "0" ]]; then
 onTimeColor=$yellowColor
-printf "Drive "$drivesn2" Warranty Expired on "$drivedt2"<br>" >> "$logfile_warranty"
+#printf "Drive "$drivesn2" Warranty Expired on "$drivedt2"<br>" >> "$logfile_warranty"
+logfile_warranty=$logfile_warranty"Drive "$drivesn2" Warranty Expired on "$drivedt2"<br>"
  fi
 
 ### SMART STATUS
@@ -2268,7 +2289,7 @@ if [[ $SCT_Warning == "TLER_No_Msg" && $SCT_Drive_Enable == "true" ]]; then
      # Now we set the TLER ONLY for Disabled Drives because we do not know how it will affect other drives.
      smartctl -l scterc,"$SCT_Read_Timeout","$SCT_Write_Timeout" /dev/"$drive" > /dev/null 2>&1
      scterc="$(smartctl -l scterc /dev/"$drive" | tail -3 | head -2)"
-      if [[ $scterc =~ "seconds" ]]; then printf "<b><span style='color:green;'>Drive "$serial" TLER is NOW ENABLED !</span></b><br>" >> "$logfile_messages"; fi
+      if [[ $scterc =~ "seconds" ]]; then logfile_messages=$logfile_messages"$(printf "<b><span style='color:green;'>Drive "$serial" TLER is NOW ENABLED !</span></b><br>")"; fi
       if [[ $scterc =~ "Disabled" ]]; then printf "<b><span style='color:darkred;'>Drive "$serial" TLER is Disabled and failed to set.</span></b><br>" >> "$logfile_warning"; fi
      fi
 fi
@@ -2415,6 +2436,9 @@ echo 'Zpool_Status_Title="'$Zpool_Status_Title'"'
 echo 'Zpool_Pool_Size_Title="'$Zpool_Pool_Size_Title'"'
 echo 'Zpool_Free_Space_Title="'$Zpool_Free_Space_Title'"'
 echo 'Zpool_Used_Space_Title="'$Zpool_Used_Space_Title'"'
+echo 'Zfs_Pool_Size_Title="'$Zfs_Pool_Size_Title'"'
+echo 'Zfs_Free_Space_Title="'$Zfs_Free_Space_Title'"'
+echo 'Zfs_Used_Space_Title="'$Zfs_Used_Space_Title'"'
 echo 'Zpool_Read_Errors_Title="'$Zpool_Read_Errors_Title'"'
 echo 'Zpool_Write_Errors_Title="'$Zpool_Write_Errors_Title'"'
 echo 'Zpool_Checksum_Errors_Title="'$Zpool_Checksum_Errors_Title'"'
@@ -4100,6 +4124,9 @@ echo 'Zpool_Status_Title="Status"'
 echo 'Zpool_Pool_Size_Title="Pool Size"'
 echo 'Zpool_Free_Space_Title="Free Space"'
 echo 'Zpool_Used_Space_Title="Space Used"'
+echo 'Zfs_Pool_Size_Title="^Actual Pool Size"'
+echo 'Zfs_Free_Space_Title="^Actual Free Space"'
+echo 'Zfs_Used_Space_Title="^Actual Used Space"'
 echo 'Zpool_Read_Errors_Title="Read Errors"'
 echo 'Zpool_Write_Errors_Title="Write Errors"'
 echo 'Zpool_Checksum_Errors_Title="Cksum Errors"'
