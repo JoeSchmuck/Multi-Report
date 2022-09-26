@@ -12,7 +12,7 @@
 ### Version v1.4, v1.5, v1.6 FreeNAS/TrueNAS (joeschmuck)
 
 ### Changelog:
-# v1.6d (20 September 2022)
+# v1.6d (26 September 2022)
 #   - Thanks goes out to ChrisRJ for offering some great suggestions to enhance and optimize the script.
 #   - Updated gptid text and help text areas (clarifing inforamtion)
 #   - Updated the -dump parameter to -dump [all] and included non-SMART attachments.
@@ -22,15 +22,13 @@
 #   - Added Raw Read Error Rates chart column.
 #   - Added compensation for Seagate Seek Error Rates and Raw Read Error Rates.
 #   - Added Automatic Configuration File Update feature.
-#   - Added ZFS Pool Size becasue it's representative of the actual storage capacity.
-#   ---- Cleaning/Optimizing Code In Progress
-#   --- Future Thoughts - Periodically the chart will fail to be formatted correctly.  I think this is due
-#   ----- to so many writes to /tmp, in spite of it being all RAM FS.
-#   ---- I should probably use variables for the logfile, warning and critical log files since I write to these files a lot,
-#   ------ this will make things hopefully work smoother and no more chart issues.  Fewer writes to /tmp space.
-#   --------- logfile_warranty=Done (this was simple), logfile = not complete (this is the main one that needs to be done),
-#   --------- logfile_warning = not complete, logfile_critical = not complete, logfile_messages=Done.
-#   --------- And which files should I save for troubleshooting at the end of the script?
+#   - Added selection between ZFS Pool Size or Zpool Pool Size. ZFS is representative of the actual storage capacity.
+#   -- and updated the Pool Status Report Summary chart.
+#   - Added ATA Error Log Silencing (by special request).
+#   - Added 0.1 second delay after writing $logfile to eliminate intermititent file creation errors.
+#   -- Future Work
+#   ---- Change all the -config dialog to be consistent.
+#   ---- Optimizing Code
 #
 #
 # v1.6c (28 August 2022)
@@ -229,6 +227,7 @@ wearLevelCrit=9           # Wear Level Alarm Setpoint lower OK limit before a WA
 powerTimeFormat="h"       # Format for power-on hours string, valid options are "ymdh", "ymd", "ym", "y", or "h" (year month day hour).
 tempdisplay="*C"          # The format you desire the temperature to be displayed in. Common formats are: "*C", "^C", or "^c". Choose your own.
 non_exist_value="---"     # How do you desire non existant data to be displayed.  The Default is "---", popular options are "N/A" or " ".
+pool_capacity="zfs"       # Select "zfs" or "zpool" for Zpool Status Report - Pool Size and Free Space capacities. zfs is default.
  
 # Ignore or Activate Alarms
 ignoreUDMA="false"        # Set to "true" to ignore all UltraDMA CRC Errors for the summary alarm (Email Header) only, errors will appear in the graphical chart.
@@ -242,6 +241,7 @@ includeSSD="true"         # Set to "true" will engage SSD Automatic Detection an
 includeNVM="true"         # Set to "true" will engage NVM Automatic Detection and Reporting, false = Disable NVM Automatic Detection and Reporting.
 reportnonSMART="true"     # Will force even non-SMART devices to be reported, "true" = normal operation to report non-SMART devices.
 disableRAWdata="false"    # Set to "true" to remove the smartctl -a data and non-smart data appended to the normal report.  Default is false.
+ata_auto_enable="false"   # Set to "true" to automatically update Log Error count to only display a log error when a new one occurs.
  
 # Media Alarms
 sectorsWarn=1             # Number of sectors per drive to allow with errors before WARNING color/message will be used, this value should be less than sectorsCrit.
@@ -297,10 +297,10 @@ Zpool_Pool_Name_Title="Pool Name"
 Zpool_Status_Title="Status"
 Zpool_Pool_Size_Title="Pool Size"
 Zpool_Free_Space_Title="Free Space"
-Zpool_Used_Space_Title="Space Used"
-Zfs_Pool_Size_Title="^Actual Pool Size"
-Zfs_Free_Space_Title="^Actual Free Space"
-Zfs_Used_Space_Title="^Actual Used Space"
+Zpool_Used_Space_Title="Used Space"
+Zfs_Pool_Size_Title="^Pool Size"
+Zfs_Free_Space_Title="^Free Space"
+Zfs_Used_Space_Title="^Used Space"
 Zpool_Read_Errors_Title="Read Errors"
 Zpool_Write_Errors_Title="Write Errors"
 Zpool_Checksum_Errors_Title="Cksum Errors"
@@ -489,6 +489,14 @@ Multi_Zone="none"
 #   Use same format as CRC_Errors (see above).
  
 Bad_Sectors="none"
+
+######## ATA Error Log Silencing ##################
+# What does it do:
+#   This will ignore error log messages equal to or less than the threshold.
+# How to use:
+#  Same as the CRC_Errors, [drive serial number:error count]
+
+ata_errors="none"
  
 ####### Warranty Expiration Date
 # What does it do:
@@ -542,13 +550,13 @@ logfile_messages_temp="/tmp/smart_report_messages.tmp"
 boundary="gc0p4Jq0M2Yt08jU534c0p"
 
 if [[ $softver != "Linux" ]]; then
-programver="Multi-Report v1.6d-beta3 dtd:2022-09-20 (TrueNAS Core "$(cat /etc/version | cut -d " " -f1 | sed 's/TrueNAS-//')")"
+programver="Multi-Report v1.6d dtd:2022-09-26 (TrueNAS Core "$(cat /etc/version | cut -d " " -f1 | sed 's/TrueNAS-//')")"
 else
-programver="Multi-Report v1.6d-beta3 dtd:2022-09-20 (TrueNAS Scale "$(cat /etc/version)")"
+programver="Multi-Report v1.6d dtd:2022-09-26 (TrueNAS Scale "$(cat /etc/version)")"
 fi
 
 #If the config file format changes, this is the latest working date, anything older must be updated.
-valid_config_version_date="2022-09-20"
+valid_config_version_date="2022-09-26"
 
 ##########################
 ##########################
@@ -615,6 +623,13 @@ do
    echo "File $1 Open - Delayed"
    sleep .5
 done
+}
+
+
+#################### Force Slight Delay ####################
+# I think there is a race condition when writing to $logfile, trying to slow this down.
+force_delay () {
+sleep .1
 }
 
 #################### PURGE EXPORT DATA CSV FILE #######################
@@ -694,6 +709,7 @@ if [ "$expDataEmail" == "true" ]; then
       base64 "$statistical_data_file"
       if [[ "$dump_all" == "1" || "$dump_all" == "2" ]]; then echo "--${boundary}"; else echo "--${boundary}--"; fi
       ) >> "$logfile"
+force_delay
    fi
 
 fi
@@ -817,6 +833,7 @@ email_preformat () {
     echo "MIME-Version: 1.0"
     echo "Content-Type: multipart/mixed; boundary=${boundary}"
 ) > "$logfile"
+force_delay
 }
 
 
@@ -868,6 +885,7 @@ if [ "$configBackup" == "true" ]; then
             echo "<b>You should correct this problem as soon as possible!</b>"
             echo "<br>"
         ) >> "$logfile"
+force_delay
 
     else
         # Config integrity check passed; copy config db, generate checksums, make .tar.gz archive
@@ -896,27 +914,24 @@ if [ "$configBackup" == "true" ]; then
             echo "--${boundary}"
             echo "Content-Type: text/html"
         ) >> "$logfile"
+force_delay
         # If logfile saving is enabled, copy .tar.gz file to specified location before it (and everything else) is removed below
 
                 if [ "$saveBackup" == "true" ]; then
                   cp "${tarfile}" "${backupLocation}/${filename}.tar.gz"
                 fi
-
         rm "/tmp/${filename}.db"
         rm /tmp/config_backup.md5
         rm /tmp/config_backup.sha256
         rm "${tarfile}"
-
     fi
-
 else
     (
         echo "--${boundary}"
         echo "Content-Type: text/html"
     ) >> "$logfile"
-
+force_delay
   fi
-
 else
   # configBackup = false so this is what to do
   # Config backup enabled; set up for html-type content
@@ -924,9 +939,8 @@ else
         echo "--${boundary}"
         echo "Content-Type: text/html"
     ) >> "$logfile"
-
+force_delay
 fi
-
 }
 
 
@@ -937,20 +951,17 @@ zpool_report () {
 ### zpool status summary table
 
 (
-    # Write HTML table headers to log file; HTML in an email requires 100% in-line styling (no CSS or <style> section), hence the massive tags
-echo $programver"<br>Report Run "$(date +%d-%b-%Y)" @ "$timestamp
+  # Write HTML table headers to log file; HTML in an email requires 100% in-line styling (no CSS or <style> section), hence the massive tags
+    echo $programver"<br>Report Run "$(date +%d-%b-%Y)" @ "$timestamp
     echo "<br><br>"
     echo "<table style=\"border: 1px solid black; border-collapse: collapse;\">"
-    echo "<tr><th colspan=\"15\" style=\"text-align:center; font-size:20px; height:40px; font-family:courier;\"><span style='color:gray;'>*</span>ZPool Status Report Summary</th></tr>"
+    echo "<tr><th colspan=\"12\" style=\"text-align:center; font-size:20px; height:40px; font-family:courier;\"><span style='color:gray;'>*</span>ZPool Status Report Summary</th></tr>"
     echo "<tr>"
     echo "  <th style=\"text-align:center; width:130px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$Zpool_Pool_Name_Title"</th>"
     echo "  <th style=\"text-align:center; width:80px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$Zpool_Status_Title"</th>"
     echo "  <th style=\"text-align:center; width:80px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$Zpool_Pool_Size_Title"</th>"
     echo "  <th style=\"text-align:center; width:80px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$Zpool_Free_Space_Title"</th>"
     echo "  <th style=\"text-align:center; width:80px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$Zpool_Used_Space_Title"</th>"
-    echo "  <th style=\"text-align:center; width:80px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$Zfs_Pool_Size_Title"</th>"
-    echo "  <th style=\"text-align:center; width:80px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$Zfs_Free_Space_Title"</th>"
-    echo "  <th style=\"text-align:center; width:80px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$Zfs_Used_Space_Title"</th>"
     echo "  <th style=\"text-align:center; width:80px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$Zpool_Read_Errors_Title"</th>"
     echo "  <th style=\"text-align:center; width:80px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$Zpool_Write_Errors_Title"</th>"
     echo "  <th style=\"text-align:center; width:80px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$Zpool_Checksum_Errors_Title"</th>"
@@ -960,6 +971,7 @@ echo $programver"<br>Report Run "$(date +%d-%b-%Y)" @ "$timestamp
     echo "  <th style=\"text-align:center; width:80px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$Zpool_Scrub_Duration_Title"</th>"
     echo "</tr>"
 ) >> "$logfile"
+force_delay
 
 pools=$(zpool list -H -o name)
 poolNum=0
@@ -1004,9 +1016,9 @@ for pool in $pools; do
     zfs_pool_avail="$(zfs list $pool | awk '{print $3}' | sed -e '/AVAIL/d')"
 
     if [[ $zfs_pool_used == *"T"* ]] || [[ zfs_pool_avail == *"T"* ]]; then
-       zfs_pool_size="$(echo "scale=2; (($zfs_pool_used + $zfs_pool_avail) * 100) / 100" | bc)T"
+        zfs_pool_size="$(awk -v a="$zfs_pool_used" -v b="$zfs_pool_avail" 'BEGIN { printf a+b }' </dev/null)T"
     else
-       zfs_pool_size="$(echo "scale=2; (($zfs_pool_used + $zfs_pool_avail) * 100) / 100" | bc)G"
+        zfs_pool_size="$(awk -v a="$zfs_pool_used" -v b="$zfs_pool_avail" 'BEGIN { printf a+b }' </dev/null)G"
     fi
 
     # Get used capacity percentage of the zpool
@@ -1116,6 +1128,13 @@ fi
     if [ "$(echo "$scrubAge" | awk '{print int($1)}')" -gt "$scrubAgeWarn" ]; then scrubAgeColor="$warnColor"; echo "$pool - Scrub Age" >> "$logfile_warning"; else scrubAgeColor="$bgColor"; fi
     if [ "$scrubAge" == "In Progress" ]; then scrubAgeColor="$blueColor"; fi
 
+if [[ $pool_capacity == "zfs" ]]; then
+pool_size=$zfs_pool_size
+pool_free=$zfs_pool_avail
+used=$zfs_pool_used" ("$used"%)"
+else
+used=$used"%"  
+fi
     (
         # Use the information gathered above to write the date to the current table row
         printf "<tr style=\"background-color:%s;\">
@@ -1123,10 +1142,7 @@ fi
             <td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>
             <td style=\"text-align:center; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>
             <td style=\"text-align:center; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>
-            <td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s%%</td>
-            <td style=\"text-align:center; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>
-            <td style=\"text-align:center; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>
-            <td style=\"text-align:center; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>
+            <td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>
             <td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>
             <td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>
             <td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>
@@ -1134,14 +1150,22 @@ fi
             <td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>
             <td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>
             <td style=\"text-align:center; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>
-        </tr>\\n" "$bgColor" "$pool" "$statusColor" "$status" "$pool_size" "$pool_free" "$usedColor" "$used" "$zfs_pool_size" "$zfs_pool_avail" "$zfs_pool_used" "$readErrorsColor" "$readErrors" "$writeErrorsColor" "$writeErrors" "$cksumErrorsColor" \
+        </tr>\\n" "$bgColor" "$pool" "$statusColor" "$status" "$pool_size" "$pool_free" "$usedColor" "$used" "$readErrorsColor" "$readErrors" "$writeErrorsColor" "$writeErrors" "$cksumErrorsColor" \
         "$cksumErrors" "$scrubRepBytesColor" "$scrubRepBytes" "$scrubErrorsColor" "$scrubErrors" "$scrubAgeColor" "$scrubAge" "$scrubTime"
     ) >> "$logfile"
- 
+force_delay
 done
+
 # End of zpool status table
 echo "</table>" >> "$logfile"
-echo "<br><span style='color:gray;'>*Data obtained from zpool command  ---  ^Data obtained from zfs command</span>" >> "$logfile"
+force_delay
+if [[ $pool_capacity == "zfs" ]]; then
+echo "<br><span style='color:gray;'>*Data obtained from zpool and zfs commands</span>" >> "$logfile"
+force_delay
+else
+echo "<br><span style='color:gray;'>*Data obtained from zpool command</span>" >> "$logfile"
+force_delay
+fi
 }
 
 ######################### GET DRIVE DATA #############################
@@ -1459,8 +1483,6 @@ if [[ "$1" == "NVM" ]] && [[ "$NVM_Drive_Temp_Max" == "true" ]]; then ((Columns=
 if [[ "$1" == "NVM" ]] && [[ "$NVM_Power_On_Hours" == "true" ]]; then ((Columns=Columns+1)); fi;
 if [[ "$1" == "NVM" ]] && [[ "$NVM_Wear_Level" == "true" ]]; then ((Columns=Columns+1)); fi;
 
-#echo "Columns="$Columns
- 
 (
     # Write HTML table headers to log file
     echo "<br><br>"
@@ -1545,6 +1567,7 @@ if [[ "$1" == "NVM" ]] && [[ "$NVM_Wear_Level" == "true" ]]; then ((Columns=Colu
     echo "</tr>"
 
 ) >> "$logfile"
+force_delay
 }
 
 ################################## WRITE TABLE #############################################################
@@ -1631,18 +1654,19 @@ if [[ "$1" == "SSD" ]] && [[ "$SSD_Last_Test_Type" == "true" ]]; then printf "<t
 
     echo "</tr>"
 ) | tr -d "[]" >> "$logfile"
+force_delay
 }
 
 #############################  END THE TABLE ###########################
 
 end_table () {
- 
 (
     echo "</tr>"
  echo "</table>"
 if [[ "$SER1" == "1" ]]; then echo "<span style='color:gray;'>* = Seek Error Rate is Normalized.  Higher is better.</span>"; fi
     echo "<br>"
 ) >> "$logfile"
+force_delay
 }
 
 ################################## COMPILE DETAILED REPORT ###############################################
@@ -1653,34 +1677,40 @@ detailed_report () {
 testfile=$1
  
 (
-
 echo "<pre style=\"font-size:20px\">"
 echo "<b>Multi-Report Text Section</b>"
 echo "<pre style=\"font-size:14px\">"
 ) >> "$logfile"
+force_delay
  
 if test -e "$Config_File_Name"; then
-echo "<b>External Configuration File in Use</b><br>" >> "$logfile"
+   echo "<b>External Configuration File in Use</b><br>" >> "$logfile"
+force_delay
 else
-echo "<b>No External Configuration File Exists</b><br>" >> "$logfile"
+   echo "<b>No External Configuration File Exists</b><br>" >> "$logfile"
+force_delay
 fi
  
 if [[ $expDataEnable == "true" ]]; then
-if [[ "$(echo $statistical_data_file | grep "/tmp/")" ]]; then
- echo "<b><span style='color:darkred;'>The Statistical Data File is located in the /tmp directory and is not permanent.<br>Recommend changing to a proper dataset.</span></b><br>" >> "$logfile"; fi
-if [[ $statistical_data_file_created == "1" ]]; then echo "Statistical Data File Created.<br>" >> "$logfile"; fi
+   if [[ "$(echo $statistical_data_file | grep "/tmp/")" ]]; then
+   echo "<b><span style='color:darkred;'>The Statistical Data File is located in the /tmp directory and is not permanent.<br>Recommend changing to a proper dataset.</span></b><br>" >> "$logfile"
+   force_delay
+   fi
+
+   if [[ $statistical_data_file_created == "1" ]]; then echo "Statistical Data File Created.<br>" >> "$logfile"; force_delay; fi
 
    if [[ $expDataEmail == "true" ]]; then
       echo "<b>Statistical Export Log Located:<br></b>$statistical_data_file<br><b>Emailed every:</b> $expDataEmailSend<br>" >> "$logfile"
+      force_delay
    else
       echo "<b>Statistical Export Log Located at:<br>$statistical_data_file</b><br>" >> "$logfile"
+      force_delay
    fi
 fi
 
 ### Lets write out the error messages if there are any, Critical first followed by Warning
  
 (
-
 #if test -e "$logfile_messages"; then
 if [[ ! $logfile_messages == "" ]]; then
 echo "<b>MESSAGES LOG FILE"
@@ -1705,31 +1735,29 @@ echo "Ignored Drives = "$Ignore_Drives
 echo "<br>END<br>"
 fi
 
-
-
 if [[ $Fun == "1" ]]; then echo "Have a Happy April Fools Day!"; fi
 if [[ ! $logfile_warranty == "" ]]; then 
-#if test -e "$logfile_warranty"; then
   echo $logfile_warranty
   echo "</b><br>"
 fi
 ) >> "$logfile"
+force_delay
+
 
 if [[ $disableRAWdata != "true" ]]; then
 
-### zpool status for each pool
-for pool in $pools; do
-if [ $softver != "Linux" ]; then
-drives_in_zpool=$(zpool status "$pool" | grep "gptid" | awk '{print $1}')
-else
-drives_in_zpool=$(zpool status -P "$pool" | grep "/dev/disk" | awk -F '[/]' '{print $5}' | cut -d " " -f1)
-fi
-driveit=0
+  ### zpool status for each pool
+   for pool in $pools; do
+      if [ $softver != "Linux" ]; then
+         drives_in_zpool=$(zpool status "$pool" | grep "gptid" | awk '{print $1}')
+      else
+         drives_in_zpool=$(zpool status -P "$pool" | grep "/dev/disk" | awk -F '[/]' '{print $5}' | cut -d " " -f1)
+      fi
+   driveit=0
  
     (
       # Create a simple header and drop the output of zpool status -v
         echo "<b>########## ZPool status report for ${pool} ##########</b>"
-       # echo "<br>"
         zpool status -v "$pool"
         for longpool in $drives_in_zpool; do
           if [ $softver != "Linux" ]; then
@@ -1743,20 +1771,24 @@ driveit=0
           fi
         done
         echo "<br>"
-
     ) >> "$logfile"
-done
+force_delay
+   done
 
   if [[ $includeSSD == "true" ]] && [[ $includeNVM == "true" ]]; then
-  drives="${smartdrives} ${smartdrivesSSD} ${smartdrivesNVM}"
+     drives="${smartdrives} ${smartdrivesSSD} ${smartdrivesNVM}"
   elif [[ $includeSSD == "true" ]]; then
-  drives="${smartdrives} ${smartdrivesSSD}"
+     drives="${smartdrives} ${smartdrivesSSD}"
   else
-  drives="${smartdrives}"
+     drives="${smartdrives}"
   fi
+
 ### SMART status for each drive - SMART Enabled
- for drive in $drives; do
+
+ write_ata_errors="0"
  
+ for drive in $drives; do
+
 if [[ $drive == "ada50" || $drive == "nvme50"  ]] ; then
     brand="$(cat "$testfile" | grep "Model Family" | awk '{print $3, $4, $5}')"
     serial="$(cat "$testfile" | grep "Serial Number" | awk '{print $3}')"
@@ -1764,15 +1796,62 @@ if [[ $drive == "ada50" || $drive == "nvme50"  ]] ; then
     echo "<br><b>########## FULL TESTFILE -- SMART status report for ${drive} drive (${brand}: ${serial}) ##########</b>" 
     cat "$testfile"
     ) >> "$logfile"
+force_delay
 else
     # Gather brand and serial number of each drive
     brand="$(smartctl -i /dev/"$drive" | grep "Model Family" | awk '{print $3, $4, $5}')"
     serial="$(smartctl -i /dev/"$drive" | grep "Serial Number" | awk '{print $3}')"
+    test_ata_error="$(smartctl -H -A -l error /dev/"$drive" | grep "ATA Error Count" | awk '{print $4}')" 
+
+    # If no data in ata_errors then lets gather data if needed.
+    if [[ $ata_errors == "" ]]; then ata_errors="none"; fi
+
+### ATA ERROR LOG ### Let's find a match to string ata_errors
+
+    IFS=',' read -ra ADDR <<< "$ata_errors"
+       for i in "${ADDR[@]}"; do
+           ataerrorssn1="$(echo $i | cut -d':' -f 1)"
+           ataerrorsdt1="$(echo $i | cut -d':' -f 2)"
+
+           if [[ $ataerrorssn1 == "none" ]]; then
+              if [[ ! $test_ata_error == "" ]]; then
+                 if [[ $ata_auto_enable == "true" ]]; then
+                    temp_ata_errors=$temp_ata_errors$serial:$test_ata_error","
+                    write_ata_errors="1"
+                 fi
+              fi
+           fi
+
+           if [[ "$ataerrorssn1" == "$serial" ]]; then
+              ataerrors=$ataerrorsdt1
+
+              if [[ $ata_errors == "" ]]; then
+                 write_ata_errors="1"
+              fi
+              temp_ata_errors=$temp_ata_errors$serial:$test_ata_error","
+
+              if [[ $test_ata_error -gt $ataerrors ]]; then
+                 write_ata_errors="1"
+                 printf "Drive "$serial" ATA Error Count: "$test_ata_error" - Value Increased <br>" >> "$logfile_warning"
+              fi
+           fi
+           continue
+       done
 
     (
      # Create a simple header and drop the output of some basic smartctl commands
         echo "<b>########## SMART status report for ${drive} drive (${brand}: ${serial}) ##########</b>"
+     if [[ $test_ata_error -gt "0" ]]; then
+        if [[ $test_ata_error -gt $ataerrors ]]; then 
+           smartctl -H -A -l error /dev/"$drive"
+        else
+           smartctl -H -A /dev/"$drive"
+           echo "ATA Error Count: "$test_ata_error
+           echo " "
+        fi
+     else
         smartctl -H -A -l error /dev/"$drive"
+     fi
 
      # Create Recent Tests Report
         echo "Num Test_Description  (Most recent Short & Extended Tests - Listed by test number)"
@@ -1784,7 +1863,7 @@ else
         echo $lasttest2
         echo "<br>"
     ) >> "$logfile"
-
+force_delay
        
  # SCT Error Recovery Control Report
        scterc="$(smartctl -l scterc /dev/"$drive" | tail -3 | head -2)"
@@ -1792,6 +1871,7 @@ else
       echo "SCT Error Recovery Control: "$scterc
       echo "<br>"
      ) >> "$logfile"
+force_delay
 fi
  done
 fi
@@ -1831,6 +1911,7 @@ for drive in $drives; do
       fi
 
     ) >> "$logfile"
+force_delay
   fi
 done
 fi
@@ -1842,11 +1923,17 @@ remove_junk_report () {
  
 ### Remove some un-needed junk from the output
 sed -i -e '/smartctl/d' "$logfile"
+force_delay
 sed -i -e '/Copyright/d' "$logfile"
+force_delay
 sed -i -e '/=== START OF READ/d' "$logfile"
+force_delay
 sed -i -e '/SMART Attributes Data/d' "$logfile"
+force_delay
 sed -i -e '/Vendor Specific SMART/d' "$logfile"
+force_delay
 sed -i -e '/SMART Error Log Version/d' "$logfile"
+force_delay
 
 # Attach dump files
 if [[ "$dump_all" == "1" || "$dump_all" == "2" ]]; then
@@ -1870,17 +1957,8 @@ done
   echo "Content-Transfer-Encoding: base64"
   echo "Content-Disposition: attachment; filename=config_file.txt"
   base64 $Config_File_Name
-
-#  echo "--${boundary}"
-#  echo "Content-Type: text/html"
-#  echo "Content-Transfer-Encoding: base64"
-#  echo "Content-Disposition: attachment; filename=drive_${drive}_x.txt"
-#  base64 "/tmp/drive_${drive}_x.txt"
-
- # echo "--${boundary}"
- # echo "Content-Type: text/html"
-
  ) >> "$logfile"
+force_delay
 
 fi
  
@@ -1889,6 +1967,7 @@ fi
     echo "</pre>"
     echo "--${boundary}--"
 )  >> "$logfile"
+force_delay
 }
 
 ############################# COMBINE ALL DATA INTO A FORMAL EMAIL MESSAGE AND SEND IT ############################
@@ -1903,7 +1982,6 @@ elif test -e "$logfile_warning"; then
  subject="*WARNING*  SMART Testing Results for ${host}  *WARNING*"
 elif [[ $disableWarranty == "false" ]]; then
       if [[ ! $logfile_warranty == "" ]]; then
-#	if test -e "$logfile_warranty"; then
 	subject="*Drive Warranty Expired* - SMART Testing Results for ${host}"
 	else
 	subject="SMART Testing Results for ${host} - All is Good"
@@ -1920,7 +1998,7 @@ echo "Subject: ${subject}"
 ) > ${logfile_header}
 
 cat $logfile >> $logfile_header
-
+force_delay
 ### Send report
 sendmail -t -oi < "$logfile_header"
 }
@@ -2367,6 +2445,7 @@ echo "# Output Formats"
 echo 'powerTimeFormat="'$powerTimeFormat'"       # Format for power-on hours string, valid options are "ymdh", "ymd", "ym", "y", or "h" (year month day hour).'
 echo 'tempdisplay="'$tempdisplay'"          # The format you desire the temperature to be displayed in. Common formats are: "*C", "^C", or "^c". Choose your own.'
 echo 'non_exist_value="'$non_exist_value'"     # How do you desire non existent data to be displayed.  The Default is "---", popular options are "N/A" or " ".'
+echo 'pool_capacity="'$pool_capacity'"       # Select "zfs" or "zpool" for Zpool Status Report - Pool Size and Free Space capacities. zfs is default.'
 echo " "
 echo "# Ignore or Activate Alarms"
 echo 'ignoreUDMA="'$ignoreUDMA'"        # Set to "true" to ignore all UltraDMA CRC Errors for the summary alarm (Email Header) only, errors will appear in the graphical chart.'
@@ -2374,6 +2453,7 @@ echo 'ignoreSeekError="'$ignoreSeekError'"    # Set to "true" to ignore all Seek
 echo 'ignoreReadError="'$ignoreReadError'"    # Set to "true" to ignore all Raw Read Error Rate/Health errors.  Default is true.'
 echo 'ignoreMultiZone="'$ignoreMultiZone'"   # Set to "true" to ignore all MultiZone Errors. Default is false.'
 echo 'disableWarranty="'$disableWarranty'"    # Set to "true to disable email Subject line alerts for any expired warranty alert. The email body will still report the alert.'
+echo 'ata_auto_enable="'$ata_auto_enable'"   # Set to "true" to automatically update Log Error count to only display a log error when a new one occurs.'
 echo " "
 echo "# Disable or Activate Input/Output File Settings"
 echo 'includeSSD="'$includeSSD'"         # Set to "true" will engage SSD Automatic Detection and Reporting, false = Disable SSD Automatic Detection and Reporting.'
@@ -2628,6 +2708,14 @@ echo " "
 if [[ ! $BAD_SECTORS == "" ]]; then Bad_Sectors=$BAD_SECTORS; fi
 echo 'Bad_Sectors="'$Bad_Sectors'"'
 echo " "
+echo "######## ATA Error Log Silencing ##################"
+echo "# What does it do:"
+echo "#   This will ignore error log messages equal to or less than the threshold."
+echo "# How to use:"
+echo "#  Same as the CRC_Errors, [drive serial number:error count]"
+echo " "
+echo 'ata_errors="'$ata_errors'"'
+echo " "
 echo "####### Warranty Expiration Date"
 echo "# What does it do:"
 echo "# This section is used to add warranty expirations for designated drives and to create an alert when they expire."
@@ -2657,8 +2745,8 @@ echo 'blueColor="'$blueColor'"     # Hex code for Sky Blue, used for the SCRUB I
 echo 'yellowColor="'$yellowColor'"   # Hex code for pale yellow.'
 
 ) > "$Config_File_Name"
-
 }
+
 ################################## CLEAN UP TEMPORARY FILES #######################################
 
 cleanup_files () {
@@ -2671,7 +2759,6 @@ if test -e "$logfile_warranty"; then rm "$logfile_warranty"; fi
 if test -e "$logfile_messages"; then rm "$logfile_messages"; fi
 f=(/tmp/drive_*.txt)
 if [[ -f "${f[0]}" ]]; then rm /tmp/drive_*.txt; fi
-
 }
 
 ################################# CLEAR VARIABLES ###############################################
@@ -2715,6 +2802,8 @@ seagate=""
 seekErrorRate=""
 rawReadErrorRate=""
 seek=""
+test_ata_error=""
+
 
 # And Reset bgColors
 if [[ "$bgColor" == "$altColor" ]]; then bgColor="#ffffff"; else bgColor="$altColor"; fi
@@ -2737,7 +2826,6 @@ lastTestTypeColor=$bgColor
 wearLevelColor=$bgColor
 NVMcriticalWarningColor=$bgColor
 HeliumColor=$bgColor
-
 }
 
 ################# GENERATE CONFIG FILE ##############
@@ -2764,9 +2852,10 @@ echo "      N)ew configuration file  (creates a new clean configuration external
 echo " "
 echo "      A)dvanced configuration (must have a configuration file already present)"
 echo " "
-echo "      U)pdate configuration file to current version (being phased out)"
+echo "      U)pdate configuration file to current version (being phased out"
+echo "        by an automatic update)"
 echo " "
-echo "      H)ow to use this configuration tool"
+echo "      H)ow to use this configuration tool (general instructions)"
 echo " "
 echo "      X) Exit"
 echo " "
@@ -2815,28 +2904,29 @@ case $Keyboard_var in
     echo " "
     echo "   A) Alarm Setpoints (Temp, Zpool, Media, Activate In/Out, Ignore)" 
     echo " "
-    echo "   B) Config-Backup"
+    echo "   B) Config-Backup (Edit Config-Backup Settings)"
     echo " "
-    echo "   C) Email Address" 
+    echo "   C) Email Address (Edit email address)" 
     echo " "
-    echo "   D) HDD Column Selection"
+    echo "   D) HDD Column Selection (Select columns to display/hide)"
     echo " "
-    echo "   E) SSD Column Selection"
+    echo "   E) SSD Column Selection (Select columns to display/hide)"
     echo " "
-    echo "   F) NVMe Column Selection"
+    echo "   F) NVMe Column Selection (Select columns to display/hide)"
     echo " "
-    echo "   G) Output Formats (Hours, Temp, Non-Existant)"
+    echo "   G) Output Formats (Hours, Temp, Non-Existant, Pool Capacity)"
     echo " "
-    echo "   H) Report Header Titles" 
+    echo "   H) Report Header Titles (Edit Header Titles)" 
     echo " "
     echo "   I) Statistical Data File Setup"
     echo " "
-    echo "   J) TLER / SCT"
+    echo "   J) TLER / SCT (Setup if TLER is active)"
     echo " "
     echo "   K) Drive Errors and Custom Builds (Ignore Drives, UDMA CRC, MultiZone,"
-    echo "            Reallocated Sectors, Warranty Expiration, Person Specific Custom)"
+    echo "            Reallocated Sectors, ATA Errors, Warranty Expiration,"
+    echo "            and Person Specific Custom)"
     echo " "
-    echo "   W) Write Configuration File"
+    echo "   W) Write Configuration File (Save your changes)"
     echo " "
     echo "   X) Exit - Will not automatically save changes"
     echo " "
@@ -2854,15 +2944,15 @@ case $Keyboard_var in
          echo "            Alarm Configuration Settings"
          echo " "
          echo " "
-         echo "   A) Temperature Settings" 
+         echo "   A) Temperature Settings (Various Temperature Settings)" 
          echo " "
-         echo "   B) Zpool Settings"
+         echo "   B) Zpool Settings (Scrub Age and Pool Avail Alarms)"
          echo " "
-         echo "   C) Media Alarm Settings"
+         echo "   C) Media Alarm Settings (Sectors and CRC Type Alarms)"
          echo " "
-         echo "   D) Activate Input/Output Settings" 
+         echo "   D) Activate Input/Output Settings (Enable SSD/NVMe/Non-SMART)" 
          echo " "
-         echo "   E) Ignore Alarms"
+         echo "   E) Ignore Alarms (Ignore CRC/MultiZone/Seek Type Errors)"
          echo " "
          echo "   X) Exit - Return to previous menu"
          echo " "
@@ -3098,6 +3188,13 @@ case $Keyboard_var in
                   if [[ $Keyboard_yn == "t" ]]; then disableWarranty="true"; else disableWarranty="false"; fi
                fi
                echo "Set Value: ("$disableWarranty")"
+               echo " "
+               echo -n "ATA Auto Enable ("$ata_auto_enable") "
+               read -n 1 Keyboard_yn
+               if [[ ! $Keyboard_yn == "" ]]; then
+                  if [[ $Keyboard_yn == "t" ]]; then ata_auto_enable="true"; else ata_auto_enable="false"; fi
+               fi
+               echo "Set Value: ("$ata_auto_enable")"
                echo " "
                echo "returning..."
                sleep 2
@@ -3592,6 +3689,14 @@ case $Keyboard_var in
         if [[ ! $Keyboard_yn == "" ]]; then non_exist_value=$Keyboard_yn; fi
         echo "Set Value: "$non_exist_value
         echo " "
+        echo "Pool Size and Free Space"
+        echo "ZFS is the most accurate and conforms to the GUI values."
+        echo "Current Value:  ("$pool_capacity") "
+        echo -n "Enter 'zfs' or 'zpool' or Enter/Return for unchanged: "
+        read Keyboard_yn
+        if [[ ! $Keyboard_yn == "" ]]; then pool_capacity=$Keyboard_yn; fi
+        echo "Set Value: "$pool_capacity
+        echo " "
         echo "returning..."
         sleep 2
         ;;
@@ -3848,6 +3953,42 @@ case $Keyboard_var in
            echo "Set Value: "$Bad_Sectors
         fi
         echo " "
+        echo "Automatic ATA Error Count Updates - This will automatically have the script"
+        echo "update the multi_report_config.txt file with the current Error Log count."
+        echo "This migth be desirable if you have a drive that keeps throwing minor errors."
+        echo "Enter/Return to keep current value, 't' (enable), or 'f' (disable) this feature." 
+        echo "Current: "$ata_auto_enable
+        read Keyboard_yn
+        if [[ ! $Keyboard_yn == "" ]]; then if [[ $Keyboard_yn == "t" ]]; then ata_auto_enable="true"; else ata_auto_enable="false"; fi; fi
+        echo "Set Value: "$ata_auto_enable
+        echo " "
+        echo "ATA Error Count - This will ignore any drive with an error count less than"
+        echo "the number provided.  When the drive errors exceed this value then the"
+        echo "Error Log will be present again."
+        echo "Enter 'd' to delete, 'e' to edit, or Enter/Return for no change."
+        echo "Current: "$ata_errors
+        read Keyboard_yn
+        if [[ ! $Keyboard_yn == "" ]]; then ata_errors=$Keyboard_yn; fi
+        if [[ $Keyboard_yn == "d" ]]; then ata_errors=""; fi
+        if [[ $Keyboard_yn == "e" ]]; then
+           ata_errors=""
+           for drive in $smartdrivesall; do
+              clear_variables
+              get_drive_data
+              echo " "
+              echo "Do you want to add this drive (y/n): Drive ID: "$drive" Serial Number: "$serial
+              read Keyboard_yn
+              if [[ $Keyboard_yn == "y" ]]; then
+                 echo "Enter the Error Log threshold: "
+                 read Keyboard_yn
+                 ata_errors=$ata_errors$serial":"$Keyboard_yn","
+              fi
+              echo "ata_errors="$ata_errors
+              done
+              if [[ ! $ata_errors == "" ]]; then ata_errors="$(echo "$ata_errors" | sed 's/.$//')"; else ata_errors="none"; fi
+         fi
+        echo "Set Value: "$ata_errors
+        echo " "
         echo "Drive Warranty Expiration Date Warning - This will provide a yellow background"
         echo "and a text message when the warranty date occurs."
         echo "The format is: drive_serial_number:yyyy-mm-dd and separated by a comma for"
@@ -3902,7 +4043,7 @@ case $Keyboard_var in
 
         X)
         echo "Exiting, Not Saving"
-        sleep 2
+        sleep 1
         x=100
         ;;
 
@@ -4055,6 +4196,7 @@ echo "# Output Formats"
 echo 'powerTimeFormat="h"       # Format for power-on hours string, valid options are "ymdh", "ymd", "ym", "y", or "h" (year month day hour).'
 echo 'tempdisplay="*C"          # The format you desire the temperature to be displayed in. Common formats are: "*C", "^C", or "^c". Choose your own.'
 echo 'non_exist_value="---"     # How do you desire non existent data to be displayed.  The Default is "---", popular options are "N/A" or " ".'
+echo 'pool_capacity="zfs"       # Select "zfs" or "zpool" for Zpool Status Report - Pool Size and Free Space capacities. zfs is default.'
 echo " "
 echo "# Ignore or Activate Alarms"
 echo 'ignoreUDMA="false"        # Set to "true" to ignore all UltraDMA CRC Errors for the summary alarm (Email Header) only, errors will appear in the graphical chart.'
@@ -4068,6 +4210,7 @@ echo 'includeSSD="true"         # Set to "true" will engage SSD Automatic Detect
 echo 'includeNVM="true"         # Set to "true" will engage NVM Automatic Detection and Reporting, false = Disable NVM Automatic Detection and Reporting.'
 echo 'reportnonSMART="true"     # Will force even non-SMART devices to be reported, "true" = normal operation to report non-SMART devices.'
 echo 'disableRAWdata="false"    # Set to "true" to remove the 'smartctl -a' data and non-smart data appended to the normal report.  Default is false.'
+echo 'ata_auto_enable="false"   # Set to "true" to automatically update Log Error count to only display a log error when a new one occurs.'
 echo " "
 echo "# Media Alarms"
 echo "sectorsWarn=1             # Number of sectors per drive to allow with errors before WARNING color/message will be used, this value should be less than sectorsCrit."
@@ -4123,10 +4266,10 @@ echo 'Zpool_Pool_Name_Title="Pool Name"'
 echo 'Zpool_Status_Title="Status"'
 echo 'Zpool_Pool_Size_Title="Pool Size"'
 echo 'Zpool_Free_Space_Title="Free Space"'
-echo 'Zpool_Used_Space_Title="Space Used"'
-echo 'Zfs_Pool_Size_Title="^Actual Pool Size"'
-echo 'Zfs_Free_Space_Title="^Actual Free Space"'
-echo 'Zfs_Used_Space_Title="^Actual Used Space"'
+echo 'Zpool_Used_Space_Title="Used Space"'
+echo 'Zfs_Pool_Size_Title="^Pool Size"'
+echo 'Zfs_Free_Space_Title="^Free Space"'
+echo 'Zfs_Used_Space_Title="^Used Space"'
 echo 'Zpool_Read_Errors_Title="Read Errors"'
 echo 'Zpool_Write_Errors_Title="Write Errors"'
 echo 'Zpool_Checksum_Errors_Title="Cksum Errors"'
@@ -4315,6 +4458,14 @@ echo "# How to use it:"
 echo "#   Use same format as CRC_Errors (see above)."
 echo " "
 if [[ $Bad_Sectors == "" ]]; then echo 'Bad_Sectors="none"'; else echo 'Bad_Sectors="'$Bad_Sectors'"'; fi
+echo " "
+echo "######## ATA Error Log Silencing ##################"
+echo "# What does it do:"
+echo "#   This will ignore error log messages equal to or less than the threshold."
+echo "# How to use:"
+echo "#   Same as the CRC_Errors, [drive serial number:error count]"
+echo " "
+echo 'ata_errors="none"'
 echo " "
 echo "####### Warranty Expiration Date"
 echo "# What does it do:"
@@ -4660,10 +4811,8 @@ dump_drive_data () {
   echo "Content-Transfer-Encoding: base64"
   echo "Content-Disposition: attachment; filename=drive_${drive}_x.txt"
   base64 "/tmp/drive_${drive}_x.txt"
- # echo "--${boundary}"
- # echo "Content-Type: text/html"
-
  ) >> "$logfile"
+force_delay
 }
 
 ### DEFINE FUNCTIONS END ###
@@ -4800,8 +4949,7 @@ if [[ "$1" == "HDD" ]]; then
 fi
 for drive in $smartdrives; do
   clear_variables
-get_drive_data
-#  get_drive_data "$smartdrives" "HDD"
+  get_drive_data
   crunch_numbers "HDD"
   write_table "HDD"
 done
@@ -4819,8 +4967,7 @@ if [[ $includeSSD == "true" ]]; then
        fi
      for drive in $smartdrivesSSD; do
        clear_variables
-get_drive_data
-#       get_drive_data "$smartdrivesSSD" "SSD"
+       get_drive_data
        crunch_numbers "SSD"
        write_table "SSD"
      done
@@ -4839,8 +4986,7 @@ if [[ $includeNVM == "true" ]]; then
        fi
        for drive in $smartdrivesNVM; do
          clear_variables
-get_drive_data
-#         get_drive_data "$smartdrivesNVM" "NVM"
+         get_drive_data
          crunch_numbers "NVM"
          write_table "NVM"
        done
@@ -4848,11 +4994,8 @@ get_drive_data
        testfile=""
    fi
 fi
-
        for drive in $nonsmartdrives; do
          clear_variables
-# We still use $2 in this routine, change to $1
-#         get_drive_data "$nonsmartdrives" "NON"
          get_drive_data "NON" 
        done
 
@@ -4861,6 +5004,7 @@ fi
 if [[ $expDataPurge != 0 ]]; then
 purge_exportdata
 fi
+write_ata_errors="0"
 detailed_report $2
 
 if [[ $reportnonSMART == "true" ]]; then
@@ -4876,5 +5020,11 @@ else
   remove_junk_report
   create_email
 fi
+
+# Update multi_report_config.txt file if required.
+   if [[ $write_ata_errors == "1" ]]; then
+       ata_errors="$(echo "$temp_ata_errors" | sed 's/.$//')"
+       update_config_file
+    fi
 
 # All reporting files are left in the /tmp/ directory for troubleshooting and cleaned up when the script is initial run.
