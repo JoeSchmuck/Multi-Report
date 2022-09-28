@@ -550,13 +550,13 @@ logfile_messages_temp="/tmp/smart_report_messages.tmp"
 boundary="gc0p4Jq0M2Yt08jU534c0p"
 
 if [[ $softver != "Linux" ]]; then
-programver="Multi-Report v1.6d dtd:2022-09-26 (TrueNAS Core "$(cat /etc/version | cut -d " " -f1 | sed 's/TrueNAS-//')")"
+programver="Multi-Report v1.6d dtd:2022-09-27 (TrueNAS Core "$(cat /etc/version | cut -d " " -f1 | sed 's/TrueNAS-//')")"
 else
-programver="Multi-Report v1.6d dtd:2022-09-26 (TrueNAS Scale "$(cat /etc/version)")"
+programver="Multi-Report v1.6d dtd:2022-09-27 (TrueNAS Scale "$(cat /etc/version)")"
 fi
 
 #If the config file format changes, this is the latest working date, anything older must be updated.
-valid_config_version_date="2022-09-26"
+valid_config_version_date="2022-09-27"
 
 ##########################
 ##########################
@@ -1386,6 +1386,8 @@ if [[ "$sas" == 1 ]]; then
 fi
 
 # Some drives do not report test age after 65536 hours.
+onHours=${onHours#0}
+onHours="${onHours//,}"
 if [[ $onHours -gt "65536" ]] && [[ $lastTestHours -gt "0" && $lastTestHours -lt "65536" ]]; then lastTestHours=$(($lastTestHours + 65536)); fi
 
 ######## VMWare Hack to fix NVMe bad variables #####
