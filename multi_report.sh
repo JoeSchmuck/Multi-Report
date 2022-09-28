@@ -12,7 +12,7 @@
 ### Version v1.4, v1.5, v1.6 FreeNAS/TrueNAS (joeschmuck)
 
 ### Changelog:
-# v1.6d (26 September 2022)
+# v1.6d (28 September 2022)
 #   - Thanks goes out to ChrisRJ for offering some great suggestions to enhance and optimize the script.
 #   - Updated gptid text and help text areas (clarifing inforamtion)
 #   - Updated the -dump parameter to -dump [all] and included non-SMART attachments.
@@ -22,10 +22,11 @@
 #   - Added Raw Read Error Rates chart column.
 #   - Added compensation for Seagate Seek Error Rates and Raw Read Error Rates.
 #   - Added Automatic Configuration File Update feature.
-#   - Added selection between ZFS Pool Size or Zpool Pool Size. ZFS is representative of the actual storage capacity.
+#   - Added selection between ZFS Pool Size or Zpool Pool Size. ZFS is representative of the actual storage capacity
 #   -- and updated the Pool Status Report Summary chart.
 #   - Added ATA Error Log Silencing (by special request).
-#   - Added 0.1 second delay after writing $logfile to eliminate intermititent file creation errors.
+#   - Added 0.1 second delay after writing "$logfile" to eliminate intermititent file creation errors.
+#   - Fixed Text Report -> Drive Model Number not showing up for some drives.
 #   -- Future Work
 #   ---- Change all the -config dialog to be consistent.
 #   ---- Optimizing Code
@@ -550,13 +551,13 @@ logfile_messages_temp="/tmp/smart_report_messages.tmp"
 boundary="gc0p4Jq0M2Yt08jU534c0p"
 
 if [[ $softver != "Linux" ]]; then
-programver="Multi-Report v1.6d dtd:2022-09-27 (TrueNAS Core "$(cat /etc/version | cut -d " " -f1 | sed 's/TrueNAS-//')")"
+programver="Multi-Report v1.6d dtd:2022-09-28 (TrueNAS Core "$(cat /etc/version | cut -d " " -f1 | sed 's/TrueNAS-//')")"
 else
-programver="Multi-Report v1.6d dtd:2022-09-27 (TrueNAS Scale "$(cat /etc/version)")"
+programver="Multi-Report v1.6d dtd:2022-09-28 (TrueNAS Scale "$(cat /etc/version)")"
 fi
 
 #If the config file format changes, this is the latest working date, anything older must be updated.
-valid_config_version_date="2022-09-27"
+valid_config_version_date="2022-09-28"
 
 ##########################
 ##########################
@@ -1792,18 +1793,42 @@ force_delay
  for drive in $drives; do
 
 if [[ $drive == "ada50" || $drive == "nvme50"  ]] ; then
-    brand="$(cat "$testfile" | grep "Model Family" | awk '{print $3, $4, $5}')"
+
+if [[ "$(cat "$testfile" | grep "Device Model" | awk '{print $3 " " $4 " " $5 " " $6 " " $7}')" ]]; then
+   modelnumber="$(cat "$testfile" | grep "Device Model" | awk '{print $3 " " $4 " " $5 " " $6 " " $7}')"; fi
+
+if [[ "$(cat "$testfile" | grep "Model Number:" | awk '{print $3 " " $4 " " $5 " " $6 " " $7}')" ]]; then
+   modelnumber="$(cat "$testfile" | grep "Model Number:" | awk '{print $3 " " $4 " " $5 " " $6 " " $7}')"; fi
+
+if [[ "$(cat "$testfile" | grep "Product:" | awk '{print $2}')" ]]; then
+   modelnumber="$(cat "$testfile" | grep "Product:" | awk '{print $2}')"; fi
+
+
+ #   brand="$(cat "$testfile" | grep "Model Family" | awk '{print $3, $4, $5}')"
     serial="$(cat "$testfile" | grep "Serial Number" | awk '{print $3}')"
     (
-    echo "<br><b>########## FULL TESTFILE -- SMART status report for ${drive} drive (${brand}: ${serial}) ##########</b>" 
+    echo "<br><b>########## FULL TESTFILE -- SMART status report for ${drive} drive (${modelnumber}: ${serial}) ##########</b>" 
     cat "$testfile"
     ) >> "$logfile"
 force_delay
 else
     # Gather brand and serial number of each drive
-    brand="$(smartctl -i /dev/"$drive" | grep "Model Family" | awk '{print $3, $4, $5}')"
-    serial="$(smartctl -i /dev/"$drive" | grep "Serial Number" | awk '{print $3}')"
+    smartdata="$(smartctl -a /dev/"$drive")"
+if [[ "$(echo "$smartdata" | grep "Device Model" | awk '{print $3 " " $4 " " $5 " " $6 " " $7}')" ]]; then
+   modelnumber="$(echo "$smartdata" | grep "Device Model" | awk '{print $3 " " $4 " " $5 " " $6 " " $7}')"; fi
+
+if [[ "$(echo "$smartdata" | grep "Model Number:" | awk '{print $3 " " $4 " " $5 " " $6 " " $7}')" ]]; then
+   modelnumber="$(echo "$smartdata" | grep "Model Number:" | awk '{print $3 " " $4 " " $5 " " $6 " " $7}')"; fi
+
+if [[ "$(echo "$smartdata" | grep "Product:" | awk '{print $2}')" ]]; then
+   modelnumber="$(echo "$smartdata" | grep "Product:" | awk '{print $2}')"; fi
+
+ #   brand="$(smartctl -i /dev/"$drive" | grep "Model Family" | awk '{print $3, $4, $5}')"
+    serial="$(echo "$smartdata" | grep "Serial Number" | awk '{print $3}')"
     test_ata_error="$(smartctl -H -A -l error /dev/"$drive" | grep "ATA Error Count" | awk '{print $4}')" 
+
+if [[ $serial == "" ]]; then serial="N/A"; fi
+if [[ $modelnumber == "" ]]; then modelnumber="N/A"; fi
 
     # If no data in ata_errors then lets gather data if needed.
     if [[ $ata_errors == "" ]]; then ata_errors="none"; fi
@@ -1842,7 +1867,7 @@ else
 
     (
      # Create a simple header and drop the output of some basic smartctl commands
-        echo "<b>########## SMART status report for ${drive} drive (${brand}: ${serial}) ##########</b>"
+        echo "<b>########## SMART status report for ${drive} drive (${modelnumber}: ${serial}) ##########</b>"
      if [[ $test_ata_error -gt "0" ]]; then
         if [[ $test_ata_error -gt $ataerrors ]]; then 
            smartctl -H -A -l error /dev/"$drive"
@@ -1892,17 +1917,28 @@ drives=$nonsmartdrives
 if [ $reportnonSMART == "true" ]; then 
 for drive in $drives; do
   if [ ! "$(echo "$drive" | grep "cd")" ]; then
-   if [ $softver != "Linux" ]; then
-    # Gather brand and serial number of each drive
-    brand="$(smartctl -i /dev/"$drive" | grep "Model Family" | awk '{print $3, $4, $5}')"
-    serial="$(smartctl -i /dev/"$drive" | grep "Serial Number" | awk '{print $3}')"
-   else
-    brand="$(fdisk -l /dev/"$drive" | grep "Disk model" | awk '{print $3, $4, $5}')"
-    serial="$(fdisk -l /dev/"$drive" | grep "Serial Number" | awk '{print $3}')"
-   fi
+
+  # Gather model number and serial number of each drive
+    
+    smartdata="$(smartctl -a /dev/"$drive")"
+
+    serial="$(echo "$smartdata" | grep "Serial Number" | awk '{print $3}')"
+
+if [[ "$(echo "$smartdata" | grep "Device Model" | awk '{print $3 " " $4 " " $5 " " $6 " " $7}')" ]]; then
+   modelnumber="$(echo "$smartdata" | grep "Device Model" | awk '{print $3 " " $4 " " $5 " " $6 " " $7}')"; fi
+
+if [[ "$(echo "$smartdata" | grep "Model Number:" | awk '{print $3 " " $4 " " $5 " " $6 " " $7}')" ]]; then
+   modelnumber="$(echo "$smartdata" | grep "Model Number:" | awk '{print $3 " " $4 " " $5 " " $6 " " $7}')"; fi
+
+if [[ "$(echo "$smartdata" | grep "Product:" | awk '{print $2}')" ]]; then
+   modelnumber="$(echo "$smartdata" | grep "Product:" | awk '{print $2}')"; fi
+
+if [[ $serial == "" ]]; then serial="N/A"; fi
+if [[ $modelnumber == "" ]]; then modelnumber="N/A"; fi
+
     (
         echo "<br>"
-        echo "<b>########## NON-SMART status report for ${drive} drive (${brand}: ${serial}) ##########</b>"
+        echo "<b>########## NON-SMART status report for ${drive} drive (${modelnumber}: ${serial}) ##########</b>"
     # And we will dump everything since it's not a standard SMART device.
         echo "<b>SMARTCTL DATA</b>"
         smartctl -a /dev/"$drive"
@@ -2968,6 +3004,8 @@ case $Keyboard_var in
                clear 
                echo "Temperature Settings"
                echo " "
+               echo "Current value is displayed.  Enter a new value or Return to keep."
+               echo " "
                echo -n "HDD Warning Temperature ("$HDDtempWarn") "
                read Keyboard_yn
                if [[ ! $Keyboard_yn == "" ]]; then HDDtempWarn=$Keyboard_yn; fi
@@ -2995,7 +3033,8 @@ case $Keyboard_var in
                if [[ ! $Keyboard_yn == "" ]]; then SSDtempCrit=$Keyboard_yn; fi
                echo "Set Value: ("$SSDtempCrit")"
                echo " "
-               echo -n "SSD Max Temperature Override for Power Cycle Enabled ("$SSDmaxovrd") "
+               echo "SSD Max Temperature Override for Power Cycle Enabled ("$SSDmaxovrd") "
+               echo "This value when "true" will not alarm on any Current Power Cycle Max Temperature Limit."
                read -n 1 Keyboard_yn
                if [[ ! $Keyboard_yn == "" ]]; then
                   if [[ $Keyboard_yn == "t" ]]; then SSDmaxovrd="true"; else SSDmaxovrd="false"; fi
@@ -3020,12 +3059,14 @@ case $Keyboard_var in
                clear
                echo "Zpool Settings"
                echo " "
-               echo -n "Scrub maximum days since last completion ("$scrubAgeWarn") "
+               echo "Scrub maximum days since last completion ("$scrubAgeWarn") "
+               echo "Maximum age (in days) of last pool scrub before CRITICAL color will be used."
                read Keyboard_yn
                if [[ ! $Keyboard_yn == "" ]]; then scrubAgeWarn=$Keyboard_yn; fi
                echo "Set Value: ("$scrubAgeWarn")"
                echo " "
-               echo -n "Pool Space Used Alert ("$usedWarn") "
+               echo "Pool Space Used Alert ("$usedWarn") "
+               echo "Pool used percentage for CRITICAL color to be used."
                read Keyboard_yn
                if [[ ! $Keyboard_yn == "" ]]; then usedWarn=$Keyboard_yn; fi
                echo "Set Value: ("$usedWarn")"
@@ -3120,13 +3161,15 @@ case $Keyboard_var in
                clear
                echo "Activate/Disable Input/Output Settings"
                echo " "
+               echo 'Set to "true" will engage SSD Automatic Detection and Reporting'
                echo -n "Include SSD's in report ("$includeSSD") "
                read -n 1 Keyboard_yn
                if [[ ! $Keyboard_yn == "" ]]; then
                   if [[ $Keyboard_yn == "t" ]]; then includeSSD="true"; else includeSSD="false"; fi
                fi
                echo "Set Value: ("$includeSSD")"
-               echo " "     
+               echo " "
+               echo "Set to "true" will engage NVM Automatic Detection and Reporting"
                echo -n "Include NVMe's in report ("$includeNVM") "
                read -n 1 Keyboard_yn
                if [[ ! $Keyboard_yn == "" ]]; then
@@ -3134,6 +3177,7 @@ case $Keyboard_var in
                fi
                echo "Set Value: ("$includeNVM")"
                echo " "
+               echo "Will force even non-SMART devices to be reported"
                echo -n "Report Non-SMART Devices ("$reportnonSMART") "
                read -n 1 Keyboard_yn
                if [[ ! $Keyboard_yn == "" ]]; then
@@ -3141,6 +3185,7 @@ case $Keyboard_var in
                fi
                echo "Set Value: ("$reportnonSMART")"
                echo " "
+               echo 'Set to "true" to remove the smartctl -a data and non-smart data appended to the normal report.'
                echo -n "Remove Non-SMART Data from report ("$disableRAWdata") "
                read -n 1 Keyboard_yn
                if [[ ! $Keyboard_yn == "" ]]; then
@@ -3851,8 +3896,9 @@ case $Keyboard_var in
         echo "This will scan your drives and for any non-zero value the offset will"
         echo "automatically be added."
         echo " "
-        echo "Enter 'y' for yes or 'n' for no, or Enter/Return to manually set the values."
+        echo "Enter 'y' for yes or 'n' for no to manually set the values, Return for no change."
         read Keyboard_yn
+
         if [[ $Keyboard_yn == "y" ]]; then
            autoselect=1
            echo "Automatic Configuration selected..."
@@ -3875,7 +3921,7 @@ case $Keyboard_var in
            echo "Reallocated_Sectors: "$Bad_Sectors
            echo " "
         fi
-        if [[ ! $autoselect == "1" ]]; then
+        if [[ ! $autoselect == "1" ]] && [[ $Keyboard_yn == "n" ]]; then
            echo "Offset UDMA CRC Errors"
            echo "Press 'd' to delete, 'e' to edit, or Enter/Return to accept."
            echo "Current List: "$CRC_Errors
