@@ -12,9 +12,9 @@
 ### Version v1.4, v1.5, v1.6 FreeNAS/TrueNAS (joeschmuck)
 
 ### Changelog:
-# v1.6d (28 September 2022)
+# v1.6d (01 October 2022)
 #   - Thanks goes out to ChrisRJ for offering some great suggestions to enhance and optimize the script.
-#   - Updated gptid text and help text areas (clarifing inforamtion)
+#   - Updated gptid text and help text areas (clarifying information)
 #   - Updated the -dump parameter to -dump [all] and included non-SMART attachments.
 #   - Added Automatic UDMA_CRC, MultiZone, and Reallocated Sector Compensation to -config advanced option K.
 #   - Fixed Warranty Date always showing as expired.
@@ -25,7 +25,7 @@
 #   - Added selection between ZFS Pool Size or Zpool Pool Size. ZFS is representative of the actual storage capacity
 #   -- and updated the Pool Status Report Summary chart.
 #   - Added ATA Error Log Silencing (by special request).
-#   - Added 0.1 second delay after writing "$logfile" to eliminate intermititent file creation errors.
+#   - Added 0.1 second delay after writing "$logfile" to eliminate intermittent file creation errors.
 #   - Fixed Text Report -> Drive Model Number not showing up for some drives.
 #   -- Future Work
 #   ---- Change all the -config dialog to be consistent.
@@ -100,7 +100,7 @@
 #   - Fixed the Capacity to remove the brackets "[]", thanks Jeff Alperin.
 #   - Fixed Scrub Age failure due to 1 day or longer repair time, now shows anything >24 hours.
 #
-#   - Known Problem: One user reported UDMA_CRC_Errors is not subtracting correctly, have not been able to personnaly replicate it.
+#   - Known Problem: One user reported UDMA_CRC_Errors is not subtracting correctly, have not been able to personally replicate it.
 #   -- This error seems to occur around line #1027
 #
 # v1.4b:
@@ -227,7 +227,7 @@ wearLevelCrit=9           # Wear Level Alarm Setpoint lower OK limit before a WA
 # Output Formats
 powerTimeFormat="h"       # Format for power-on hours string, valid options are "ymdh", "ymd", "ym", "y", or "h" (year month day hour).
 tempdisplay="*C"          # The format you desire the temperature to be displayed in. Common formats are: "*C", "^C", or "^c". Choose your own.
-non_exist_value="---"     # How do you desire non existant data to be displayed.  The Default is "---", popular options are "N/A" or " ".
+non_exist_value="---"     # How do you desire non-existent data to be displayed.  The Default is "---", popular options are "N/A" or " ".
 pool_capacity="zfs"       # Select "zfs" or "zpool" for Zpool Status Report - Pool Size and Free Space capacities. zfs is default.
  
 # Ignore or Activate Alarms
@@ -541,7 +541,7 @@ softver=$(uname -s)
 host=$(hostname -s)
 truenas_ver=$(cat /etc/version)
 
-### temp files have beed converted to variable stored, not stored in /tmp/ as a file. ###
+### temp files have been converted to variable stored, not stored in /tmp/ as a file. ###
 logfile="/tmp/smart_report_body.tmp"
 logfile_header="/tmp/smart_report_header.tmp"
 logfile_warning="/tmp/smart_report_warning_flag.tmp"
@@ -551,9 +551,9 @@ logfile_messages_temp="/tmp/smart_report_messages.tmp"
 boundary="gc0p4Jq0M2Yt08jU534c0p"
 
 if [[ $softver != "Linux" ]]; then
-programver="Multi-Report v1.6d dtd:2022-09-28 (TrueNAS Core "$(cat /etc/version | cut -d " " -f1 | sed 's/TrueNAS-//')")"
+programver="Multi-Report v1.6d dtd:2022-10-01 (TrueNAS Core "$(cat /etc/version | cut -d " " -f1 | sed 's/TrueNAS-//')")"
 else
-programver="Multi-Report v1.6d dtd:2022-09-28 (TrueNAS Scale "$(cat /etc/version)")"
+programver="Multi-Report v1.6d dtd:2022-10-01 (TrueNAS Scale "$(cat /etc/version)")"
 fi
 
 #If the config file format changes, this is the latest working date, anything older must be updated.
@@ -1407,7 +1407,7 @@ fi
 ########################## GET TIMESTAMP ######################
 get_timestamp () {
 
-# I Want Milliseconds Resolution represented for timestamp, FreeBSD deos not support it ################################
+# I Want Milliseconds Resolution represented for timestamp, FreeBSD does not support it ################################
 
 if [[ $softver != "Linux" ]]; then 
   timestamp=$(date +%T)
@@ -1803,6 +1803,8 @@ if [[ "$(cat "$testfile" | grep "Model Number:" | awk '{print $3 " " $4 " " $5 "
 if [[ "$(cat "$testfile" | grep "Product:" | awk '{print $2}')" ]]; then
    modelnumber="$(cat "$testfile" | grep "Product:" | awk '{print $2}')"; fi
 
+if [[ "$(cat "$testfile" | grep "Model Family" | awk '{print $3}')" ]]; then
+   modelnumber="$(cat "$testfile" | grep "Model Family" | awk '{print $3 " " $4 " " $5}')"; fi
 
  #   brand="$(cat "$testfile" | grep "Model Family" | awk '{print $3, $4, $5}')"
     serial="$(cat "$testfile" | grep "Serial Number" | awk '{print $3}')"
@@ -1814,21 +1816,26 @@ force_delay
 else
     # Gather brand and serial number of each drive
     smartdata="$(smartctl -a /dev/"$drive")"
-if [[ "$(echo "$smartdata" | grep "Device Model" | awk '{print $3 " " $4 " " $5 " " $6 " " $7}')" ]]; then
-   modelnumber="$(echo "$smartdata" | grep "Device Model" | awk '{print $3 " " $4 " " $5 " " $6 " " $7}')"; fi
 
-if [[ "$(echo "$smartdata" | grep "Model Number:" | awk '{print $3 " " $4 " " $5 " " $6 " " $7}')" ]]; then
-   modelnumber="$(echo "$smartdata" | grep "Model Number:" | awk '{print $3 " " $4 " " $5 " " $6 " " $7}')"; fi
+    if [[ "$(echo "$smartdata" | grep "Device Model" | awk '{print $3 " " $4 " " $5 " " $6 " " $7}')" ]]; then
+       modelnumber="$(echo "$smartdata" | grep "Device Model" | awk '{print $3 " " $4 " " $5 " " $6 " " $7}')"; fi
 
-if [[ "$(echo "$smartdata" | grep "Product:" | awk '{print $2}')" ]]; then
-   modelnumber="$(echo "$smartdata" | grep "Product:" | awk '{print $2}')"; fi
+    if [[ "$(echo "$smartdata" | grep "Model Number:" | awk '{print $3 " " $4 " " $5 " " $6 " " $7}')" ]]; then
+       modelnumber="$(echo "$smartdata" | grep "Model Number:" | awk '{print $3 " " $4 " " $5 " " $6 " " $7}')"; fi
 
- #   brand="$(smartctl -i /dev/"$drive" | grep "Model Family" | awk '{print $3, $4, $5}')"
+    if [[ "$(echo "$smartdata" | grep "Product:" | awk '{print $2}')" ]]; then
+       modelnumber="$(echo "$smartdata" | grep "Product:" | awk '{print $2 " " $3 " " $4 " " $5 " " $6}')"; fi
+
+    if [[ "$(echo "$smartdata" | grep "Model Family" | awk '{print $3}')" ]]; then
+       modelnumber="$(echo "$smartdata" | grep "Model Family" | awk '{print $3 " " $4 " " $5}')"; fi
+
     serial="$(echo "$smartdata" | grep "Serial Number" | awk '{print $3}')"
     test_ata_error="$(smartctl -H -A -l error /dev/"$drive" | grep "ATA Error Count" | awk '{print $4}')" 
 
-if [[ $serial == "" ]]; then serial="N/A"; fi
-if [[ $modelnumber == "" ]]; then modelnumber="N/A"; fi
+    modelnumber="$(echo "${modelnumber}" | sed -e 's/\ *$//g')"
+
+    if [[ $serial == "" ]]; then serial="N/A"; fi
+    if [[ $modelnumber == "" ]]; then modelnumber="N/A"; fi
 
     # If no data in ata_errors then lets gather data if needed.
     if [[ $ata_errors == "" ]]; then ata_errors="none"; fi
@@ -1867,7 +1874,7 @@ if [[ $modelnumber == "" ]]; then modelnumber="N/A"; fi
 
     (
      # Create a simple header and drop the output of some basic smartctl commands
-        echo "<b>########## SMART status report for ${drive} drive (${modelnumber}: ${serial}) ##########</b>"
+        echo "<b>########## SMART status report for ${drive} drive (${modelnumber} : ${serial}) ##########</b>"
      if [[ $test_ata_error -gt "0" ]]; then
         if [[ $test_ata_error -gt $ataerrors ]]; then 
            smartctl -H -A -l error /dev/"$drive"
@@ -1924,21 +1931,23 @@ for drive in $drives; do
 
     serial="$(echo "$smartdata" | grep "Serial Number" | awk '{print $3}')"
 
-if [[ "$(echo "$smartdata" | grep "Device Model" | awk '{print $3 " " $4 " " $5 " " $6 " " $7}')" ]]; then
-   modelnumber="$(echo "$smartdata" | grep "Device Model" | awk '{print $3 " " $4 " " $5 " " $6 " " $7}')"; fi
+    if [[ "$(echo "$smartdata" | grep "Device Model" | awk '{print $3 " " $4 " " $5 " " $6 " " $7}')" ]]; then
+       modelnumber="$(echo "$smartdata" | grep "Device Model" | awk '{print $3 " " $4 " " $5 " " $6 " " $7}')"; fi
 
-if [[ "$(echo "$smartdata" | grep "Model Number:" | awk '{print $3 " " $4 " " $5 " " $6 " " $7}')" ]]; then
-   modelnumber="$(echo "$smartdata" | grep "Model Number:" | awk '{print $3 " " $4 " " $5 " " $6 " " $7}')"; fi
+    if [[ "$(echo "$smartdata" | grep "Model Number:" | awk '{print $3 " " $4 " " $5 " " $6 " " $7}')" ]]; then
+       modelnumber="$(echo "$smartdata" | grep "Model Number:" | awk '{print $3 " " $4 " " $5 " " $6 " " $7}')"; fi
 
-if [[ "$(echo "$smartdata" | grep "Product:" | awk '{print $2}')" ]]; then
-   modelnumber="$(echo "$smartdata" | grep "Product:" | awk '{print $2}')"; fi
+    if [[ "$(echo "$smartdata" | grep "Product:" | awk '{print $2}')" ]]; then
+       modelnumber="$(echo "$smartdata" | grep "Product:" | awk '{print $2 " " $3 " " $4 " " $5 " " $6}')"; fi
 
-if [[ $serial == "" ]]; then serial="N/A"; fi
-if [[ $modelnumber == "" ]]; then modelnumber="N/A"; fi
+    modelnumber="$(echo "${modelnumber}" | sed -e 's/\ *$//g')"
+
+    if [[ $serial == "" ]]; then serial="N/A"; fi
+    if [[ $modelnumber == "" ]]; then modelnumber="N/A"; fi
 
     (
         echo "<br>"
-        echo "<b>########## NON-SMART status report for ${drive} drive (${modelnumber}: ${serial}) ##########</b>"
+        echo "<b>########## NON-SMART status report for ${drive} drive (${modelnumber} : ${serial}) ##########</b>"
     # And we will dump everything since it's not a standard SMART device.
         echo "<b>SMARTCTL DATA</b>"
         smartctl -a /dev/"$drive"
@@ -2482,7 +2491,7 @@ echo "###### General Settings"
 echo "# Output Formats"
 echo 'powerTimeFormat="'$powerTimeFormat'"       # Format for power-on hours string, valid options are "ymdh", "ymd", "ym", "y", or "h" (year month day hour).'
 echo 'tempdisplay="'$tempdisplay'"          # The format you desire the temperature to be displayed in. Common formats are: "*C", "^C", or "^c". Choose your own.'
-echo 'non_exist_value="'$non_exist_value'"     # How do you desire non existent data to be displayed.  The Default is "---", popular options are "N/A" or " ".'
+echo 'non_exist_value="'$non_exist_value'"     # How do you desire non-existent data to be displayed.  The Default is "---", popular options are "N/A" or " ".'
 echo 'pool_capacity="'$pool_capacity'"       # Select "zfs" or "zpool" for Zpool Status Report - Pool Size and Free Space capacities. zfs is default.'
 echo " "
 echo "# Ignore or Activate Alarms"
@@ -2952,7 +2961,7 @@ case $Keyboard_var in
     echo " "
     echo "   F) NVMe Column Selection (Select columns to display/hide)"
     echo " "
-    echo "   G) Output Formats (Hours, Temp, Non-Existant, Pool Capacity)"
+    echo "   G) Output Formats (Hours, Temp, Non-Existent, Pool Capacity)"
     echo " "
     echo "   H) Report Header Titles (Edit Header Titles)" 
     echo " "
@@ -3276,7 +3285,7 @@ case $Keyboard_var in
          echo "Set Value: ("$saveBackup")"
          echo " "
          echo "TrueNAS Backup Configuration file location ("$backupLocation")"
-         echo -n "Enter new location or press Enter/Return to accecpt current value:"
+         echo -n "Enter new location or press Enter/Return to accept current value:"
          read Keyboard_yn
          if [[ ! $Keyboard_yn == "" ]]; then backupLocation=$Keyboard_yn; fi
          echo "Set Value: ("$backupLocation")"
@@ -3730,7 +3739,7 @@ case $Keyboard_var in
         if [[ ! $Keyboard_yn == "" ]]; then tempdisplay=$Keyboard_yn; fi
         echo "Set Value: "$tempdisplay
         echo " "
-        echo "Non-existant Value ("$non_exist_value") "
+        echo "Non-existent Value ("$non_exist_value") "
         echo -n "you may use what you want, Common formats are: ---, N/A, or a space character: "
         read Keyboard_yn
         if [[ ! $Keyboard_yn == "" ]]; then non_exist_value=$Keyboard_yn; fi
@@ -4131,7 +4140,7 @@ case $Keyboard_var in
     echo "  4) Some options will give you a choice of 'd' to delete the value and"
     echo "     continue, or 'e' to Edit."
     echo " "
-    echo "Just to re-itterate: Press the Enter/Return key to accept the current value."
+    echo "Just to re-iterate: Press the Enter/Return key to accept the current value."
     echo "Press 't' or 'f' to change to 'true' or 'false'.  Enter a number or string"
     echo "followed by the Enter/Return key to change a value."
     echo " "
@@ -4243,7 +4252,7 @@ echo "###### General Settings"
 echo "# Output Formats"
 echo 'powerTimeFormat="h"       # Format for power-on hours string, valid options are "ymdh", "ymd", "ym", "y", or "h" (year month day hour).'
 echo 'tempdisplay="*C"          # The format you desire the temperature to be displayed in. Common formats are: "*C", "^C", or "^c". Choose your own.'
-echo 'non_exist_value="---"     # How do you desire non existent data to be displayed.  The Default is "---", popular options are "N/A" or " ".'
+echo 'non_exist_value="---"     # How do you desire non-existent data to be displayed.  The Default is "---", popular options are "N/A" or " ".'
 echo 'pool_capacity="zfs"       # Select "zfs" or "zpool" for Zpool Status Report - Pool Size and Free Space capacities. zfs is default.'
 echo " "
 echo "# Ignore or Activate Alarms"
@@ -4701,7 +4710,7 @@ echo "      and generate a report."
 echo " "
 echo "CONFIGURATION"
 echo "      The script has become quite complex over time and with added features"
-echo "      untimately required an external configuration file with version 1.6c"
+echo "      ultimately required an external configuration file with version 1.6c"
 echo "      to simplify upgrades to the end users."
 echo " "
 echo "      If the external configuration file does not exist, the script will use"
@@ -4711,7 +4720,7 @@ echo "      changed the email address within the script."
 echo " "
 echo "      In order to generate an external configuration file you must use the"
 echo "      [-config] parameter when running the script which is the preferred"
-echo "      method to donfigure your script.  Five options will be available:"
+echo "      method to configure your script.  Five options will be available:"
 echo " "
 echo "          N)ew configuration file"
 echo "          A)dvanced configuration"
@@ -4732,7 +4741,7 @@ echo "      Besides the emailed chart the script can also email you attachments 
 echo "      your FreeNAS/TrueNAS configuration file and a Statistical Data file."
 echo " "
 echo "      The statistical data file is a comma delimited collection of drive data"
-echo "      that can be opened in any spreadsheet program such as MicroSoft Excel."
+echo "      that can be opened in any spreadsheet program such as Microsoft Excel."
 echo "      This data could prove to be useful in diagnosing and troubleshooting"
 echo "      drive or system problems."
 echo " "
@@ -4784,7 +4793,7 @@ echo "      day at e.g. 2:00AM using no switches. This will produce an email sna
 echo "      once a day."
 echo " "
 echo "      In addition if you are trying to troubleshoot heat problems for example"
-echo "      then I would recommend you setup an additiona CRON job run the file with"
+echo "      then I would recommend you setup an additional CRON job run the file with"
 echo "      the -s switch for collecting statistical data only (i.e. no email report)."
 echo "      This statistics cron job should run more frequently, usually every hour"
 echo "      or more frequently.  The corresponding cron job should be scheduled to"
@@ -4828,7 +4837,7 @@ echo "      that you need to maintain the proper formatting of the text or you w
 echo "      throw a wrench into things."
 echo " "
 echo "HOW TO HANDLE ERRORS"
-echo "      If you run across errors running the script, odd are it is becasue a drive"
+echo "      If you run across errors running the script, odd are it is because a drive"
 echo "      was not recognized properly.  I recommend you post your error to the forum"
 echo "      to as for assistance.  It is very possible you will be asked for a -dump"
 echo "      of your data in order to let the developers assist you and correct the"
@@ -4898,8 +4907,8 @@ exit 0
 fi
 
 # if -dump then interactive user selected dumping, if "all" then automatic dumping of everything.
-# Use dump_all=1 during the runnig routine to gather all the drive data and dump to drive ID files.
-# if -dump all is used, then include config and statristical attachments (dump_all=2).
+# Use dump_all=1 during the running routine to gather all the drive data and dump to drive ID files.
+# if -dump all is used, then include config and statistical attachments (dump_all=2).
 # Dump the files into /tmp/ and then email them.
 
 if [[ "$1" == "-dump" ]]; then
