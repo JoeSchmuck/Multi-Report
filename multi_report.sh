@@ -12,7 +12,7 @@
 ### Version v1.4, v1.5, v1.6 FreeNAS/TrueNAS (joeschmuck)
 
 ### Changelog:
-# v1.6d (01 October 2022)
+# v1.6d (05 October 2022)
 #   - Thanks goes out to ChrisRJ for offering some great suggestions to enhance and optimize the script.
 #   - Updated gptid text and help text areas (clarifying information)
 #   - Updated the -dump parameter to -dump [all] and included non-SMART attachments.
@@ -27,6 +27,7 @@
 #   - Added ATA Error Log Silencing (by special request).
 #   - Added 0.1 second delay after writing "$logfile" to eliminate intermittent file creation errors.
 #   - Fixed Text Report -> Drive Model Number not showing up for some drives.
+#   - Added option to email copy of multi_report_config.txt upon any automatic script modification and/or by day.
 #   -- Future Work
 #   ---- Change all the -config dialog to be consistent.
 #   ---- Optimizing Code
@@ -280,7 +281,12 @@ configBackup="true"      # Set to "true" to save config backup (which renders ne
 configSendDay="Mon"      # Set to the day of the week the config is emailed.  (All, Mon, Tue, Wed, Thu, Fri, Sat, Sun, Month)
 saveBackup="false"       # Set to "false" to delete FreeNAS config backup after mail is sent; "true" to keep it in dir below.
 backupLocation="/tmp/"   # Directory in which to store the backup FreeNAS config files.
- 
+
+###### Attach multi_report_config.txt to Email ######
+Config_Email_Enable="true"    # Set to "true" to enable periodic email (which renders next two options operational).
+Config_Changed_Email="true"   # If "true" will attach the updated/changed file to the email.
+Config_Backup_Day="Mon"       # Set to the day of the week the multi_report_config.txt is emailed.  (All, Mon, Tue, Wed, Thu, Fri, Sat, Sun, Month, Never)
+
 ########## REPORT CHART CONFIGURATION ##############
  
 ###### REPORT HEADER TITLE ######
@@ -551,13 +557,13 @@ logfile_messages_temp="/tmp/smart_report_messages.tmp"
 boundary="gc0p4Jq0M2Yt08jU534c0p"
 
 if [[ $softver != "Linux" ]]; then
-programver="Multi-Report v1.6d dtd:2022-10-01 (TrueNAS Core "$(cat /etc/version | cut -d " " -f1 | sed 's/TrueNAS-//')")"
+programver="Multi-Report v1.6d dtd:2022-10-05 (TrueNAS Core "$(cat /etc/version | cut -d " " -f1 | sed 's/TrueNAS-//')")"
 else
-programver="Multi-Report v1.6d dtd:2022-10-01 (TrueNAS Scale "$(cat /etc/version)")"
+programver="Multi-Report v1.6d dtd:2022-10-05 (TrueNAS Scale "$(cat /etc/version)")"
 fi
 
 #If the config file format changes, this is the latest working date, anything older must be updated.
-valid_config_version_date="2022-09-28"
+valid_config_version_date="2022-10-05"
 
 ##########################
 ##########################
@@ -715,6 +721,7 @@ force_delay
 
 fi
 }
+
 
 ##################### IGNORE DRIVES ROUTINE #################
 
@@ -1712,7 +1719,7 @@ if [[ $expDataEnable == "true" ]]; then
 fi
 
 ### Lets write out the error messages if there are any, Critical first followed by Warning
- 
+
 (
 #if test -e "$logfile_messages"; then
 if [[ ! $logfile_messages == "" ]]; then
@@ -1764,12 +1771,13 @@ if [[ $disableRAWdata != "true" ]]; then
         zpool status -v "$pool"
         for longpool in $drives_in_zpool; do
           if [ $softver != "Linux" ]; then
-             drive_ident=$(glabel status | tail -n +2 | grep "$longpool" | awk '{print $3}' | cut -d 'p' -f1)
+             drive_ident=$(glabel status | tail -n +2 | grep "$longpool" | awk '{print $1 " -> " $3}' | cut -d '/' -f2 | cut -d 'p' -f1)
           else
-             drive_ident=$(/sbin/blkid | grep "$longpool" | cut -d ":" -f1 | cut -d "/" -f3)
+             drive_ident=$(/sbin/blkid | grep "$longpool" | grep 'PARTUUID' | awk '{print $7}' | cut -d '"' -f2)
+             drive_ident=$drive_ident" -> "$(/sbin/blkid | grep "$longpool" | cut -d ":" -f1 | cut -d "/" -f3)
           fi
           if [[ $drive_ident != "" ]]; then
-          if [[ $driveit == "0" ]]; then echo "<br>Drives for this pool listed below are in order as listed above:"; driveit="1"; fi
+          if [[ $driveit == "0" ]]; then echo "<br>Drives for this pool are listed below:"; driveit="1"; fi
           echo $drive_ident
           fi
         done
@@ -1806,7 +1814,6 @@ if [[ "$(cat "$testfile" | grep "Product:" | awk '{print $2}')" ]]; then
 if [[ "$(cat "$testfile" | grep "Model Family" | awk '{print $3}')" ]]; then
    modelnumber="$(cat "$testfile" | grep "Model Family" | awk '{print $3 " " $4 " " $5}')"; fi
 
- #   brand="$(cat "$testfile" | grep "Model Family" | awk '{print $3, $4, $5}')"
     serial="$(cat "$testfile" | grep "Serial Number" | awk '{print $3}')"
     (
     echo "<br><b>########## FULL TESTFILE -- SMART status report for ${drive} drive (${modelnumber}: ${serial}) ##########</b>" 
@@ -1984,30 +1991,53 @@ force_delay
 
 # Attach dump files
 if [[ "$dump_all" == "1" || "$dump_all" == "2" ]]; then
-for drive in $smartdrives; do
-  dump_drive_data
-done
-for drive in $smartdrivesSSD; do
-  dump_drive_data
-done
-for drive in $smartdrivesNVM; do
-  dump_drive_data
-done
-for drive in $nonsmartdrives; do
-  dump_drive_data
-done
- 
-(
-  # Write MIME section header for file attachment (encoded with base64)
-  echo "--${boundary}"
-  echo "Content-Type: text/html"
-  echo "Content-Transfer-Encoding: base64"
-  echo "Content-Disposition: attachment; filename=config_file.txt"
-  base64 $Config_File_Name
- ) >> "$logfile"
-force_delay
-
+   for drive in $smartdrives; do
+     dump_drive_data
+   done
+   for drive in $smartdrivesSSD; do
+     dump_drive_data
+   done
+   for drive in $smartdrivesNVM; do
+     dump_drive_data
+   done
+   for drive in $nonsmartdrives; do
+     dump_drive_data
+   done
+   doit="true"
 fi
+
+if [[ "$Config_Email_Enable" == "true" ]]; then
+
+   if [[ "$Attach_Config" == "1" ]]; then doit="true"; fi
+
+   Now=$(date +"%a")
+     case $Config_Backup_Day in
+       All)
+         doit="true"
+       ;;
+       Mon|Tue|Wed|Thu|Fri|Sat|Sun)
+         if [[ "$Config_Backup_Day" == "$Now" ]]; then doit="true"; fi
+       ;;
+       Month)
+         if [[ $(date +"%d") == "01" ]]; then doit="true"; fi
+       ;;
+       Never)
+       ;;
+       *)
+       ;;
+     esac
+fi
+   if [[ "$doit" == "true" ]]; then
+      (
+      # Write MIME section header for file attachment (encoded with base64)
+      echo "--${boundary}"
+      echo "Content-Type: text/html"
+      echo "Content-Transfer-Encoding: base64"
+      echo "Content-Disposition: attachment; filename=multi_report_config.txt"
+      base64 $Config_File_Name
+      ) >> "$logfile"
+force_delay
+   fi
  
 ### End details section, close MIME section
 (
@@ -2545,6 +2575,11 @@ echo 'configSendDay="'$configSendDay'"      # Set to the day of the week the con
 echo 'saveBackup="'$saveBackup'"       # Set to "false" to delete FreeNAS config backup after mail is sent; "true" to keep it in dir below.'
 echo 'backupLocation="'$backupLocation'"   # Directory in which to store the backup FreeNAS config files.'
 echo " "
+echo "###### Attach multi_report_config.txt to Email ######"
+echo 'Config_Email_Enable="'$Config_Email_Enable'"   # Set to "true" to enable periodic email (which renders next two options operational).'
+echo 'Config_Changed_Email="'$Config_Changed_Email'"  # If "true" it will attach the updated/changed file to the email.'
+echo 'Config_Backup_Day="'$Config_Backup_Day'"     # Set to the day of the week the multi_report_config.txt is emailed.  (All, Mon, Tue, Wed, Thu, Fri, Sat, Sun, Month, Never)'
+echo " "
 echo "########## REPORT CHART CONFIGURATION ##############"
 echo " "
 echo "###### REPORT HEADER TITLE ######"
@@ -2792,6 +2827,7 @@ echo 'blueColor="'$blueColor'"     # Hex code for Sky Blue, used for the SCRUB I
 echo 'yellowColor="'$yellowColor'"   # Hex code for pale yellow.'
 
 ) > "$Config_File_Name"
+if [[ $Config_Changed_Email == "true" ]]; then Attach_Config="1"; fi
 }
 
 ################################## CLEAN UP TEMPORARY FILES #######################################
@@ -2951,7 +2987,7 @@ case $Keyboard_var in
     echo " "
     echo "   A) Alarm Setpoints (Temp, Zpool, Media, Activate In/Out, Ignore)" 
     echo " "
-    echo "   B) Config-Backup (Edit Config-Backup Settings)"
+    echo "   B) Config-Backup (Edit Config-Backup & Multi-Report_Config Settings)"
     echo " "
     echo "   C) Email Address (Edit email address)" 
     echo " "
@@ -3277,7 +3313,7 @@ case $Keyboard_var in
          clear
          echo "TrueNAS Configuration Backup Setup"
          echo " "
-         echo -n "Save a local copy of the config-backup file ("$saveBackup") "
+         echo -n "Save a local copy of the config-backup file (t/f) ("$saveBackup") "
          read -n 1 Keyboard_yn
          if [[ ! $Keyboard_yn == "" ]]; then
             if [[ $Keyboard_yn == "t" ]]; then saveBackup="true"; else saveBackup="false"; fi
@@ -3305,6 +3341,35 @@ case $Keyboard_var in
          if [[ ! $Keyboard_HDD == "" ]]; then configSendDay=$Keyboard_HDD; fi
          echo "Set Value: ("$configSendDay")"
          echo " "
+         sleep .5
+         clear
+         echo '"multi_report_config.txt" Backup Setup'
+         echo " "
+         echo -n "Enable sending multi_report_config.txt file (will enable next two options if true) (t/f) ("$Config_Email_Enable") "
+         read -n 1 Keyboard_yn
+         if [[ ! $Keyboard_yn == "" ]]; then
+            if [[ $Keyboard_yn == "t" ]]; then Config_Email_Enable="true"; else Config_Email_Enable="false"; fi
+         fi
+         echo "Set Value: ("$Config_Email_Enable")"
+         echo " "
+         echo "What day of the week would you like the file attached?"
+         echo "Current Value: "$Config_Backup_Day
+         echo "(All, Mon, Tue, Wed, Thu, Fri, Sat, Sun, Month, Never)"
+         echo -n "Enter: "
+         read Keyboard_HDD
+         if [[ ! $Keyboard_HDD == "" ]]; then Config_Backup_Day=$Keyboard_HDD; fi
+         echo "Set Value: ("$Config_Backup_Day")"
+         echo " "
+         echo " "
+         echo -n "Send email of multi_report_config.txt file for any change (t/f) ("$Config_Changed_Email") "
+         read -n 1 Keyboard_yn
+         if [[ ! $Keyboard_yn == "" ]]; then
+            if [[ $Keyboard_yn == "t" ]]; then Config_Changed_Email="true"; else Config_Changed_Email="false"; fi
+         fi
+         echo "Set Value: ("$Config_Changed_Email")"
+         echo " "
+
+
          echo "returning..."
          sleep 2
          ;;
@@ -4306,6 +4371,11 @@ echo 'configSendDay="Mon"      # Set to the day of the week the config is emaile
 echo 'saveBackup="false"       # Set to "false" to delete FreeNAS config backup after mail is sent; "true" to keep it in dir below.'
 echo 'backupLocation="/tmp/"   # Directory in which to store the backup FreeNAS config files.'
 echo " "
+echo "###### Attach multi_report_config.txt to Email ######"
+echo 'Config_Email_Enable="true"    # Set to "true" to enable periodic email (which renders next two options operational).'
+echo 'Config_Changed_Email="true"   # If "true" it will attach the updated/changed file to the email.'
+echo 'Config_Backup_Day="Mon"       # Set to the day of the week the multi_report_config.txt is emailed.  (All, Mon, Tue, Wed, Thu, Fri, Sat, Sun, Month, Never)'
+echo " "
 echo "########## REPORT CHART CONFIGURATION ##############"
 echo " "
 echo "###### REPORT HEADER TITLE ######"
@@ -4644,6 +4714,7 @@ echo 'yellowColor="#f1ffad"   # Hex code for pale yellow.'
     echo " "
     echo " "
     z=50
+    
     exit 1
     ;;
 
@@ -4912,7 +4983,7 @@ fi
 # Dump the files into /tmp/ and then email them.
 
 if [[ "$1" == "-dump" ]]; then
-   if [[ "$2" == "all" ]]; then dump_all="2"; echo "Drive Data, Multi-Report Configuration, Statistics, and TrueNAS Configuration files."; else dump_all="1"; echo "Drive Data and Multi_Report Configuration files."; fi
+   if [[ "$2" == "all" ]]; then dump_all="2"; echo "Attaching Drive Data, Multi-Report Configuration, Statistics, and TrueNAS Configuration files."; else dump_all="1"; echo "Attaching Drive Data and Multi-Report Configuration files."; fi
 else
    dump_all="0"
 fi
@@ -5070,6 +5141,12 @@ if [[ $reportnonSMART == "true" ]]; then
   fi
 fi
 
+# Update multi_report_config.txt file if required.
+   if [[ $write_ata_errors == "1" ]]; then
+       ata_errors="$(echo "$temp_ata_errors" | sed 's/.$//')"
+       update_config_file
+   fi
+
 if [[ "$1" == "-s" ]]; then
   echo "Statistical Data Collection Complete"
 else
@@ -5078,10 +5155,6 @@ else
   create_email
 fi
 
-# Update multi_report_config.txt file if required.
-   if [[ $write_ata_errors == "1" ]]; then
-       ata_errors="$(echo "$temp_ata_errors" | sed 's/.$//')"
-       update_config_file
-    fi
+
 
 # All reporting files are left in the /tmp/ directory for troubleshooting and cleaned up when the script is initial run.
