@@ -12,6 +12,12 @@
 ### Version v1.4, v1.5, v1.6 FreeNAS/TrueNAS (joeschmuck)
 
 ### Changelog:
+# v1.6d-1 (08 October 2022)
+#   - Bug Fix for converting multiple numbers from Octal to Decimal.  The previous process worked "most" of the time
+#   -- but we always aim for 100% working.
+#   
+#   The multi_report_config file is compatable with version back to v1.6d.
+#
 # v1.6d (05 October 2022)
 #   - Thanks goes out to ChrisRJ for offering some great suggestions to enhance and optimize the script.
 #   - Updated gptid text and help text areas (clarifying information)
@@ -28,10 +34,12 @@
 #   - Added 0.1 second delay after writing "$logfile" to eliminate intermittent file creation errors.
 #   - Fixed Text Report -> Drive Model Number not showing up for some drives.
 #   - Added option to email copy of multi_report_config.txt upon any automatic script modification and/or by day.
+#   
 #   -- Future Work
 #   ---- Change all the -config dialog to be consistent.
 #   ---- Optimizing Code
 #
+#   The multi_report_config file will be automatically updated.
 #
 # v1.6c (28 August 2022)
 #   - Supports external configuration file (but not required).
@@ -557,9 +565,9 @@ logfile_messages_temp="/tmp/smart_report_messages.tmp"
 boundary="gc0p4Jq0M2Yt08jU534c0p"
 
 if [[ $softver != "Linux" ]]; then
-programver="Multi-Report v1.6d dtd:2022-10-05 (TrueNAS Core "$(cat /etc/version | cut -d " " -f1 | sed 's/TrueNAS-//')")"
+programver="Multi-Report v1.6d-1 dtd:2022-10-08 (TrueNAS Core "$(cat /etc/version | cut -d " " -f1 | sed 's/TrueNAS-//')")"
 else
-programver="Multi-Report v1.6d dtd:2022-10-05 (TrueNAS Scale "$(cat /etc/version)")"
+programver="Multi-Report v1.6d-1 dtd:2022-10-08 (TrueNAS Scale "$(cat /etc/version)")"
 fi
 
 #If the config file format changes, this is the latest working date, anything older must be updated.
@@ -614,6 +622,19 @@ else
 fi
 }
 
+#################### Convert to Decimal ##################
+
+convert_to_decimal () {
+
+if [[ "$1" == "" ]]; then return; fi
+Converting_Value=${1#0}
+#echo "Step 1 -> Converting "$1" to BASE 10 = "$Converting_Value
+Converting_Value="${Converting_Value//,}"
+#echo "Step 2 -> Removing commas from "$1" to "$Converting_Value
+Return_Value=$Converting_Value
+if [[ $1 == "0" ]]; then Return_Value=0; fi
+#echo "Return_Value="$Return_Value
+}
 
 #################### CHECK OPEN FILE #####################
 # Checks if trhe file is open before continuing.
@@ -1215,10 +1236,10 @@ else
 
    if [[ "$sas" == 0 ]]; then
       if [[ "$(echo "$smartdata" | grep "# 1" | awk '{print $9}')" =~ [%]+$ ]]; then
-         lastTestHours="$((10#$(echo "$smartdata" | grep "# 1" | awk '{print $10}' )))"
+         lastTestHours="$(echo "$smartdata" | grep "# 1" | awk '{print $10}' )"
       else
          if [[ "$(echo "$smartdata" | grep "# 1" | awk '{print $9}')" ]]; then
-         lastTestHours="$((10#$(echo "$smartdata" | grep "# 1" | awk '{print $9}' )))"
+         lastTestHours="$(echo "$smartdata" | grep "# 1" | awk '{print $9}' )"
       fi
    fi
 fi
@@ -1239,115 +1260,113 @@ if [[ "$(echo "$smartdata" | grep "Serial Number" | awk '{print $3}')" ]]; then
    serial="$(echo "$smartdata" | grep "Serial Number" | awk '{print $3}')"; fi
 
 if [[ "$(echo "$smartdata" | grep "Airflow" | awk '{print $10}')" ]]; then
-   temp="$((10#$(echo "$smartdata" | grep "Airflow" | awk '{print $10 + 0}')))"; fi
+   temp="$(echo "$smartdata" | grep "Airflow" | awk '{print $10 + 0}')"; fi
 
 if [[ "$(echo "$smartdata" | grep "Temperature_Case" | awk '{print $10}')" ]]; then
-   temp="$((10#$(echo "$smartdata" | grep "Temperature_Case" | awk '{print $10 + 0}')))"; fi
+   temp="$(echo "$smartdata" | grep "Temperature_Case" | awk '{print $10}')"; fi
 
 if [[ "$(echo "$smartdata" | grep "Temperature_Celsius" | awk '{print $10}')" ]]; then
-   temp="$((10#$(echo "$smartdata" | grep "Temperature_Celsius" | awk '{print $10 + 0}')))"; fi
+   temp="$(echo "$smartdata" | grep "Temperature_Celsius" | awk '{print $10 + 0}')"; fi
 
 if [[ "$sas" == 0 ]]; then
    if [[ "$(echo "$smartdata" | grep "Temperature:" | awk '{print $2}')" ]]; then
-      temp="$((10#$(echo "$smartdata" | grep "Temperature:" | awk '{print $2 + 0}')))"; fi
+      temp="$(echo "$smartdata" | grep "Temperature:" | awk '{print $2 + 0}')"; fi
 fi
 
 if [[ "$(echo "$smartdata" | grep "Power_On_Hours" | awk '{print $10}')" ]]; then
-   onHours="$((10#$(echo "$smartdata" | grep "Power_On_Hours" | awk '{print $10}' | cut -d 'h' -f1)))"; fi
+   onHours="$(echo "$smartdata" | grep "Power_On_Hours" | awk '{print $10}' | cut -d 'h' -f1)"; fi
 
 if [[ "$(echo "$smartdata" | grep "Power On Hours" | awk '{print $4}')" ]]; then
-   onHours="$(echo "$smartdata" | grep "Power On Hours" | awk '{print $4}')"; fi
+   onHours="$(echo "$smartdata" | grep "Power On Hours" | awk '{print $4 + 0}')"; fi
 
 if [[ "$(echo "$smartdata" | grep "Start_Stop_Count" | awk '{print $10}')" ]]; then
-   startStop="$((10#$(echo "$smartdata" | grep "Start_Stop_Count" | awk '{print $10}')))"; fi
+   startStop="$(echo "$smartdata" | grep "Start_Stop_Count" | awk '{print $10}')"; fi
 
 if [[ "$(echo "$smartdata" | grep "Spin_Retry_Count" | awk '{print $10}')" ]]; then
-   spinRetry="$((10#$(echo "$smartdata" | grep "Spin_Retry_Count" | awk '{print $10 + 0}')))"; fi
+   spinRetry="$(echo "$smartdata" | grep "Spin_Retry_Count" | awk '{print $10 + 0}')"; fi
 
 if [[ "$(echo "$smartdata" | grep "Reallocated_Sector" | awk '{print $10}')" ]]; then
-   reAlloc="$((10#$(echo "$smartdata" | grep "Reallocated_Sector" | awk '{print $10}')))"; fi
+   reAlloc="$(echo "$smartdata" | grep "Reallocated_Sector" | awk '{print $10}')"; fi
 
 if [[ "$(echo "$smartdata" | grep "Reallocated_Event_Count" | awk '{print $10}')" ]]; then
-   reAllocEvent="$((10#$(echo "$smartdata" | grep "Reallocated_Event_Count" | awk '{print $10}')))"; fi
+   reAllocEvent="$(echo "$smartdata" | grep "Reallocated_Event_Count" | awk '{print $10}')"; fi
 
 if [[ "$(echo "$smartdata" | grep "Current_Pending_Sector" | awk '{print $10}')" ]]; then
-   pending="$((10#$(echo "$smartdata" | grep "Current_Pending_Sector" | awk '{print $10}')))"; fi
+   pending="$(echo "$smartdata" | grep "Current_Pending_Sector" | awk '{print $10}')"; fi
 
 if [[ "$(echo "$smartdata" | grep "Offline_Uncorrectable" | awk '{print $10}')" ]]; then
-   offlineUnc="$((10#$(echo "$smartdata" | grep "Offline_Uncorrectable" | awk '{print $10}')))"; fi
+   offlineUnc="$(echo "$smartdata" | grep "Offline_Uncorrectable" | awk '{print $10}')"; fi
 
 if [[ "$(echo "$smartdata" | grep "Uncorrectable_Error_Cnt" | awk '{print $10}')" ]]; then
-   offlineUnc="$((10#$(echo "$smartdata" | grep "Uncorrectable_Error_Cnt" | awk '{print $10}')))"; fi
+   offlineUnc="$(echo "$smartdata" | grep "Uncorrectable_Error_Cnt" | awk '{print $10}')"; fi
 
 if [[ "$(echo "$smartdata" | grep "UDMA_CRC_Error_Count" | awk '{print $10}')" ]]; then
-   crcErrors="$((10#$(echo "$smartdata" | grep "UDMA_CRC_Error_Count" | awk '{print $10 + 0}')))"; fi
+   crcErrors="$(echo "$smartdata" | grep "UDMA_CRC_Error_Count" | awk '{print $10 + 0}')"; fi
 
 if [[ "$(echo "$smartdata" | grep "CRC_Error_Count" | awk '{print $10}')" ]]; then
-   crcErrors="$((10#$(echo "$smartdata" | grep "CRC_Error_Count" | awk '{print $10}')))"; fi
+   crcErrors="$(echo "$smartdata" | grep "CRC_Error_Count" | awk '{print $10}')"; fi
 
 if [[ "$(echo "$smartdata" | grep "Seek_Error_Rate" | awk '{print $4}')" ]]; then
-   seekErrorHealth2="$((10#$(echo "$smartdata" | grep "Seek_Error_Rate" | awk '{print $4}')))"; fi
+   seekErrorHealth2="$(echo "$smartdata" | grep "Seek_Error_Rate" | awk '{print $4 + 0}')"; fi
 
 if [[ "$(echo "$smartdata" | grep "Seek_Error_Rate" | awk '{print $10}')" ]]; then
-   seekErrorHealth="$((10#$(echo "$smartdata" | grep "Seek_Error_Rate" | awk '{print $10}')))"; fi
+   seekErrorHealth="$(echo "$smartdata" | grep "Seek_Error_Rate" | awk '{print $10 + 0}')"; fi
 
 if [[ "$(echo "$smartdata" | grep "Raw_Read_Error_Rate" | awk '{print $4}')" ]]; then
-   rawReadErrorRate2="$((10#$(echo "$smartdata" | grep "Raw_Read_Error_Rate" | awk '{print $4}')))"; fi
+   rawReadErrorRate2="$(echo "$smartdata" | grep "Raw_Read_Error_Rate" | head -1 | awk '{print $4 + 0}')"; fi
 
 if [[ "$(echo "$smartdata" | grep "Raw_Read_Error_Rate" | awk '{print $10}')" ]]; then
-   rawReadErrorRate="$((10#$(echo "$smartdata" | grep "Raw_Read_Error_Rate" | awk '{print $10}')))"; fi
+   rawReadErrorRate="$(echo "$smartdata" | grep "Raw_Read_Error_Rate" | head -1 | awk '{print $10 + 0}')"; fi
 
 ### Add search for Seagate and mark seagate=1
 if [[ "$(echo "$smartdata" | grep -i "Seagate" )" ]]; then seagate=1; else seagate=""; fi
 
 if [[ "$(echo "$smartdata" | grep "Load_Cycle_Count" | awk '{print $10}')" ]]; then
-   loadCycle="$((10#$(echo "$smartdata" | grep "Load_Cycle_Count" | awk '{print $10}')))"; fi
+   loadCycle="$(echo "$smartdata" | grep "Load_Cycle_Count" | awk '{print $10}')"; fi
 
 if [[ "$(echo "$smartdata" | grep "Multi_Zone_Error_Rate" | awk '{print $10}')" ]]; then
-   multiZone="$((10#$(echo "$smartdata" | grep "Multi_Zone_Error_Rate" | awk '{print $10 + 0}')))"; fi
+   multiZone="$(echo "$smartdata" | grep "Multi_Zone_Error_Rate" | awk '{print $10 + 0}')"; fi
 
 if [[ "$(echo "$smartdata" | grep "SSD_Life_Left" | awk '{print $4}')" ]]; then
-   wearLevel="$((10#$(echo "$smartdata" | grep "SSD_Life_Left" | awk '{print $4 + 0}')))"; fi
+   wearLevel="$(echo "$smartdata" | grep "SSD_Life_Left" | awk '{print $4 + 0}')"; fi
 
 if [[ "$(echo "$smartdata" | grep "Wear_Leveling_Count" | awk '{print $4}')" ]]; then
-   wearLevel="$((10#$(echo "$smartdata" | grep "Wear_Leveling_Count" | awk '{print $4 + 0}')))"; fi
+   wearLevel="$(echo "$smartdata" | grep "Wear_Leveling_Count" | awk '{print $4 + 0}')"; fi
 
 if [[ "$(echo "$smartdata" | grep "Percent_Lifetime_Remain" | awk '{print $4}')" ]]; then
-   wearLevel="$((10#$(echo "$smartdata" | grep "Percent_Lifetime_Remain" | awk '{print $4 + 0}')))"; fi
+   wearLevel="$(echo "$smartdata" | grep "Percent_Lifetime_Remain" | awk '{print $4 + 0}')"; fi
 
 if [[ "$(echo "$smartdata" | grep "Media_Wearout_Indicator" | awk '{print $4}')" ]]; then
-   wearLevel="$((10#$(echo "$smartdata" | grep "Media_Wearout_Indicator" | awk '{print $4 + 0}')))"; fi
+   wearLevel="$(echo "$smartdata" | grep "Media_Wearout_Indicator" | awk '{print $4 + 0}')"; fi
 
-# Changed from Available Spare: for NVME.txt
 if [[ "$(echo "$smartdata" | grep "Percentage Used:" | awk '{print $3}')" ]]; then
-   wearLevel="$((10#$(echo "$smartdata" | grep "Percentage Used:" | awk '{print $3 + 0}')))"
-   wearLevel=100-$wearLevel
+   wearLevel="$(echo "$smartdata" | grep "Percentage Used:" | awk '{print $3 + 0}')"
+   wearLevel=$(( 100 - $wearLevel ))
 fi
 
 if [[ "$(echo "$smartdata" | grep "Percentage used endurance indicator:" | awk '{print $5}')" ]]; then
-   wearLevel="$((10#$(echo "$smartdata" | grep "Percentage used endurance indicator:" | awk '{print $5}' | cut -d '%' -f1)))"
+   wearLevel="$(echo "$smartdata" | grep "Percentage used endurance indicator:" | awk '{print $5}' | cut -d '%' -f1)"
    # Adjusting Wear Level for amount used vice amount remaining #
-   wearLevel=100-$wearLevel
+   wearLevel=$(( 100 - $wearLevel ))
 fi
 
 if [[ "$(echo "$smartdata" | grep "Reallocated_NAND_Blk_Cnt" | awk '{print $10}')" ]]; then
-   reAlloc="$((10#$(echo "$smartdata" | grep "Reallocated_NAND_Blk_Cnt" | awk '{print $10}')))"; fi
+   reAlloc="$(echo "$smartdata" | grep "Reallocated_NAND_Blk_Cnt" | awk '{print $10}')"; fi
 
 if [[ "$(echo "$smartdata" | grep "Current Drive Temperature:" | awk '{print $4}')" ]]; then
    temp="$((10#$(echo "$smartdata" | grep "Current Drive Temperature:" | awk '{print $4 + 0}')))"; fi
 
 if [[ "$(echo "$smartdata" | grep "Accumulated start-stop cycles:" | awk '{print $4}')" ]]; then
-   startStop="$((10#$(echo "$smartdata" | grep "Accumulated start-stop cycles:" | awk '{print $4 + 0}')))"; fi
+   startStop="$(echo "$smartdata" | grep "Accumulated start-stop cycles:" | awk '{print $4 + 0}')"; fi
 
 if [[ "$(echo "$smartdata" | grep "Accumulated load-unload cycles:" | awk '{print $4}')" ]]; then
-   loadCycle="$((10#$(echo "$smartdata" | grep "Accumulated load-unload cycles:" | awk '{print $4}')))"; fi
+   loadCycle="$(echo "$smartdata" | grep "Accumulated load-unload cycles:" | awk '{print $4}')"; fi
 
 if [[ "$(echo "$smartdata" | grep "Elements in grown defect list:" | awk '{print $6}')" == '^[0-9]+$' ]]; then
-   reAlloc="$((10#$(echo "$smartdata" | grep "Elements in grown defect list:" | awk '{print $6}')))"; fi
+   reAlloc="$(echo "$smartdata" | grep "Elements in grown defect list:" | awk '{print $6}')"; fi
 
 if [[ "$(echo "$smartdata" | grep "Accumulated power on time" | awk '{print $6}' | cut -d ":" -f1)" ]]; then
-   onHours="$((10#$(echo "$smartdata" | grep "Accumulated power on time" | awk '{print $6}' | cut -d ":" -f1)))"
-fi
+   onHours="$(echo "$smartdata" | grep "Accumulated power on time" | awk '{print $6}' | cut -d ":" -f1)"; fi
 
 if [[ "$(echo "$smartdata" | grep "Rotation" | awk '{print $3}')" ]]; then
    rotation="$(echo "$smartdata" | grep "Rotation" | awk '{print $3}')"; fi
@@ -1371,7 +1390,7 @@ if [[ "$(echo "$smartdata" | grep "Critical Warning:" | awk '{print $3}')" ]]; t
    NVMcriticalWarning="$(echo "$smartdata" | grep "Critical Warning:" | awk '{print $3}')"; fi
 
 if [[ "$(echo "$smartdata" | grep "Helium_Level" | awk '{print $10}')" ]]; then
-   Helium="$(echo "$smartdata" | grep "Helium_Level" | awk '{print $10}')"; fi
+   Helium="$(echo "$smartdata" | grep "Helium_Level" | awk '{print $10 + 0}')"; fi
 
 if [[ "$(echo "$smartdata" | grep "22 Unknown_Attribute" | awk '{print $10}')" ]]; then
    if [[ "$Helium" == "" ]]; then Helium="$(echo "$smartdata" | grep "22 Unknown_Attribute" | awk '{print $10}')"; fi; fi
@@ -1393,9 +1412,34 @@ if [[ "$sas" == 1 ]]; then
    lastTestType="$(echo "$smartdata" | grep "# 1" | awk '{print $4}')"; fi
 fi
 
+######### Convert variables to Decimal #########
+
+#echo "---"
+#echo "Drive="$drive
+
+if [[ "$spinRetry" != "" ]] && [[ "$spinRetry" != "0" ]]; then convert_to_decimal $spinRetry; spinRetry=$Return_Value; fi
+if [[ "$reAllocEvent" != "" ]] && [[ "$reAllocEvent" != "0" ]]; then convert_to_decimal $reAllocEvent; reAllocEvent=$Return_Value; fi
+if [[ "$pending" != "" ]] && [[ "$pending" != "0" ]]; then convert_to_decimal $pending; pending=$Return_Value; fi
+if [[ "$offlineUnc" != "" ]] && [[ "$offlineUnc" != "0" ]]; then convert_to_decimal $offlineUnc; offlineUnc=$Return_Value; fi
+if [[ "$crcErrors" != "" ]] && [[ "$crcErrors" != "0" ]]; then convert_to_decimal $crcErrors; crcErrors=$Return_Value; fi
+if [[ "$seekErrorHealth2" != "" ]] && [[ "$seekErrorHealth2" != "0" ]]; then convert_to_decimal $seekErrorHealth2; seekErrorHealth2=$Return_Value; fi
+if [[ "$seekErrorHealth" != "" ]] && [[ "$seekErrorHealth" != "0" ]]; then convert_to_decimal $seekErrorHealth; seekErrorHealth=$Return_Value; fi
+if [[ "$rawReadErrorRate2" != "" ]] && [[ "$rawReadErrorRate2" != "0" ]]; then convert_to_decimal $rawReadErrorRate2; rawReadErrorRate2=$Return_Value; fi
+if [[ "$rawReadErrorRate" != "" ]] && [[ "$rawReadErrorRate" != "0" ]]; then convert_to_decimal $rawReadErrorRate; rawReadErrorRate=$Return_Value; fi
+if [[ "$multiZone" != "" ]] && [[ "$multiZone" != "0" ]]; then convert_to_decimal $multiZone; multiZone=$Return_Value; fi
+if [[ "$wearLevel" != "" ]] && [[ "$wearLevel" != "0" ]]; then convert_to_decimal $wearLevel; wearLevel=$Return_Value; fi
+if [[ "$temp" != "" ]] && [[ "$temp" != "0" ]]; then convert_to_decimal $temp; temp=$Return_Value; fi
+if [[ "$startStop" != "" ]] && [[ "$startStop" != "0" ]]; then convert_to_decimal $startStop; startStop=$Return_Value; fi
+if [[ "$loadCycle" != "" ]] && [[ "$loadCycle" != "0" ]]; then convert_to_decimal $loadCycle; loadCycle=$Return_Value; fi
+if [[ "$reAlloc" != "" ]] && [[ "$reAlloc" != "0" ]]; then convert_to_decimal $reAlloc; reAlloc=$Return_Value; fi
+if [[ "$onHours" != "" ]] && [[ "$onHours" != "0" ]]; then convert_to_decimal $onHours; onHours=$Return_Value; fi
+if [[ "$Helium" != "" ]] && [[ "$Helium" != "0" ]]; then convert_to_decimal $Helium; Helium=$Return_Value; fi
+if [[ "$lastTestHours" != "" ]] && [[ "$lastTestHours" != "0" ]]; then convert_to_decimal $lastTestHours; lastTestHours=$Return_Value; fi
+if [[ "$altlastTestHours" -gt "0" ]]; then convert_to_decimal $altlastTestHours; altlastTestHours=$Return_Value; fi
+
 # Some drives do not report test age after 65536 hours.
-onHours=${onHours#0}
-onHours="${onHours//,}"
+#onHours=${onHours#0}
+#onHours="${onHours//,}"
 if [[ $onHours -gt "65536" ]] && [[ $lastTestHours -gt "0" && $lastTestHours -lt "65536" ]]; then lastTestHours=$(($lastTestHours + 65536)); fi
 
 ######## VMWare Hack to fix NVMe bad variables #####
@@ -2233,6 +2277,10 @@ if [[ $Helium == "$heliumMin" || $Helium == "$non_exist_value" ]]; then
  fi
 fi
 fi
+
+if [[ $rotation == "" ]]; then rotation="$non_exist_value"; fi
+if [[ $capacity == "" ]]; then capacity="$non_exist_value"; fi
+
 ########### PROCESSING THAT AFFECTS EVERYTHING ##########################################################
 ### SPINRETRY
 
@@ -2884,6 +2932,7 @@ Helium=""
 seagate=""
 seekErrorRate=""
 rawReadErrorRate=""
+rawReadErrorRate2=""
 seek=""
 test_ata_error=""
 
