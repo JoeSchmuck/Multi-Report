@@ -12,6 +12,12 @@
 ### Version v1.4, v1.5, v1.6 FreeNAS/TrueNAS (joeschmuck)
 
 ### Changelog:
+# v1.6d-2 (09 October 2022)
+#   - Bug fix for NVMe power on hours.
+#   - Updated to support more drives Min/Max temps and display the non-existant value if nothing is obtained vice "0".
+#   
+#   The multi_report_config file is compatable with version back to v1.6d.
+#
 # v1.6d-1 (08 October 2022)
 #   - Bug Fix for converting multiple numbers from Octal to Decimal.  The previous process worked "most" of the time
 #   -- but we always aim for 100% working.
@@ -227,6 +233,8 @@ SSDtempCrit=50            # SSD Drive temp (in C) upper OK limit before a CRITIC
 SSDmaxovrd="true"         # SSD Max Drive Temp Override. This value when "true" will not alarm on any Current Power Cycle Max Temperature Limit.
 NVMtempWarn=50            # NVM Drive temp (in C) upper OK limit before a WARNING color/message will be used.
 NVMtempCrit=60            # NVM Drive temp (in C) upper OK limit before a CRITICAL color/message will be used.
+NVMmaxovrd="true"         # NVM Max Drive Temp Override. This value when "true" will not alarm on any Current Power Cycle Max Temperature Limit.
+                          # --- NOTE: NVMe drives currently do not report Min/Max temperatures so this is a future feature.
  
 ###### SSD/NVMe Specific Settings
  
@@ -565,9 +573,9 @@ logfile_messages_temp="/tmp/smart_report_messages.tmp"
 boundary="gc0p4Jq0M2Yt08jU534c0p"
 
 if [[ $softver != "Linux" ]]; then
-programver="Multi-Report v1.6d-1 dtd:2022-10-08 (TrueNAS Core "$(cat /etc/version | cut -d " " -f1 | sed 's/TrueNAS-//')")"
+programver="Multi-Report v1.6d-2 dtd:2022-10-09 (TrueNAS Core "$(cat /etc/version | cut -d " " -f1 | sed 's/TrueNAS-//')")"
 else
-programver="Multi-Report v1.6d-1 dtd:2022-10-08 (TrueNAS Scale "$(cat /etc/version)")"
+programver="Multi-Report v1.6d-2 dtd:2022-10-09 (TrueNAS Scale "$(cat /etc/version)")"
 fi
 
 #If the config file format changes, this is the latest working date, anything older must be updated.
@@ -1218,12 +1226,27 @@ else
    re='^[0-9]+$'
    ### For Min/Max Drive Temps
    if [[ "$(smartctl -x /dev/"$drive" | grep "Power Cycle Min/Max Temperature:" | awk '{print $5}' | cut -d '/' -f1)" != "?" ]]; then
-      temp_min=$(smartctl -x /dev/"$drive" | grep "Power Cycle Min/Max Temperature:" | awk '{print $5}' | cut -d '/' -f1); else temp_min=0; fi
-   if ! [[ $temp_min =~ $re ]]; then temp_min=0; fi
+      temp_min=$(smartctl -x /dev/"$drive" | grep "Power Cycle Min/Max Temperature:" | awk '{print $5}' | cut -d '/' -f1); else temp_min=$non_exist_value; fi
 
    if [[ "$(smartctl -x /dev/"$drive" | grep "Power Cycle Min/Max Temperature:" | awk '{print $5}' | cut -d '/' -f2)" != "?" ]]; then
-      temp_max=$(smartctl -x /dev/"$drive" | grep "Power Cycle Min/Max Temperature:" | awk '{print $5}' | cut -d '/' -f2); else temp_max=0; fi
-   if ! [[ $temp_max =~ $re ]]; then temp_max=0; fi
+      temp_max=$(smartctl -x /dev/"$drive" | grep "Power Cycle Min/Max Temperature:" | awk '{print $5}' | cut -d '/' -f2); else temp_max=$non_exist_value; fi
+
+   if [[ "$(smartctl -x /dev/"$drive" | grep "Current Temperature:" | awk '{print $3}' | cut -d '/' -f2)" != "?" ]]; then
+      temp=$(smartctl -x /dev/"$drive" | grep "Current Temperature:" | awk '{print $3}' | cut -d '/' -f2); else temp=$non_exist_value; fi
+
+   ### NEW CODE TO PULL MIN/MAX TEMPS
+   if [[ "$temp_min" == "" ]] && [[ "$temp_max" == "" ]]; then
+      if [[ "$(echo "$smartdata" | grep "Temperature" | awk '{print $11}')" == "(Min/Max" ]]; then
+         temp_play="$(echo "$smartdata" | grep "Temperature" | awk '{print $12}')"
+         temp_min="$(echo "$temp_play" | cut -d '/' -f1)"
+         temp_max="$(echo "$temp_play" | cut -d '/' -f2 | cut -d ')' -f1)"
+      fi
+   fi
+   ### SETUP FOR NO VALUE OBTAINED
+   tempdisplaymin=$tempdisplay
+   tempdisplaymax=$tempdisplay
+   if ! [[ $temp_min =~ $re ]]; then temp_min=$non_exist_value; tempdisplaymin=""; fi
+   if ! [[ $temp_max =~ $re ]]; then temp_max=$non_exist_value; tempdisplaymax=""; fi
 
    sas=0
    if [[ "$(echo "$smartdata" | grep "SAS")" ]]; then sas=1; fi
@@ -1277,7 +1300,7 @@ if [[ "$(echo "$smartdata" | grep "Power_On_Hours" | awk '{print $10}')" ]]; the
    onHours="$(echo "$smartdata" | grep "Power_On_Hours" | awk '{print $10}' | cut -d 'h' -f1)"; fi
 
 if [[ "$(echo "$smartdata" | grep "Power On Hours" | awk '{print $4}')" ]]; then
-   onHours="$(echo "$smartdata" | grep "Power On Hours" | awk '{print $4 + 0}')"; fi
+   onHours="$(echo "$smartdata" | grep "Power On Hours" | awk '{print $4}')"; fi
 
 if [[ "$(echo "$smartdata" | grep "Start_Stop_Count" | awk '{print $10}')" ]]; then
    startStop="$(echo "$smartdata" | grep "Start_Stop_Count" | awk '{print $10}')"; fi
@@ -1353,8 +1376,12 @@ fi
 if [[ "$(echo "$smartdata" | grep "Reallocated_NAND_Blk_Cnt" | awk '{print $10}')" ]]; then
    reAlloc="$(echo "$smartdata" | grep "Reallocated_NAND_Blk_Cnt" | awk '{print $10}')"; fi
 
+#if [[ "$(echo "$smartdata" | grep "Current Drive Temperature:" | awk '{print $4}')" ]]; then
+#   temp="$((10#$(echo "$smartdata" | grep "Current Drive Temperature:" | awk '{print $4 + 0}')))"; fi
+
+
 if [[ "$(echo "$smartdata" | grep "Current Drive Temperature:" | awk '{print $4}')" ]]; then
-   temp="$((10#$(echo "$smartdata" | grep "Current Drive Temperature:" | awk '{print $4 + 0}')))"; fi
+   temp="$(echo "$smartdata" | grep "Current Drive Temperature:" | awk '{print $4 + 0}')"; fi
 
 if [[ "$(echo "$smartdata" | grep "Accumulated start-stop cycles:" | awk '{print $4}')" ]]; then
    startStop="$(echo "$smartdata" | grep "Accumulated start-stop cycles:" | awk '{print $4 + 0}')"; fi
@@ -1417,6 +1444,9 @@ fi
 #echo "---"
 #echo "Drive="$drive
 
+if [[ "$temp_min" != "" ]] && [[ "$temp_min" != "0" ]] && [[ "$temp_min" != "$non_exist_value" ]]; then convert_to_decimal $temp_min; temp_min=$Return_Value; fi
+if [[ "$temp_max" != "" ]] && [[ "$temp_max" != "0" ]] && [[ "$temp_max" != "$non_exist_value" ]]; then convert_to_decimal $temp_max; temp_max=$Return_Value; fi
+if [[ "$temp" != "" ]] && [[ "$temp" != "0" ]] && [[ "$temp" != "$non_exist_value" ]]; then convert_to_decimal $temp; temp=$Return_Value; fi
 if [[ "$spinRetry" != "" ]] && [[ "$spinRetry" != "0" ]]; then convert_to_decimal $spinRetry; spinRetry=$Return_Value; fi
 if [[ "$reAllocEvent" != "" ]] && [[ "$reAllocEvent" != "0" ]]; then convert_to_decimal $reAllocEvent; reAllocEvent=$Return_Value; fi
 if [[ "$pending" != "" ]] && [[ "$pending" != "0" ]]; then convert_to_decimal $pending; pending=$Return_Value; fi
@@ -1655,17 +1685,17 @@ if [[ "$1" == "NVM" ]] && [[ "$NVM_SMART_Status" == "true" ]]; then printf "<td 
 
 if [[ "$1" == "NVM" ]] && [[ "$NVM_Critical_Warning" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$NVMcriticalWarningColor" "$NVMcriticalWarning"; fi
 
-if [[ "$1" == "HDD" ]] && [[ "$HDD_Drive_Temp" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%d$tempdisplay</td>\n" "$tempColor" "$temp"; fi
-if [[ "$1" == "SSD" ]] && [[ "$SSD_Drive_Temp" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%d$tempdisplay</td>\n" "$tempColor" "$temp"; fi
-if [[ "$1" == "NVM" ]] && [[ "$NVM_Drive_Temp" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%d$tempdisplay</td>\n" "$tempColor" "$temp"; fi
+if [[ "$1" == "HDD" ]] && [[ "$HDD_Drive_Temp" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s$tempdisplay</td>\n" "$tempColor" "$temp"; fi
+if [[ "$1" == "SSD" ]] && [[ "$SSD_Drive_Temp" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s$tempdisplay</td>\n" "$tempColor" "$temp"; fi
+if [[ "$1" == "NVM" ]] && [[ "$NVM_Drive_Temp" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s$tempdisplay</td>\n" "$tempColor" "$temp"; fi
 
-if [[ "$1" == "HDD" ]] && [[ "$HDD_Drive_Temp_Min" == "true" ]]; then printf "<td style=\"text-align:center; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%d$tempdisplay</td>\n" "$temp_min"; fi
-if [[ "$1" == "SSD" ]] && [[ "$SSD_Drive_Temp_Min" == "true" ]]; then printf "<td style=\"text-align:center; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%d$tempdisplay</td>\n" "$temp_min"; fi
-if [[ "$1" == "NVM" ]] && [[ "$NVM_Drive_Temp_Min" == "true" ]]; then printf "<td style=\"text-align:center; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%d$tempdisplay</td>\n" "$temp_min"; fi
+if [[ "$1" == "HDD" ]] && [[ "$HDD_Drive_Temp_Min" == "true" ]]; then printf "<td style=\"text-align:center; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s$tempdisplaymin</td>\n" "$temp_min"; fi
+if [[ "$1" == "SSD" ]] && [[ "$SSD_Drive_Temp_Min" == "true" ]]; then printf "<td style=\"text-align:center; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s$tempdisplaymin</td>\n" "$temp_min"; fi
+if [[ "$1" == "NVM" ]] && [[ "$NVM_Drive_Temp_Min" == "true" ]]; then printf "<td style=\"text-align:center; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s$tempdisplaymin</td>\n" "$temp_min"; fi
 
-if [[ "$1" == "HDD" ]] && [[ "$HDD_Drive_Temp_Max" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%d$tempdisplay</td>\n" "$temp_maxColor" "$temp_max"; fi
-if [[ "$1" == "SSD" ]] && [[ "$SSD_Drive_Temp_Max" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%d$tempdisplay</td>\n" "$temp_maxColor" "$temp_max"; fi
-if [[ "$1" == "NVM" ]] && [[ "$NVM_Drive_Temp_Max" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%d$tempdisplay</td>\n" "$temp_maxColor" "$temp_max"; fi
+if [[ "$1" == "HDD" ]] && [[ "$HDD_Drive_Temp_Max" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s$tempdisplaymax</td>\n" "$temp_maxColor" "$temp_max"; fi
+if [[ "$1" == "SSD" ]] && [[ "$SSD_Drive_Temp_Max" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s$tempdisplaymax</td>\n" "$temp_maxColor" "$temp_max"; fi
+if [[ "$1" == "NVM" ]] && [[ "$NVM_Drive_Temp_Max" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s$tempdisplaymax</td>\n" "$temp_maxColor" "$temp_max"; fi
 
 if [[ "$1" == "HDD" ]] && [[ "$HDD_Power_On_Hours" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$onTimeColor" "$onTime"; fi
 if [[ "$1" == "SSD" ]] && [[ "$SSD_Power_On_Hours" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$onTimeColor" "$onTime"; fi
@@ -2211,46 +2241,48 @@ reAlloc=$(($reAlloc-$badsectdt2))
 
 ####################  TEMPERATURE SECTION ###################
 # LETS ZERO OUT BOGUS HIGH TEMPS and LOW TEMPS
-if [[ $temp == "" ]]; then temp="0"; fi
-if [[ $temp -gt 150 ]]; then temp="0"; fi
-if [[ $temp -lt -60 ]]; then temp="0"; fi
+#if [[ $temp == "" ]]; then temp="0"; fi
+if [[ $temp -gt 150 ]]; then temp="$non_exist_value"; fi
+if [[ $temp -lt -60 ]]; then temp="$non_exist_value"; fi
 
 ### TEMP for HDD
 if [[ $detail_level == "HDD" ]]; then
-if [[ $temp != "" ]]; then if [[ $temp -gt $HDDtempCrit ]]; then tempColor=$critColor; else if [[ $temp -gt $HDDtempWarn ]]; then tempColor=$warnColor; fi; fi; fi
-if [[ $temp != "" ]]; then if [[ $temp -gt $HDDtempCrit ]]; then printf "Drive "$serial" Critical Drive Temp "$temp" - Threshold = "$HDDtempCrit"<br>" >> "$logfile_critical";
+if [[ $temp != "$non_exist_value" ]]; then if [[ $temp -gt $HDDtempCrit ]]; then tempColor=$critColor; else if [[ $temp -gt $HDDtempWarn ]]; then tempColor=$warnColor; fi; fi; fi
+if [[ $temp != "$non_exist_value" ]]; then if [[ $temp -gt $HDDtempCrit ]]; then printf "Drive "$serial" Critical Drive Temp "$temp" - Threshold = "$HDDtempCrit"<br>" >> "$logfile_critical";
 else if [[ $temp -gt $HDDtempWarn ]]; then printf "Drive "$serial" High Drive Temp "$temp" - Threshold set at "$HDDtempWarn"<br>" >> "$logfile_warning"; fi; fi; fi
 
 if [[ $HDDmaxovrd != "true" ]]; then
-if [[ $temp_max != "" ]]; then if [[ $temp_max -gt $HDDtempCrit ]]; then temp_maxColor=$critColor; else if [[ $temp_max -gt $HDDtempWarn ]]; then temp_maxColor=$warnColor; fi; fi; fi
-if [[ $temp_max != "" ]]; then if [[ $temp_max -gt $HDDtempCrit ]]; then printf "Drive "$serial" Critical Drive Temp "$temp_max" - Temp Max Threshold = "$HDDtempCrit"<br>" >> "$logfile_critical";
+if [[ $temp_max != "$non_exist_value" ]]; then if [[ $temp_max -gt $HDDtempCrit ]]; then temp_maxColor=$critColor; else if [[ $temp_max -gt $HDDtempWarn ]]; then temp_maxColor=$warnColor; fi; fi; fi
+if [[ $temp_max != "$non_exist_value" ]]; then if [[ $temp_max -gt $HDDtempCrit ]]; then printf "Drive "$serial" Critical Drive Temp "$temp_max" - Temp Max Threshold = "$HDDtempCrit"<br>" >> "$logfile_critical";
 else if [[ $temp_max -gt $HDDtempWarn ]]; then printf "Drive "$serial" High Drive Temp "$temp_max" - Temp Max Threshold set at "$HDDtempWarn"<br>" >> "$logfile_warning"; fi; fi; fi
 fi
 fi
 
 ### TEMP for SSD
 if [[ $detail_level == "SSD" ]]; then
-if [[ $temp != "" ]]; then if [[ $temp -gt $SSDtempCrit ]]; then tempColor=$critColor; else if [[ $temp -gt $SSDtempWarn ]]; then tempColor=$warnColor; fi; fi; fi
-if [[ $temp != "" ]]; then if [[ $temp -gt $SSDtempCrit ]]; then printf "Drive "$serial" Critical Drive Temp "$temp" - Threshold = "$SSDtempCrit"<br>" >> "$logfile_critical";
+if [[ $temp != "$non_exist_value" ]]; then if [[ $temp -gt $SSDtempCrit ]]; then tempColor=$critColor; else if [[ $temp -gt $SSDtempWarn ]]; then tempColor=$warnColor; fi; fi; fi
+if [[ $temp != "$non_exist_value" ]]; then if [[ $temp -gt $SSDtempCrit ]]; then printf "Drive "$serial" Critical Drive Temp "$temp" - Threshold = "$SSDtempCrit"<br>" >> "$logfile_critical";
 else if [[ $temp -gt $SSDtempWarn ]]; then printf "Drive "$serial" High Drive Temp "$temp" - Threshold set at "$SSDtempWarn"<br>" >> "$logfile_warning"; fi; fi; fi
 
 if [[ $SSDmaxovrd != "true" ]]; then
-if [[ $temp_max != "" ]]; then if [[ $temp_max -gt $SSDtempCrit ]]; then temp_maxColor=$critColor; else if [[ $temp_max -gt $SSDtempWarn ]]; then temp_maxColor=$warnColor; fi; fi; fi
-if [[ $temp_max != "" ]]; then if [[ $temp_max -gt $SSDtempCrit ]]; then printf "Drive "$serial" Critical Drive Temp "$temp_max" - Threshold = "$SSDtempCrit"<br>" >> "$logfile_critical";
+if [[ $temp_max != "$non_exist_value" ]]; then if [[ $temp_max -gt $SSDtempCrit ]]; then temp_maxColor=$critColor; else if [[ $temp_max -gt $SSDtempWarn ]]; then temp_maxColor=$warnColor; fi; fi; fi
+if [[ $temp_max != "$non_exist_value" ]]; then if [[ $temp_max -gt $SSDtempCrit ]]; then printf "Drive "$serial" Critical Drive Temp "$temp_max" - Threshold = "$SSDtempCrit"<br>" >> "$logfile_critical";
 else if [[ $temp_max -gt $SSDtempWarn ]]; then printf "Drive "$serial" High Drive Temp "$temp_max" - Temp Max Threshold set at "$SSDtempWarn"<br>" >> "$logfile_warning"; fi; fi; fi
 fi
 fi
 
 ### TEMP for NVM
 if [[ $detail_level == "NVM" ]]; then
-if [[ $temp != "" ]]; then if [[ $temp -gt $NVMtempCrit ]]; then tempColor=$critColor; else if [[ $temp -gt $NVMtempWarn ]]; then tempColor=$warnColor; fi; fi; fi
-if [[ $temp != "" ]]; then if [[ $temp -gt $NVMtempCrit ]]; then printf "Drive "$serial" Critical Drive Temp "$temp" - Threshold = "$NVMtempCrit"<br>" >> "$logfile_critical";
+if [[ $temp != "$non_exist_value" ]]; then if [[ $temp -gt $NVMtempCrit ]]; then tempColor=$critColor; else if [[ $temp -gt $NVMtempWarn ]]; then tempColor=$warnColor; fi; fi; fi
+if [[ $temp != "$non_exist_value" ]]; then if [[ $temp -gt $NVMtempCrit ]]; then printf "Drive "$serial" Critical Drive Temp "$temp" - Threshold = "$NVMtempCrit"<br>" >> "$logfile_critical";
 else if [[ $temp -gt $NVMtempWarn ]]; then printf "Drive "$serial" High Drive Temp "$temp" - Threshold set at "$NVMtempWarn"<br>" >> "$logfile_warning"; fi; fi; fi
 
-if [[ $temp_max != "" ]]; then if [[ $temp_max -gt $NVMtempCrit ]]; then temp_maxColor=$critColor; else if [[ $temp_max -gt $NVMtempWarn ]]; then temp_maxColor=$warnColor; fi; fi; fi
-if [[ $temp_max != "" ]]; then if [[ $temp_max -gt $NVMtempCrit ]]; then printf "Drive "$serial" Critical Drive Temp "$temp_max" - Threshold = "$NVMtempCrit"<br>" >> "$logfile_critical";
+### TEMP_MAX for NVM
+if [[ $NVMmaxovrd != "true" ]]; then
+if [[ $temp_max != "$non_exist_value" ]]; then if [[ $temp_max -gt $NVMtempCrit ]]; then temp_maxColor=$critColor; else if [[ $temp_max -gt $NVMtempWarn ]]; then temp_maxColor=$warnColor; fi; fi; fi
+if [[ $temp_max != "$non_exist_value" ]]; then if [[ $temp_max -gt $NVMtempCrit ]]; then printf "Drive "$serial" Critical Drive Temp "$temp_max" - Threshold = "$NVMtempCrit"<br>" >> "$logfile_critical";
 else if [[ $temp_max -gt $NVMtempWarn ]]; then printf "Drive "$serial" High Drive Temp "$temp_max" - Threshold set at "$NVMtempWarn"<br>" >> "$logfile_warning"; fi; fi; fi
-
+fi
 fi
 
 # NVM CRITICAL WARNING
@@ -2560,6 +2592,8 @@ echo "SSDtempCrit=$SSDtempCrit            # SSD Drive temp (in C) upper OK limit
 echo 'SSDmaxovrd="'$SSDmaxovrd'"         # SSD Max Drive Temp Override. This value when "true" will not alarm on any Current Power Cycle Max Temperature Limit.'
 echo "NVMtempWarn=$NVMtempWarn            # NVM Drive temp (in C) upper OK limit before a WARNING color/message will be used."
 echo "NVMtempCrit=$NVMtempCrit            # NVM Drive temp (in C) upper OK limit before a CRITICAL color/message will be used."
+echo 'NVMmaxovrd="true"         # NVM Max Drive Temp Override. This value when "true" will not alarm on any Current Power Cycle Max Temperature Limit.'
+echo "                          # --- NOTE: NVMe drives currently do not report Min/Max temperatures so this is a future feature."
 echo " "
 echo "###### SSD/NVMe Specific Settings"
 echo " "
@@ -2924,6 +2958,7 @@ startStop=""
 spinRetry=""
 temp=""
 temp_max=""
+temp_min=""
 wearLevel=""
 onTime=""
 testAge=""
@@ -4357,6 +4392,8 @@ echo "SSDtempCrit=50            # SSD Drive temp (in C) upper OK limit before a 
 echo 'SSDmaxovrd="true"         # SSD Max Drive Temp Override. This value when "true" will not alarm on any Current Power Cycle Max Temperature Limit.'
 echo "NVMtempWarn=50            # NVM Drive temp (in C) upper OK limit before a WARNING color/message will be used."
 echo "NVMtempCrit=60            # NVM Drive temp (in C) upper OK limit before a CRITICAL color/message will be used."
+echo 'NVMmaxovrd="true"         # NVM Max Drive Temp Override. This value when "true" will not alarm on any Current Power Cycle Max Temperature Limit.'
+echo "                          # --- NOTE: NVMe drives currently do not report Min/Max temperatures so this is a future feature."
 echo " "
 echo "###### SSD/NVMe Specific Settings"
 echo " "
@@ -5076,23 +5113,39 @@ if [[ $(date +"%m-%d") == "04-01" ]]; then Fun=1; echo "Fun Day"; else Fun=0; fi
 if [[ "$1" == "HDD" ]]; then
 ### Add a test routine if $2 is null, exit stating missing parameter and then spit out the HELP command
 testfile="$2"
-echo "HDD Test File"
-fi
 
+if test -f "$testfile"; then
+echo "Test File Exists"
+else
+echo "Test File Does Not Exist"
+exit 1
+fi
+fi
 
 get_smartHDD_listings
 testfile=""
 
 if [[ "$1" == "SSD" ]]; then
 testfile="$2"
-echo "SSD Test File"
+if test -f "$testfile"; then
+echo "Test File Exists"
+else
+echo "Test File Does Not Exist"
+exit 1
+fi
 fi
 get_smartSSD_listings
 testfile=""
 
 if [[ "$1" == "NVM" ]]; then
 testfile="$2"
-echo "NVM Test File="$testfile
+
+if test -f "$testfile"; then
+echo "Test File Exists"
+else
+echo "Test File Does Not Exist"
+exit 1
+fi
 fi
 get_smartNVM_listings
 testfile=""
