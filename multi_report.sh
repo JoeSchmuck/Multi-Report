@@ -12,8 +12,21 @@
 ### Version v1.4, v1.5, v1.6 FreeNAS/TrueNAS (joeschmuck)
 
 ### Changelog:
+# v1.6e-beta (12 October 2022)
+#   - Fixed gptid not showing in the text section for the cache drive (Scale only affected).
+#   - 
+#   - Need to add the No-Text Option, just leave the chart.
+#   - Need to add a chart for all the user options and enable/disable it.
+#   - Need to update instructions to add multiple email addresses.
+#
+#   The multi_report_config file is not fully compatable with previous versions and the script will automatically
+#   update to the current version.
+#
 # v1.6d-2 (09 October 2022)
 #   - Bug fix for NVMe power on hours.
+#   --- Unfortunately as the script gets more complex it's very easy to induce a problem.  And since I do not have
+#   --- a lot of different hardware, I need the users to contact me and tell me there is an issue so I can fix it.
+#   --- It's unfortunate that I've have two bug fixes already but them's the breaks.
 #   - Updated to support more drives Min/Max temps and display the non-existant value if nothing is obtained vice "0".
 #   
 #   The multi_report_config file is compatable with version back to v1.6d.
@@ -573,9 +586,9 @@ logfile_messages_temp="/tmp/smart_report_messages.tmp"
 boundary="gc0p4Jq0M2Yt08jU534c0p"
 
 if [[ $softver != "Linux" ]]; then
-programver="Multi-Report v1.6d-2 dtd:2022-10-09 (TrueNAS Core "$(cat /etc/version | cut -d " " -f1 | sed 's/TrueNAS-//')")"
+programver="Multi-Report v1.6e-beta dtd:2022-10-12 (TrueNAS Core "$(cat /etc/version | cut -d " " -f1 | sed 's/TrueNAS-//')")"
 else
-programver="Multi-Report v1.6d-2 dtd:2022-10-09 (TrueNAS Scale "$(cat /etc/version)")"
+programver="Multi-Report v1.6e-beta dtd:2022-10-12 (TrueNAS Scale "$(cat /etc/version)")"
 fi
 
 #If the config file format changes, this is the latest working date, anything older must be updated.
@@ -677,12 +690,9 @@ purge_exportdata () {
 if test -e "/tmp/temp_purge_file.csv"; then
 rm "/tmp/temp_purge_file.csv"
 # Create the header
-  printf "Date,Time,Device ID,Drive Type,Serial Number,SMART Status,Temp,Power On Hours,Wear Level,Start Stop Count,Load Cycle,Spin Retry,Reallocated Sectors,\
-ReAllocated Sector Events,Pending Sectors,Offline Uncorrectable,UDMA CRC Errors,Seek Error Rate,Multi Zone Errors,Read Error Rate,Helium Level\n" > "/tmp/temp_purge_file.csv"
+#  printf "Date,Time,Device ID,Drive Type,Serial Number,SMART Status,Temp,Power On Hours,Wear Level,Start Stop Count,Load Cycle,Spin Retry,Reallocated Sectors,\
+#ReAllocated Sector Events,Pending Sectors,Offline Uncorrectable,UDMA CRC Errors,Seek Error Rate,Multi Zone Errors,Read Error Rate,Helium Level\n" > "/tmp/temp_purge_file.csv"
 fi
-
- {
-  input="$statistical_data_file"
 
   if [ $softver != "Linux" ]; then
      expireDate=$(date -v -"$expDataPurge"d +%Y/%m/%d)
@@ -690,28 +700,60 @@ fi
      expireDate=$(date -d "$expDataPurge days ago" +%Y/%m/%d) 
   fi
 
-  awk -v expireDate="$expireDate" '
-  BEGIN {
-    FS=OFS=","
-    FPAT = "([^,]+)|(\"[^\"]+\")"
-    count=0
-    }
-data=$1
-    {
-    FS=OFS=" "
+awk -v expireDate="$expireDate" -F, '{ if($1 >= expireDate) print $0;}' "$statistical_data_file" > "/tmp/temp_purge_file.csv"
 
-    if (count !=0) if ($1 >= expireDate) {
-       printf ("%s\n", data) >> "/tmp/temp_purge_file.csv"
-    }
-    ++count
-    }
 
-END {
-    }
-' $input >/dev/null
- }
+# {
+# input="$statistical_data_file"
+#
+#  if [ $softver != "Linux" ]; then
+#     expireDate=$(date -v -"$expDataPurge"d +%Y/%m/%d)
+#  else
+#     expireDate=$(date -d "$expDataPurge days ago" +%Y/%m/%d) 
+#  fi
+
+#  awk -v expireDate="$expireDate" '
+#  BEGIN {
+#    FS=OFS=","
+#    FPAT = "([^,]+)|(\"[^\"]+\")"
+#    count=0
+#    }
+#data=$1
+#    {
+#    FS=OFS=" "
+#
+#    if (count !=0) if ($1 >= expireDate) {
+#       printf ("%s\n", data) >> "/tmp/temp_purge_file.csv"
+#    }
+#    ++count
+#    }
+#
+#END {
+#    }
+#' $input >/dev/null
+# }
 cp -R "/tmp/temp_purge_file.csv" "$statistical_data_file"
 }
+
+###### Purge ada50 and nvme50 from the logs #######
+
+purge_testdata () {
+### This routine will purge the "statistical_data_file" of test data matching "ada50" or "nvme50".
+
+# Delete temp file if it exists
+if test -e "/tmp/temp_purge_file.csv"; then
+rm "/tmp/temp_purge_file.csv"
+fi
+
+awk -F, '{ if($3 != "nvme50") print $0;}' "$statistical_data_file" > "/tmp/temp_purge_file1.csv"
+awk -F, '{ if($3 != "ada50") print $0;}' "/tmp/temp_purge_file1.csv" > "/tmp/temp_purge_file.csv"
+
+cp -R "/tmp/temp_purge_file.csv" "$statistical_data_file"
+}
+
+
+
+
 
 
 ################## EMAIL EXPORT DATA CVS FILE #########################
@@ -1847,8 +1889,7 @@ if [[ $disableRAWdata != "true" ]]; then
           if [ $softver != "Linux" ]; then
              drive_ident=$(glabel status | tail -n +2 | grep "$longpool" | awk '{print $1 " -> " $3}' | cut -d '/' -f2 | cut -d 'p' -f1)
           else
-             drive_ident=$(/sbin/blkid | grep "$longpool" | grep 'PARTUUID' | awk '{print $7}' | cut -d '"' -f2)
-             drive_ident=$drive_ident" -> "$(/sbin/blkid | grep "$longpool" | cut -d ":" -f1 | cut -d "/" -f3)
+             drive_ident=$longpool" -> "$(/sbin/blkid | grep "$longpool" | cut -d ":" -f1 | cut -d "/" -f3)
           fi
           if [[ $drive_ident != "" ]]; then
           if [[ $driveit == "0" ]]; then echo "<br>Drives for this pool are listed below:"; driveit="1"; fi
@@ -5046,7 +5087,7 @@ force_delay
 echo $programver
 smartdata=""
 
-if ! [[ "$1" == "-config" || "$1" == "-h" || "$1" == "-delete" || "$1" == "HDD" || "$1" == "SSD" || "$1" == "NVM" || "$1" == "-s" || "$1" == "" || "$1" == "-dump" ]]; then
+if ! [[ "$1" == "-config" || "$1" == "-h" || "$1" == "-delete" || "$1" == "HDD" || "$1" == "SSD" || "$1" == "NVM" || "$1" == "-s" || "$1" == "" || "$1" == "-dump" || "$1" == "-purgetestdata" ]]; then
 echo '"'$1'" is not a valid option.'
 echo "Use -h for help and look under OPTIONS."
 echo " "
@@ -5082,6 +5123,11 @@ rm "$statistical_data_file"
 echo " "
 echo "File Obliterated !!!"
 echo " "
+exit 0
+fi
+
+if [[ "$1" == "-purgetestdata" ]]; then
+purge_testdata
 exit 0
 fi
 
