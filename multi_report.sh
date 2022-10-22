@@ -12,15 +12,17 @@
 ### Version v1.4, v1.5, v1.6 FreeNAS/TrueNAS (joeschmuck)
 
 ### Changelog:
-# v1.6e-beta (12 October 2022)
+# v1.6e-beta (22 October 2022)
 #   - Fixed gptid not showing in the text section for the cache drive (Scale only affected).
-#   - 
-#   - Need to add the No-Text Option, just leave the chart.
-#   - Need to add a chart for all the user options and enable/disable it.
-#   - Need to update instructions to add multiple email addresses.
+#   - Added Warranty Column to chart. (by request)
+#   - Removed Update option in -config since we have an automatic upgrade now.
+#   - Updated instructions for multiple email addresses.
 #
-#   The multi_report_config file is not fully compatable with previous versions and the script will automatically
-#   update to the current version.
+#   - Need to add the No-Text Option, just leave the chart.
+#   - Need to add a supplemental chart for all the user options and enable/disable it.
+#
+#   The multi_report_config file will automatically update previous versions to add new features.
+#   
 #
 # v1.6d-2 (09 October 2022)
 #   - Bug fix for NVMe power on hours.
@@ -358,6 +360,8 @@ HDD_Rotational_Rate="true"
 HDD_Rotational_Rate_Title="RPM"
 HDD_SMART_Status="true"
 HDD_SMART_Status_Title="SMART Status"
+HDD_Warranty_Title="Warr- anty"
+HDD_Warranty="true"
 HDD_Raw_Read_Error_Rate="true"
 HDD_Raw_Read_Error_Rate_Title="Raw Error Rate"
 HDD_Drive_Temp="true"
@@ -406,6 +410,8 @@ SSD_Capacity="true"
 SSD_Capacity_Title="HDD Capacity"
 SSD_SMART_Status="true"
 SSD_SMART_Status_Title="SMART Status"
+SSD_Warranty_Title="Warr- anty"
+SSD_Warranty="true"
 SSD_Drive_Temp="true"
 SSD_Drive_Temp_Title="Curr Temp"
 SSD_Drive_Temp_Min="true"
@@ -442,6 +448,8 @@ NVM_Capacity="true"
 NVM_Capacity_Title="HDD Capacity"
 NVM_SMART_Status="true"
 NVM_SMART_Status_Title="SMART Status"
+NVM_Warranty_Title="Warr- anty"
+NVM_Warranty="true"
 NVM_Critical_Warning="true"
 NVM_Critical_Warning_Title="Critical Warning"
 NVM_Drive_Temp="true"
@@ -553,7 +561,7 @@ Drive_Warranty="none"
 ###### Global table of colors
 # The colors selected you can change but you will need to look up the proper HEX code for a color.
 
-okColor="#c9ffcc"       # Hex code for color to use in SMART Status column if drives pass (default is light green, #c9ffcc).
+okColor="#b5fcb9"       # Hex code for color to use in SMART Status column if drives pass (default is darker light green, #b5fcb9).
 warnColor="#f765d0"     # Hex code for WARN color (default is purple, #f765d0).
 critColor="#ff0000"     # Hex code for CRITICAL color (default is red, #ff0000).
 altColor="#f4f4f4"      # Table background alternates row colors between white and this color (default is light gray, #f4f4f4).
@@ -561,6 +569,8 @@ whtColor="#ffffff"      # Hex for White background.
 ovrdColor="#ffff66"     # Hex code for Override Yellow.
 blueColor="#87ceeb"     # Hex code for Sky Blue, used for the SCRUB In Progress background.
 yellowColor="#f1ffad"   # Hex code for pale yellow.
+goodWarrantyColor="#c9ffcc"  # Hex code for pale light green.
+expiredWarrantyColor="#f4cccc"   # Hex code for pale pink.
 
 ##########################
 ##########################
@@ -586,13 +596,13 @@ logfile_messages_temp="/tmp/smart_report_messages.tmp"
 boundary="gc0p4Jq0M2Yt08jU534c0p"
 
 if [[ $softver != "Linux" ]]; then
-programver="Multi-Report v1.6e-beta dtd:2022-10-12 (TrueNAS Core "$(cat /etc/version | cut -d " " -f1 | sed 's/TrueNAS-//')")"
+programver="Multi-Report v1.6e-beta dtd:2022-10-22 (TrueNAS Core "$(cat /etc/version | cut -d " " -f1 | sed 's/TrueNAS-//')")"
 else
-programver="Multi-Report v1.6e-beta dtd:2022-10-12 (TrueNAS Scale "$(cat /etc/version)")"
+programver="Multi-Report v1.6e-beta dtd:2022-10-22 (TrueNAS Scale "$(cat /etc/version)")"
 fi
 
 #If the config file format changes, this is the latest working date, anything older must be updated.
-valid_config_version_date="2022-10-05"
+valid_config_version_date="2022-10-22"
 
 ##########################
 ##########################
@@ -1558,6 +1568,7 @@ if [[ "$1" == "HDD" ]] && [[ "$HDD_Model_Number" == "true" ]]; then ((Columns=Co
 if [[ "$1" == "HDD" ]] && [[ "$HDD_Capacity" == "true" ]]; then ((Columns=Columns+1)); fi;
 if [[ "$1" == "HDD" ]] && [[ "$HDD_Rotational_Rate" == "true" ]]; then ((Columns=Columns+1)); fi;
 if [[ "$1" == "HDD" ]] && [[ "$HDD_SMART_Status" == "true" ]]; then ((Columns=Columns+1)); fi;
+if [[ "$1" == "HDD" ]] && [[ "$HDD_Warranty" == "true" ]]; then ((Columns=Columns+1)); fi;
 if [[ "$1" == "HDD" ]] && [[ "$HDD_Drive_Temp" == "true" ]]; then ((Columns=Columns+1)); fi;
 if [[ "$1" == "HDD" ]] && [[ "$HDD_Drive_Temp_Min" == "true" ]]; then ((Columns=Columns+1)); fi;
 if [[ "$1" == "HDD" ]] && [[ "$HDD_Drive_Temp_Max" == "true" ]]; then ((Columns=Columns+1)); fi;
@@ -1583,6 +1594,7 @@ if [[ "$1" == "SSD" ]] && [[ "$SSD_Serial_Number" == "true" ]]; then ((Columns=C
 if [[ "$1" == "SSD" ]] && [[ "$SSD_Model_Number" == "true" ]]; then ((Columns=Columns+1)); fi;
 if [[ "$1" == "SSD" ]] && [[ "$SSD_Capacity" == "true" ]]; then ((Columns=Columns+1)); fi;
 if [[ "$1" == "SSD" ]] && [[ "$SSD_SMART_Status" == "true" ]]; then ((Columns=Columns+1)); fi;
+if [[ "$1" == "SSD" ]] && [[ "$SSD_Warranty" == "true" ]]; then ((Columns=Columns+1)); fi;
 if [[ "$1" == "SSD" ]] && [[ "$SSD_Drive_Temp" == "true" ]]; then ((Columns=Columns+1)); fi;
 if [[ "$1" == "SSD" ]] && [[ "$SSD_Drive_Temp_Min" == "true" ]]; then ((Columns=Columns+1)); fi;
 if [[ "$1" == "SSD" ]] && [[ "$SSD_Drive_Temp_Max" == "true" ]]; then ((Columns=Columns+1)); fi;
@@ -1602,6 +1614,7 @@ if [[ "$1" == "NVM" ]] && [[ "$NVM_Serial_Number" == "true" ]]; then ((Columns=C
 if [[ "$1" == "NVM" ]] && [[ "$NVM_Model_Number" == "true" ]]; then ((Columns=Columns+1)); fi;
 if [[ "$1" == "NVM" ]] && [[ "$NVM_Capacity" == "true" ]]; then ((Columns=Columns+1)); fi;
 if [[ "$1" == "NVM" ]] && [[ "$NVM_SMART_Status" == "true" ]]; then ((Columns=Columns+1)); fi;
+if [[ "$1" == "NVM" ]] && [[ "$NVM_Warranty" == "true" ]]; then ((Columns=Columns+1)); fi;
 if [[ "$1" == "NVM" ]] && [[ "$NVM_Critical_Warning" == "true" ]]; then ((Columns=Columns+1)); fi;
 if [[ "$1" == "NVM" ]] && [[ "$NVM_Drive_Temp" == "true" ]]; then ((Columns=Columns+1)); fi;
 if [[ "$1" == "NVM" ]] && [[ "$NVM_Drive_Temp_Min" == "true" ]]; then ((Columns=Columns+1)); fi;
@@ -1639,6 +1652,10 @@ if [[ "$1" == "NVM" ]] && [[ "$NVM_Wear_Level" == "true" ]]; then ((Columns=Colu
     if [[ "$1" == "HDD" ]] && [[ "$HDD_SMART_Status" == "true" ]]; then echo "  <th style=\"text-align:center; width:80px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$HDD_SMART_Status_Title"</th>"; fi
     if [[ "$1" == "SSD" ]] && [[ "$SSD_SMART_Status" == "true" ]]; then echo "  <th style=\"text-align:center; width:80px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$SSD_SMART_Status_Title"</th>"; fi
     if [[ "$1" == "NVM" ]] && [[ "$NVM_SMART_Status" == "true" ]]; then echo "  <th style=\"text-align:center; width:80px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$NVM_SMART_Status_Title"</th>"; fi
+
+    if [[ "$1" == "HDD" ]] && [[ "$HDD_Warranty" == "true" ]]; then echo "  <th style=\"text-align:center; width:80px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$HDD_Warranty_Title"</th>"; fi
+    if [[ "$1" == "SSD" ]] && [[ "$SSD_Warranty" == "true" ]]; then echo "  <th style=\"text-align:center; width:80px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$SSD_Warranty_Title"</th>"; fi
+    if [[ "$1" == "NVM" ]] && [[ "$NVM_Warranty" == "true" ]]; then echo "  <th style=\"text-align:center; width:80px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$NVM_Warranty_Title"</th>"; fi
 
     if [[ "$1" == "NVM" ]] && [[ "$NVM_Critical_Warning" == "true" ]]; then echo "  <th style=\"text-align:center; width:80px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$NVM_Critical_Warning_Title"</th>"; fi
 
@@ -1724,6 +1741,10 @@ if [[ "$1" == "HDD" ]] && [[ "$HDD_Rotational_Rate" == "true" ]]; then printf "<
 if [[ "$1" == "HDD" ]] && [[ "$HDD_SMART_Status" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$smartStatusColor" "$smartStatus"; fi
 if [[ "$1" == "SSD" ]] && [[ "$SSD_SMART_Status" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$smartStatusColor" "$smartStatus"; fi
 if [[ "$1" == "NVM" ]] && [[ "$NVM_SMART_Status" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$smartStatusColor" "$smartStatus"; fi
+
+if [[ "$1" == "HDD" ]] && [[ "$HDD_Warranty" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$WarrantyColor" "$WarrantyClock"; fi
+if [[ "$1" == "SSD" ]] && [[ "$SSD_Warranty" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$WarrantyColor" "$WarrantyClock"; fi
+if [[ "$1" == "NVM" ]] && [[ "$NVM_Warranty" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$WarrantyColor" "$WarrantyClock"; fi
 
 if [[ "$1" == "NVM" ]] && [[ "$NVM_Critical_Warning" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$NVMcriticalWarningColor" "$NVMcriticalWarning"; fi
 
@@ -2241,6 +2262,56 @@ IFS=',' read -ra ADDR <<< "$Drive_Warranty"
    drivesn1="$(echo $i | cut -d':' -f 1)"
    drivedt1="$(echo $i | cut -d':' -f 2)"
    if [[ $drivesn1 == $serial ]]; then
+      warrantyyear="$(echo $drivedt1 | cut -d '-' -f1)"
+      warrantymonth="$(echo $drivedt1 | cut -d '-' -f2)"
+      warrantyday="$(echo $drivedt1 | cut -d '-' -f3)"
+      tempnow="$((`date +%s`))"
+
+#echo "tempnow="$tempnow
+
+if [[ $softver != "Linux" ]]; then 
+      warrantytemp="$((`date -j -v"$warrantyyear"y -v"$warrantymonth"m -v"$warrantyday"d +%s`))"
+else
+# Debian Date in seconds
+warrantytemp="$((`date -d "$drivedt1" +%s`))"
+fi
+
+#echo "warrantytemp="$warrantytemp
+
+      warrantytemp="$((("$tempnow" - "$warrantytemp")/3600))"
+#echo "warrantytemp/3600="$warrantytemp
+
+      let waryrs=$((($warrantytemp / 8760)))
+      let warmos=$(((($warrantytemp % 8760) / 730)))
+      let wardys=$((((($warrantytemp % 8760) % 730) / 24)))
+      let warhrs=$(((($warrantytemp % 8760) % 730) % 24))
+      let wardays=$((($warrantytemp / 24)))
+
+      wartemp2=${wardays#-}
+      wartemp3=${waryrs#-}
+#echo "wartemp2="$wartemp2
+
+
+      if [[ $wartemp2 -gt 31 ]]; then
+         if [[ $wartemp3 -gt 0 ]]; then wartext="${waryrs#-}y ${warmos#-}m ${wardys#-}d"
+         else wartext="${warmos#-}m ${wardys#-}d"
+         fi
+#echo "YMD Loop"
+      else
+         wartext="${wardays#-}d"
+#echo "Days Loop"
+      fi
+
+WarrantyColor=$goodWarrantyColor
+
+#### Add a routine to display Days -> Months -> Years
+
+         if [[ "$warrantytemp" > 0 ]]; then
+            WarrantyClock=$wartext
+         else
+            WarrantyClock=${wartext#-}
+         fi
+
      if [[ "$datestamp2" > "$drivedt1" ]]; then
         s="1"
         drivesn2=$drivesn1
@@ -2251,6 +2322,7 @@ IFS=',' read -ra ADDR <<< "$Drive_Warranty"
    done
  if [[ $s != "0" ]]; then
 onTimeColor=$yellowColor
+WarrantyColor=$expiredWarrantyColor
 #printf "Drive "$drivesn2" Warranty Expired on "$drivedt2"<br>" >> "$logfile_warranty"
 logfile_warranty=$logfile_warranty"Drive "$drivesn2" Warranty Expired on "$drivedt2"<br>"
  fi
@@ -2745,6 +2817,8 @@ echo 'HDD_Rotational_Rate="'$HDD_Rotational_Rate'"'
 echo 'HDD_Rotational_Rate_Title="'$HDD_Rotational_Rate_Title'"'
 echo 'HDD_SMART_Status="'$HDD_SMART_Status'"'
 echo 'HDD_SMART_Status_Title="'$HDD_SMART_Status_Title'"'
+echo 'HDD_Warranty="'$HDD_Warranty'"'
+echo 'HDD_Warranty_Title="'$HDD_Warranty_Title'"'
 echo 'HDD_Raw_Read_Error_Rate="'$HDD_Raw_Read_Error_Rate'"'
 echo 'HDD_Raw_Read_Error_Rate_Title="'$HDD_Raw_Read_Error_Rate_Title'"'
 echo 'HDD_Drive_Temp="'$HDD_Drive_Temp'"'
@@ -2793,6 +2867,8 @@ echo 'SSD_Capacity="'$SSD_Capacity'"'
 echo 'SSD_Capacity_Title="'$SSD_Capacity_Title'"'
 echo 'SSD_SMART_Status="'$SSD_SMART_Status'"'
 echo 'SSD_SMART_Status_Title="'$SSD_SMART_Status_Title'"'
+echo 'SSD_Warranty="'$SSD_Warranty'"'
+echo 'SSD_Warranty_Title="'$SSD_Warranty_Title'"'
 echo 'SSD_Drive_Temp="'$SSD_Drive_Temp'"'
 echo 'SSD_Drive_Temp_Title="'$SSD_Drive_Temp_Title'"'
 echo 'SSD_Drive_Temp_Min="'$SSD_Drive_Temp_Min'"'
@@ -2829,6 +2905,8 @@ echo 'NVM_Capacity="'$NVM_Capacity'"'
 echo 'NVM_Capacity_Title="'$NVM_Capacity_Title'"'
 echo 'NVM_SMART_Status="'$NVM_SMART_Status'"'
 echo 'NVM_SMART_Status_Title="'$NVM_SMART_Status_Title'"'
+echo 'NVM_Warranty="'$NVM_Warranty'"'
+echo 'NVM_Warranty_Title="'$NVM_Warranty_Title'"'
 echo 'NVM_Critical_Warning="'$NVM_Critical_Warning'"'
 echo 'NVM_Critical_Warning_Title="'$NVM_Critical_Warning_Title'"'
 echo 'NVM_Drive_Temp="'$NVM_Drive_Temp'"'
@@ -2940,7 +3018,7 @@ echo " "
 echo "###### Global table of colors"
 echo "# The colors selected you can change but you will need to look up the proper HEX code for a color."
 echo " "
-echo 'okColor="'$okColor'"       # Hex code for color to use in SMART Status column if drives pass (default is light green, #c9ffcc).'
+echo 'okColor="'$okColor'"       # Hex code for color to use in SMART Status column if drives pass (default is darker light green, #b5fcb9).'
 echo 'warnColor="'$warnColor'"     # Hex code for WARN color (default is purple, #f765d0).'
 echo 'critColor="'$critColor'"     # Hex code for CRITICAL color (default is red, #ff0000).'
 echo 'altColor="'$altColor'"      # Table background alternates row colors between white and this color (default is light gray, #f4f4f4).'
@@ -2948,7 +3026,8 @@ echo 'whtColor="'$whtColor'"      # Hex for White background.'
 echo 'ovrdColor="'$ovrdColor'"     # Hex code for Override Yellow.'
 echo 'blueColor="'$blueColor'"     # Hex code for Sky Blue, used for the SCRUB In Progress background.'
 echo 'yellowColor="'$yellowColor'"   # Hex code for pale yellow.'
-
+echo 'goodWarrantyColor="'$goodWarrantyColor'"  # Hex code for pale light green.'
+echo 'expiredWarrantyColor="'$expiredWarrantyColor'"   # Hex code for pale pink.'
 ) > "$Config_File_Name"
 if [[ $Config_Changed_Email == "true" ]]; then Attach_Config="1"; fi
 }
@@ -3011,6 +3090,8 @@ rawReadErrorRate=""
 rawReadErrorRate2=""
 seek=""
 test_ata_error=""
+WarrantyClock=""
+warrantytemp=""
 
 
 # And Reset bgColors
@@ -3034,6 +3115,7 @@ lastTestTypeColor=$bgColor
 wearLevelColor=$bgColor
 NVMcriticalWarningColor=$bgColor
 HeliumColor=$bgColor
+WarrantyColor=$bgColor
 }
 
 ################# GENERATE CONFIG FILE ##############
@@ -3059,9 +3141,6 @@ echo " "
 echo "      N)ew configuration file  (creates a new clean configuration external file)"
 echo " "
 echo "      A)dvanced configuration (must have a configuration file already present)"
-echo " "
-echo "      U)pdate configuration file to current version (being phased out"
-echo "        by an automatic update)"
 echo " "
 echo "      H)ow to use this configuration tool (general instructions)"
 echo " "
@@ -3504,7 +3583,8 @@ case $Keyboard_var in
          clear
          echo "Email Settings"
          echo " "
-         echo "Current email address: "$email" "
+         echo "Current email address(s): "$email" "
+         echo "separate multiple email addresses with a comma "
          read Keyboard_email
          if [[ ! $Keyboard_email == "" ]]; then email=$Keyboard_email; fi
          echo "Set Value: "$email
@@ -3562,9 +3642,16 @@ case $Keyboard_var in
          echo -n "SMART Status ("$HDD_SMART_Status") "
          read -n 1 Keyboard_yn
          if [[ ! $Keyboard_yn == "" ]]; then
-            if [[ $Keyboard_yn == "t" ]]; then HDD_SMART_Statusy="true"; else HDD_SMART_Status="false"; fi
+            if [[ $Keyboard_yn == "t" ]]; then HDD_SMART_Status="true"; else HDD_SMART_Status="false"; fi
          fi
          echo "Set Value: ("$HDD_SMART_Status")"
+         echo " "
+         echo -n "Warranty ("$HDD_Warranty") "
+         read -n 1 Keyboard_yn
+         if [[ ! $Keyboard_yn == "" ]]; then
+            if [[ $Keyboard_yn == "t" ]]; then HDD_Warranty="true"; else HDD_Warranty="false"; fi
+         fi
+         echo "Set Value: ("$HDD_Warranty")"
          echo " "
          echo -n "Drive Temp ("$HDD_Drive_Temp") "
          read -n 1 Keyboard_yn
@@ -3744,6 +3831,13 @@ case $Keyboard_var in
          fi
          echo "Set Value: ("$SSD_Drive_Temp")"
          echo " "
+         echo -n "Warranty ("$SSD_Warranty") "
+         read -n 1 Keyboard_yn
+         if [[ ! $Keyboard_yn == "" ]]; then
+            if [[ $Keyboard_yn == "t" ]]; then SSD_Warranty="true"; else SSD_Warranty="false"; fi
+         fi
+         echo "Set Value: ("$SSD_Warranty")"
+         echo " "
          echo -n "Drive Temp Minimum for power cycle ("$SSD_Drive_Temp_Min") "
          read -n 1 Keyboard_yn
          if [[ ! $Keyboard_yn == "" ]]; then
@@ -3864,6 +3958,13 @@ case $Keyboard_var in
            if [[ $Keyboard_yn == "t" ]]; then NVM_SMART_Status="true"; else NVM_SMART_Status="false"; fi
         fi
         echo "Set Value: ("$NVM_SMART_Status")"
+        echo " "
+        echo -n "Warranty ("$NVM_Warranty") "
+        read -n 1 Keyboard_yn
+        if [[ ! $Keyboard_yn == "" ]]; then
+           if [[ $Keyboard_yn == "t" ]]; then NVM_Warranty="true"; else NVM_Warranty="false"; fi
+        fi
+        echo "Set Value: ("$NVM_Warranty")"
         echo " "
         echo -n "Critical Warning Status ("$NVM_Critical_Warning") "
         read -n 1 Keyboard_yn
@@ -4545,6 +4646,8 @@ echo 'HDD_Rotational_Rate="true"'
 echo 'HDD_Rotational_Rate_Title="RPM"'
 echo 'HDD_SMART_Status="true"'
 echo 'HDD_SMART_Status_Title="SMART Status"'
+echo 'HDD_Warranty="true"'
+echo 'HDD_Warranty_Title="Warr- anty"'
 echo 'HDD_Raw_Read_Error_Rate="true"'
 echo 'HDD_Raw_Read_Error_Rate_Title="Read Error Rate"'
 echo 'HDD_Drive_Temp="true"'
@@ -4593,6 +4696,8 @@ echo 'SSD_Capacity="true"'
 echo 'SSD_Capacity_Title="HDD Capacity"'
 echo 'SSD_SMART_Status="true"'
 echo 'SSD_SMART_Status_Title="SMART Status"'
+echo 'SSD_Warranty="true"'
+echo 'SSD_Warranty_Title="Warr- anty"'
 echo 'SSD_Drive_Temp="true"'
 echo 'SSD_Drive_Temp_Title="Curr Temp"'
 echo 'SSD_Drive_Temp_Min="true"'
@@ -4629,6 +4734,8 @@ echo 'NVM_Capacity="true"'
 echo 'NVM_Capacity_Title="HDD Capacity"'
 echo 'NVM_SMART_Status="true"'
 echo 'NVM_SMART_Status_Title="SMART Status"'
+echo 'NVM_Warranty="true"'
+echo 'NVM_Warranty_Title="Warr- anty"'
 echo 'NVM_Critical_Warning="true"'
 echo 'NVM_Critical_Warning_Title="Critical Warning"'
 echo 'NVM_Drive_Temp="true"'
@@ -4739,7 +4846,7 @@ echo " "
 echo "###### Global table of colors"
 echo "# The colors selected you can change but you will need to look up the proper HEX code for a color."
 echo " "
-echo 'okColor="#c9ffcc"       # Hex code for color to use in SMART Status column if drives pass (default is light green, #c9ffcc).'
+echo 'okColor="#b5fcb9"       # Hex code for color to use in SMART Status column if drives pass (default is darker light green, #b5fcb9).'
 echo 'warnColor="#f765d0"     # Hex code for WARN color (default is purple, #f765d0).'
 echo 'critColor="#ff0000"     # Hex code for CRITICAL color (default is red, #ff0000).'
 echo 'altColor="#f4f4f4"      # Table background alternates row colors between white and this color (default is light gray, #f4f4f4).'
@@ -4747,6 +4854,8 @@ echo 'whtColor="#ffffff"      # Hex for White background.'
 echo 'ovrdColor="#ffff66"     # Hex code for Override Yellow.'
 echo 'blueColor="#87ceeb"     # Hex code for Sky Blue, used for the SCRUB In Progress background.'
 echo 'yellowColor="#f1ffad"   # Hex code for pale yellow.'
+echo 'goodWarrantyColor="#c9ffcc"  # Hex code for pale light green.'
+echo 'expiredWarrantyColor="#f4cccc"   # Hex code for pale pink.'
 ) > "$Config_File_Name"
 
     echo " "
@@ -4772,65 +4881,6 @@ echo 'yellowColor="#f1ffad"   # Hex code for pale yellow.'
     echo " "
     echo "And for those who don't know what TRS-80 is, Google it."
     exit 0
-    ;;
-
-
-    U)
-    clear
-    echo "Updating Configuration File Routine"
-    echo " "
-    echo "Use this update utility when you have a newer version of the script."
-    echo " "
-    echo "This update utility will recreate a new configuration file with all your current"
-    echo "settings and will add any new variables required to the configuration file."
-    echo " "
-    echo "If you modified manually any part of the configuration file other than the"
-    echo "variables that data will be overwritten."
-    echo " "
-    echo "Press Enter/Return to continue or any other key entry to abort."
-    read -n 1 key
-    if [[ ! $key == "" ]]; then echo "        Aborting"; exit 1; fi
-    echo " "
-    echo " "
-    echo "Loading the current configuration file..."
-    load_config
-    echo " "
-    echo " " 
-    echo "Cross your fingers - Making Changes..."
-    update_config_file
-    echo " "
-    sleep 2
-    for (( p=1; p<=3; p++ ))
-    do
-    clear
-    echo "3JHD*&NASLKJ86qm"
-    echo "*()DJKAUIYV>NKABNKLJHSKDFJH"
-    echo "kjd786qmndVHJjd"
-    sleep .2
-    clear
-    echo "ERXR29SO6IA}{"
-    echo "dHUbvdl%h228GhwSd"
-    echo "&^*7djhsdaGHJKasdYhjgasd435G455"
-    sleep .2
-    clear
-    echo "jhYFdkjhs76^$9HJg"
-    echo "Jyasuidha**(yuGfs6754G5hjsd%$&^"
-    echo "sDjh65saa120kjJKhIUOIvb"
-    sleep .2
-    clear
-    echo "3JHD*&NASLKJ"
-    echo "*()DJKAUIYV>NKABNKLJHSKDFJH"
-    echo "kjd786qmndVHJjd"
-    sleep .2
-    done
-    clear
-    echo " "
-    echo " "
-    echo "What a trip!"
-    echo " "
-    echo "Configuration File updated, I told you to cross your fingers! Next time you will listen to me."
-    echo " "
-    exit 1
     ;;
 
 
@@ -5302,7 +5352,5 @@ else
   remove_junk_report
   create_email
 fi
-
-
 
 # All reporting files are left in the /tmp/ directory for troubleshooting and cleaned up when the script is initial run.
