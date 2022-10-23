@@ -12,7 +12,7 @@
 ### Version v1.4, v1.5, v1.6 FreeNAS/TrueNAS (joeschmuck)
 
 ### Changelog:
-# v1.6e-beta (22 October 2022)
+# v1.6e-beta (23 October 2022)
 #   - Fixed gptid not showing in the text section for the cache drive (Scale only affected).
 #   - Added Warranty Column to chart. (by request)
 #   - Removed Update option in -config since we have an automatic upgrade now.
@@ -556,7 +556,11 @@ ata_errors="none"
 #   Use the format ="Drive_Serial_Number:YYYY-MM-DD" and add a comma if you have more than one drive.
  
 Drive_Warranty="none"
- 
+
+######## Expired Drive Warranty Setup
+expiredWarrantyBoxColor="#000000"   # "#000000" = normal box perimeter color.
+WarrantyBoxPixels="3"   # Box line thickness. 1 = normal, 2 = thick, 3 = Very Thick, used for expired drives only.
+WarrantyBackgndColor="none"  # Hex code or "none" = normal background, Only for expired drives. 
 
 ###### Global table of colors
 # The colors selected you can change but you will need to look up the proper HEX code for a color.
@@ -569,8 +573,7 @@ whtColor="#ffffff"      # Hex for White background.
 ovrdColor="#ffff66"     # Hex code for Override Yellow.
 blueColor="#87ceeb"     # Hex code for Sky Blue, used for the SCRUB In Progress background.
 yellowColor="#f1ffad"   # Hex code for pale yellow.
-goodWarrantyColor="#c9ffcc"  # Hex code for pale light green.
-expiredWarrantyColor="#f4cccc"   # Hex code for pale pink.
+
 
 ##########################
 ##########################
@@ -596,13 +599,13 @@ logfile_messages_temp="/tmp/smart_report_messages.tmp"
 boundary="gc0p4Jq0M2Yt08jU534c0p"
 
 if [[ $softver != "Linux" ]]; then
-programver="Multi-Report v1.6e-beta dtd:2022-10-22 (TrueNAS Core "$(cat /etc/version | cut -d " " -f1 | sed 's/TrueNAS-//')")"
+programver="Multi-Report v1.6e-beta dtd:2022-10-23 (TrueNAS Core "$(cat /etc/version | cut -d " " -f1 | sed 's/TrueNAS-//')")"
 else
-programver="Multi-Report v1.6e-beta dtd:2022-10-22 (TrueNAS Scale "$(cat /etc/version)")"
+programver="Multi-Report v1.6e-beta dtd:2022-10-23 (TrueNAS Scale "$(cat /etc/version)")"
 fi
 
 #If the config file format changes, this is the latest working date, anything older must be updated.
-valid_config_version_date="2022-10-22"
+valid_config_version_date="2022-10-23"
 
 ##########################
 ##########################
@@ -1742,9 +1745,13 @@ if [[ "$1" == "HDD" ]] && [[ "$HDD_SMART_Status" == "true" ]]; then printf "<td 
 if [[ "$1" == "SSD" ]] && [[ "$SSD_SMART_Status" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$smartStatusColor" "$smartStatus"; fi
 if [[ "$1" == "NVM" ]] && [[ "$NVM_SMART_Status" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$smartStatusColor" "$smartStatus"; fi
 
-if [[ "$1" == "HDD" ]] && [[ "$HDD_Warranty" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$WarrantyColor" "$WarrantyClock"; fi
-if [[ "$1" == "SSD" ]] && [[ "$SSD_Warranty" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$WarrantyColor" "$WarrantyClock"; fi
-if [[ "$1" == "NVM" ]] && [[ "$NVM_Warranty" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$WarrantyColor" "$WarrantyClock"; fi
+if [[ "$1" == "HDD" ]] && [[ "$HDD_Warranty" == "true" ]] && [[ "$WarrantyBoxColor" == "$expiredWarrantyBoxColor" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:%spx solid %s; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$WarrantyBackgroundColor" "$WarrantyBoxPixels" "$WarrantyBoxColor" "$WarrantyClock"; fi
+if [[ "$1" == "HDD" ]] && [[ "$HDD_Warranty" == "true" ]] && [[ "$WarrantyBoxColor" != "$expiredWarrantyBoxColor" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid %s; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$WarrantyBackgroundColor" "$WarrantyBoxColor" "$WarrantyClock"; fi
+if [[ "$1" == "SSD" ]] && [[ "$SSD_Warranty" == "true" ]] && [[ "$WarrantyBoxColor" == "$expiredWarrantyBoxColor" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:%spx solid %s; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$WarrantyBackgroundColor" "$WarrantyBoxPixels" "$WarrantyBoxColor" "$WarrantyClock"; fi
+if [[ "$1" == "SSD" ]] && [[ "$SSD_Warranty" == "true" ]] && [[ "$WarrantyBoxColor" != "$expiredWarrantyBoxColor" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid %s; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$WarrantyBackgroundColor" "$WarrantyBoxColor" "$WarrantyClock"; fi
+if [[ "$1" == "NVM" ]] && [[ "$NVM_Warranty" == "true" ]] && [[ "$WarrantyBoxColor" == "$expiredWarrantyBoxColor" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:%spx solid %s; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$WarrantyBackgroundColor" "$WarrantyBoxPixels" "$WarrantyBoxColor" "$WarrantyClock"; fi
+if [[ "$1" == "NVM" ]] && [[ "$NVM_Warranty" == "true" ]] && [[ "$WarrantyBoxColor" != "$expiredWarrantyBoxColor" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid %s; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$WarrantyBackgroundColor" "$WarrantyBoxColor" "$WarrantyClock"; fi
+
 
 if [[ "$1" == "NVM" ]] && [[ "$NVM_Critical_Warning" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$NVMcriticalWarningColor" "$NVMcriticalWarning"; fi
 
@@ -2302,8 +2309,6 @@ fi
 #echo "Days Loop"
       fi
 
-WarrantyColor=$goodWarrantyColor
-
 #### Add a routine to display Days -> Months -> Years
 
          if [[ "$warrantytemp" > 0 ]]; then
@@ -2322,8 +2327,8 @@ WarrantyColor=$goodWarrantyColor
    done
  if [[ $s != "0" ]]; then
 onTimeColor=$yellowColor
-WarrantyColor=$expiredWarrantyColor
-#printf "Drive "$drivesn2" Warranty Expired on "$drivedt2"<br>" >> "$logfile_warranty"
+if [[ $WarrantyBackgndColor != "none" ]]; then WarrantyBackgroundColor=$WarrantyBackgndColor; fi
+WarrantyBoxColor=$expiredWarrantyBoxColor
 logfile_warranty=$logfile_warranty"Drive "$drivesn2" Warranty Expired on "$drivedt2"<br>"
  fi
 
@@ -3015,6 +3020,11 @@ echo " "
 if [[ ! $DRIVE_WARRANTY == "" ]]; then Drive_Warranty=$DRIVE_WARRANTY; fi
 echo 'Drive_Warranty="'$Drive_Warranty'"'
 echo " "
+echo '######## Expired Drive Warranty Setup'
+echo 'expiredWarrantyBoxColor="'$expiredWarrantyBoxColor'"   # "black" = normal box perimeter color.'
+echo 'WarrantyBoxPixels="'$WarrantyBoxPixels'"   # Box line thickness. 1 = normal, 2 = thick, 3 = Very Thick, used for expired drives only.'
+echo 'WarrantyBackgndColor="'$WarrantyBackgndColor'"  # Background color for expired drives. "none" = normal background.'
+echo " "
 echo "###### Global table of colors"
 echo "# The colors selected you can change but you will need to look up the proper HEX code for a color."
 echo " "
@@ -3026,8 +3036,7 @@ echo 'whtColor="'$whtColor'"      # Hex for White background.'
 echo 'ovrdColor="'$ovrdColor'"     # Hex code for Override Yellow.'
 echo 'blueColor="'$blueColor'"     # Hex code for Sky Blue, used for the SCRUB In Progress background.'
 echo 'yellowColor="'$yellowColor'"   # Hex code for pale yellow.'
-echo 'goodWarrantyColor="'$goodWarrantyColor'"  # Hex code for pale light green.'
-echo 'expiredWarrantyColor="'$expiredWarrantyColor'"   # Hex code for pale pink.'
+
 ) > "$Config_File_Name"
 if [[ $Config_Changed_Email == "true" ]]; then Attach_Config="1"; fi
 }
@@ -3115,7 +3124,9 @@ lastTestTypeColor=$bgColor
 wearLevelColor=$bgColor
 NVMcriticalWarningColor=$bgColor
 HeliumColor=$bgColor
-WarrantyColor=$bgColor
+WarrantyBoxColor="black"
+WarrantyBackgroundColor=$bgColor
+#WarrantyBoxPixels="1"
 }
 
 ################# GENERATE CONFIG FILE ##############
@@ -4363,6 +4374,31 @@ case $Keyboard_var in
          fi
         echo "Set Value: "$Drive_Warranty
         echo " "
+        echo "Drive Warranty Expiration Chart Box Pixel Thickness"
+        echo "Enter/Return = no change, or enter 1, 2, or 3"
+        echo "Current: "$WarrantyBoxPixels
+        read Keyboard_yn
+        if [[ ! $Keyboard_yn == "" ]]; then WarrantyBoxPixels=$Keyboard_yn; fi
+        echo "Set Value: "$WarrantyBoxPixels
+        echo " "
+        echo "Drive Warranty Expiration Chart Box Pixel Color"
+        echo "Enter/Return = no change, or enter Hex Color Code (Google it)"
+        echo "Examples: black=#000000, red=#FF0000, lightblue=#add8e6"
+        echo "Current: "$expiredWarrantyBoxColor
+        read Keyboard_yn
+        if [[ ! $Keyboard_yn == "" ]]; then expiredWarrantyBoxColor=$Keyboard_yn; fi
+        echo "Set Value: "$expiredWarrantyBoxColor
+        echo " "
+        echo "Drive Warranty Expiration Chart Box Background Color"
+        echo "Enter/Return = no change, or enter Hex Color Code (Google it)"
+        echo "Examples: black=#000000, red=#FF0000, lightblue=#add8e6"
+        echo 'You may also enter "none" to use the default background.'
+        echo "Current: "$WarrantyBackgndColor
+        read Keyboard_yn
+        if [[ ! $Keyboard_yn == "" ]]; then WarrantyBackgndColor=$Keyboard_yn; fi
+        echo "Set Value: "$WarrantyBackgndColor
+        echo " "
+        echo " "
         echo "Custom Hacks ("$custom_hack") "
         echo "Available: mistermanko"
         read Keyboard_yn
@@ -4843,6 +4879,10 @@ echo '#   Use the format ="Drive_Serial_Number:YYYY-MM-DD" and add a comma if yo
 echo " "
 echo 'Drive_Warranty="K1JUMLBD:2020-09-30,K1JRSWLD:2020-09-30,K1JUMW4D:2020-09-30,K1GVD84B:2020-10-12"'
 echo " "
+echo 'expiredWarrantyBoxColor="#000000"   # "#000000" = normal box perimeter color.'
+echo 'WarrantyBoxPixels="3"   # Box line thickness. 1 = normal, 2 = thick, 3 = Very Thick, used for expired drives only.'
+echo 'WarrantyBackgndColor="none"  # Hex code or "none" = normal background, Only for expired drives.'
+echo " "
 echo "###### Global table of colors"
 echo "# The colors selected you can change but you will need to look up the proper HEX code for a color."
 echo " "
@@ -4854,8 +4894,6 @@ echo 'whtColor="#ffffff"      # Hex for White background.'
 echo 'ovrdColor="#ffff66"     # Hex code for Override Yellow.'
 echo 'blueColor="#87ceeb"     # Hex code for Sky Blue, used for the SCRUB In Progress background.'
 echo 'yellowColor="#f1ffad"   # Hex code for pale yellow.'
-echo 'goodWarrantyColor="#c9ffcc"  # Hex code for pale light green.'
-echo 'expiredWarrantyColor="#f4cccc"   # Hex code for pale pink.'
 ) > "$Config_File_Name"
 
     echo " "
