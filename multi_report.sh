@@ -12,14 +12,21 @@
 ### Version v1.4, v1.5, v1.6 FreeNAS/TrueNAS (joeschmuck)
 
 ### Changelog:
-# v1.6e-beta (23 October 2022)
+# v1.6e-beta (02 November 2022)
 #   - Fixed gptid not showing in the text section for the cache drive (Scale only affected).
+#   - Fixed Zpool "Pool Size" - Wasn't calculating correctly periodically.
+#   - Added Toshiba MG07+ drive Helium value support.
+#   - Added Alphabetizing Device ID.
+#   - Added No HDD Chart Generation if not HDD's are identified.
 #   - Added Warranty Column to chart. (by request)
 #   - Removed Update option in -config since we have an automatic upgrade now.
 #   - Updated instructions for multiple email addresses.
+#   - Updated instructions for "from:" address, apparently some email servers will not accept the default
+#   -- and must be changed to the email address account sending the email.
 #
 #   - Need to add the No-Text Option, just leave the chart.
 #   - Need to add a supplemental chart for all the user options and enable/disable it.
+#   - Need to add to diable listing chart by no drives listed in the chart, example: No HDD.
 #
 #   The multi_report_config file will automatically update previous versions to add new features.
 #   
@@ -200,7 +207,7 @@
 # You may need to make the script executable using "chmod +x program_name.sh"
 #
 
-###### User-definable Parameters #######
+###### User-definable Parameters (IF YOU DO NOT WANT TO USE THE EXTERNAL CONFIGURATION FILE) #######
 # The sections below configure the script to your needs.  Please follow the instructions as it will matter, you cannot
 # just "wing it".  Configurations are exact.  We use basically three different formats, Variables = true/false,
 # Variables = NUMBER, and Variables = Comma Separated Variable (CSV) Strings.  Each variable will have a description
@@ -218,7 +225,8 @@
 # to maintain this data it must be stored in a dataset (user selected).
 
 ###### Email Address ######
-# Enter your email address to send the report to.  The from address does not need to be changed.
+# Enter your email address to send the report to.  The from address does not need to be changed unless you experience
+# an error sending the email.  Some email servers only use the email address associated with the email server.
 
 email="YourEmail@Address.com"
 from="TrueNAS@local.com"
@@ -559,8 +567,8 @@ Drive_Warranty="none"
 
 ######## Expired Drive Warranty Setup
 expiredWarrantyBoxColor="#000000"   # "#000000" = normal box perimeter color.
-WarrantyBoxPixels="3"   # Box line thickness. 1 = normal, 2 = thick, 3 = Very Thick, used for expired drives only.
-WarrantyBackgndColor="none"  # Hex code or "none" = normal background, Only for expired drives. 
+WarrantyBoxPixels="1"   # Box line thickness. 1 = normal, 2 = thick, 3 = Very Thick, used for expired drives only.
+WarrantyBackgndColor="#f1ffad"  # Hex code or "none" = normal background, Only for expired drives. 
 
 ###### Global table of colors
 # The colors selected you can change but you will need to look up the proper HEX code for a color.
@@ -599,9 +607,9 @@ logfile_messages_temp="/tmp/smart_report_messages.tmp"
 boundary="gc0p4Jq0M2Yt08jU534c0p"
 
 if [[ $softver != "Linux" ]]; then
-programver="Multi-Report v1.6e-beta dtd:2022-10-23 (TrueNAS Core "$(cat /etc/version | cut -d " " -f1 | sed 's/TrueNAS-//')")"
+programver="Multi-Report v1.6e-beta dtd:2022-11-02 (TrueNAS Core "$(cat /etc/version | cut -d " " -f1 | sed 's/TrueNAS-//')")"
 else
-programver="Multi-Report v1.6e-beta dtd:2022-10-23 (TrueNAS Scale "$(cat /etc/version)")"
+programver="Multi-Report v1.6e-beta dtd:2022-11-02 (TrueNAS Scale "$(cat /etc/version)")"
 fi
 
 #If the config file format changes, this is the latest working date, anything older must be updated.
@@ -821,6 +829,15 @@ process_ignore_drives () {
          if [[ $s == "0" ]]; then printf "%s " "${drive}"; fi
 }
 
+################## SORT DRIVES ROUTINE ########################
+
+sort_drives () {
+#echo "Incoming Drive List="$sort_drive_list
+sort_drive_list=$(for i in `echo $sort_drive_list`; do
+echo "$i"
+done | sort)
+#echo "Outgoing Drive List="$sort_drive_list
+}
 
 #################### GET SMART HARD DRIVES ############################
 
@@ -841,6 +858,13 @@ else
     smartdrives=$(for drive in $(fdisk -l | grep "Disk /dev/sd" | cut -c 11-13 | tr '\n' ' '); do
         if [ "$(smartctl -i /dev/"${drive}" | grep "SMART support is:.\s*Enabled")" ] && ! [ "$(smartctl -i /dev/"${drive}" | grep "Solid State Device")" ]; then process_ignore_drives; fi
     done | awk '{for (i=NF; i!=0 ; i--) print $i }' | tr ' ' '\n' | sort | tr '\n' ' ')
+fi
+
+# Call Sort Routine with the drive string.
+if [[ "$smartdrives" != "" ]]; then
+sort_drive_list=$smartdrives
+sort_drives
+smartdrives=$sort_drive_list
 fi
 }
 
@@ -865,6 +889,13 @@ fi
         if [ "$(smartctl -i /dev/"${drive}" | grep "SMART support is:.\s*Enabled")" ] && [ "$(smartctl -i /dev/"${drive}" | grep "Solid State Device")" ]; then process_ignore_drives; fi
     done | awk '{for (i=NF; i!=0 ; i--) print $i }' | tr ' ' '\n' | sort | tr '\n' ' ')
   fi
+
+# Call Sort Routine with the drive string.
+if [[ "$smartdrivesSSD" != "" ]]; then
+sort_drive_list=$smartdrivesSSD
+sort_drives
+smartdrivesSSD=$sort_drive_list
+fi
 }
 
 ########################## GET NVMe DRIVES ################################
@@ -890,6 +921,13 @@ smartdrivesNVM=$(for drive in $(fdisk -l | grep "Disk /dev/nvm" | cut -d ':' -f 
 
 ### Convert nvdx to nvmexx in smartdrivesNVM ###
 smartdrivesNVM=$( echo "$smartdrivesNVM" | sed 's/nvd/nvme/g' )
+
+# Call Sort Routine with the drive string.
+if [[ "$smartdrivesNVM" != "" ]]; then
+sort_drive_list=$smartdrivesNVM
+sort_drives
+smartdrivesNVM=$sort_drive_list
+fi
 }
 
 
@@ -913,6 +951,13 @@ fi
         if [ ! "$(smartctl -i /dev/"${drive}" | grep "SMART support is: Enabled")" ]; then process_ignore_drives; fi
     done | awk '{for (i=NF; i!=0 ; i--) print $i }' | tr ' ' '\n' | sort | tr '\n' ' ')
   fi
+
+# Call Sort Routine with the drive string.
+if [[ "$nonsmartdrives" != "" ]]; then
+sort_drive_list=$nonsmartdrives
+sort_drives
+nonsmartdrives=$sort_drive_list
+fi
 }
 
 ########################### FORMAT EMAILS STEP 1 ##########################
@@ -1106,12 +1151,41 @@ for pool in $pools; do
     # Get ZFS capacity (the real capacity)
     zfs_pool_used="$(zfs list $pool | awk '{print $2}' | sed -e '/USED/d')"
     zfs_pool_avail="$(zfs list $pool | awk '{print $3}' | sed -e '/AVAIL/d')"
-
-    if [[ $zfs_pool_used == *"T"* ]] || [[ zfs_pool_avail == *"T"* ]]; then
-        zfs_pool_size="$(awk -v a="$zfs_pool_used" -v b="$zfs_pool_avail" 'BEGIN { printf a+b }' </dev/null)T"
+#zfs_pool_used="104G"
+#zfs_pool_avail="25.7T"
+    if [[ $zfs_pool_used == *"T"* ]]; then
+       zfs_pool_used1="$(awk -v a="$zfs_pool_used" 'BEGIN { printf a*1000 }' </dev/null)";
     else
-        zfs_pool_size="$(awk -v a="$zfs_pool_used" -v b="$zfs_pool_avail" 'BEGIN { printf a+b }' </dev/null)G"
+       zfs_pool_used1="$(awk -v a="$zfs_pool_used" 'BEGIN { printf a*1 }' </dev/null)";
     fi
+    if [[ $zfs_pool_avail == *"T"* ]]; then
+       zfs_pool_avail1="$(awk -v a="$zfs_pool_avail" 'BEGIN { printf a*1000 }' </dev/null)";
+    else
+       zfs_pool_avail1="$(awk -v a="$zfs_pool_avail" 'BEGIN { printf a*1 }' </dev/null)";
+    fi
+
+    zfs_pool_size="$(awk -v a="$zfs_pool_used1" -v b="$zfs_pool_avail1" 'BEGIN { printf a+b }' </dev/null)"
+#echo "---"
+#echo "size="$zfs_pool_size
+    zfs_pool_size1="$(awk -v a="$zfs_pool_size" 'BEGIN { printf "%.0f", a }' </dev/null)"
+
+    if [[ $zfs_pool_size1 -gt 1000 ]]; then
+       zfs_pool_size="$(awk -v a="$zfs_pool_size" 'BEGIN { printf "%.2f", a/1000 }' </dev/null)T"
+    else
+       zfs_pool_size="$(awk -v a="$zfs_pool_size" 'BEGIN { printf "%.2f", a }' </dev/null)G"
+    fi
+
+
+#    if [[ $zfs_pool_used == *"T"* ]] || [[ zfs_pool_avail == *"T"* ]]; then
+#        zfs_pool_size="$(awk -v a="$zfs_pool_used" -v b="$zfs_pool_avail" 'BEGIN { printf a+b }' </dev/null)T"
+#    else
+#        zfs_pool_size="$(awk -v a="$zfs_pool_used" -v b="$zfs_pool_avail" 'BEGIN { printf a+b }' </dev/null)G"
+#    fi
+
+#echo "used="$zfs_pool_used
+#echo "avail="$zfs_pool_avail
+#echo "size="$zfs_pool_size
+
 
     # Get used capacity percentage of the zpool
     used="$(zpool list -H -p -o capacity "$pool")"
@@ -1476,6 +1550,10 @@ if [[ "$(echo "$smartdata" | grep "Helium_Level" | awk '{print $10}')" ]]; then
 
 if [[ "$(echo "$smartdata" | grep "22 Unknown_Attribute" | awk '{print $10}')" ]]; then
    if [[ "$Helium" == "" ]]; then Helium="$(echo "$smartdata" | grep "22 Unknown_Attribute" | awk '{print $10}')"; fi; fi
+
+# Added Helium check for Toshiba MG07+ drives
+if [[ "$(echo "$smartdata" | grep "23 Unknown_Attribute" | awk '{print $4}')" ]]; then
+   if [[ "$Helium" == "" ]]; then Helium="$(echo "$smartdata" | grep "23 Unknown_Attribute" | awk '{print $4}')"; fi; fi
 
 if [[ "$(echo "$smartdata" | grep "Background" | awk '{print $10}')" ]]; then
    lastTestHours="$(echo "$smartdata" | grep "Background" | awk '{print $10}')"; fi
@@ -2681,7 +2759,8 @@ echo "#"
 echo "# This configuration file will override the default values coded into the script."
 echo " "
 echo "###### Email Address ######"
-echo "# Enter your email address to send the report to.  The from address does not need to be changed."
+echo "# Enter your email address to send the report to.  The from address does not need to be changed unless you experience"
+echo "# an error sending the email.  Some email servers only use the email address associated with the email server."
 echo " "
 echo 'email="'$email'"'
 echo 'from="'$from'"'
@@ -2692,9 +2771,6 @@ echo "# The goal is to not have any script customized so I will look for fixes w
 echo "#"
 echo "# Allowable custom hacks are: mistermanko"
 echo 'custom_hack="'$custom_hack'"'
-echo " "
-echo "###### New Updates Go Here"
-echo "# v 1.6d - Added Raw Read Error Rate and Seek Error Rate "
 echo " "
 echo "###### Zpool Status Summary Table Settings"
 echo " "
@@ -3596,12 +3672,17 @@ case $Keyboard_var in
          echo " "
          echo "Current email address(s): "$email" "
          echo "separate multiple email addresses with a comma "
+         echo -n 'Enter nothing to accept the default or change it: '
          read Keyboard_email
          if [[ ! $Keyboard_email == "" ]]; then email=$Keyboard_email; fi
          echo "Set Value: "$email
          echo " "
          echo " "
          echo "Current from address: "$from" "
+         echo 'While most people are able to use the default "from" address,'
+         echo 'Some email servers will not work unless you use the email address'
+         echo 'the email address the server is assocciated with.'
+         echo -n 'Enter nothing to accept the default or change it: '
          read Keyboard_email
          if [[ ! $Keyboard_email == "" ]]; then from=$Keyboard_email; fi
          echo "Set Value: "$from
@@ -4495,6 +4576,17 @@ case $Keyboard_var in
        sleep 2
        continue
     fi
+    if [[ ! $Keyboard_email == "" ]]; then email=$Keyboard_email; fi
+    echo "Set Value: "$email
+    echo " "
+    echo "Current from address: "$from" "
+    echo 'While most people are able to use the default "from" address,'
+    echo 'Some email servers will not work unless you use the email address'
+    echo 'the email address the server is assocciated with.'
+    echo -n "Enter your from email address: "    
+    read Keyboard_email
+    if [[ ! $Keyboard_email == "" ]]; then from=$Keyboard_email; fi
+    echo "Set Value: "$from
     echo " "
     echo "Enter path and name of statistics file or just hit Enter to use default (recommended): "
     echo 'Default is '$SCRIPT_DIR'/statistical_data_file.csv'
@@ -4544,10 +4636,11 @@ echo "#"
 echo "# This configuration file will override the default values coded into the script."
 echo " "
 echo "###### Email Address ######"
-echo "# Enter your email address to send the report to.  The from address does not need to be changed."
+echo "# Enter your email address to send the report to.  The from address does not need to be changed unless you experience"
+echo "# an error sending the email.  Some email servers only use the email address associated with the email server."
 echo " "
-echo 'email="'$Keyboard_email'"'
-echo 'from="TrueNAS@local.com"'
+echo 'email="'$email'"'
+echo 'from="'$from'"'
 echo " "
 echo "###### Custom Hack ######"
 echo "# Custom Hacks are for users with generally very unsupported drives and the data must be manually manipulated."
@@ -4880,8 +4973,8 @@ echo " "
 echo 'Drive_Warranty="K1JUMLBD:2020-09-30,K1JRSWLD:2020-09-30,K1JUMW4D:2020-09-30,K1GVD84B:2020-10-12"'
 echo " "
 echo 'expiredWarrantyBoxColor="#000000"   # "#000000" = normal box perimeter color.'
-echo 'WarrantyBoxPixels="3"   # Box line thickness. 1 = normal, 2 = thick, 3 = Very Thick, used for expired drives only.'
-echo 'WarrantyBackgndColor="none"  # Hex code or "none" = normal background, Only for expired drives.'
+echo 'WarrantyBoxPixels="1"   # Box line thickness. 1 = normal, 2 = thick, 3 = Very Thick, used for expired drives only.'
+echo 'WarrantyBackgndColor="#f1ffad"  # Hex code or "none" = normal background, Only for expired drives.'
 echo " "
 echo "###### Global table of colors"
 echo "# The colors selected you can change but you will need to look up the proper HEX code for a color."
@@ -5307,10 +5400,12 @@ zpool_report
 
 # Generate SMART HDD Report
 SER1=""
+if [[ "$smartdrives" != "" ]]; then
 generate_table "HDD"
 if [[ "$1" == "HDD" ]]; then
   testfile="$2"
 fi
+
 for drive in $smartdrives; do
   clear_variables
   get_drive_data
@@ -5318,6 +5413,7 @@ for drive in $smartdrives; do
   write_table "HDD"
 done
 end_table "HDD"
+fi
 testfile=""
 
 # Generate SSD Report
