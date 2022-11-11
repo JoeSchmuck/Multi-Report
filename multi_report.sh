@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # With version 1.6c and above you may use an external configuration file.
-# Use [-h] to read the Help Section.
+# Use [-help] to read the Help Section.  For a short list of xommand commands use [-h].
 # Use [-config] to create a configuration file in the directory this script is run from.
 
 ###### ZPool & SMART status report with FreeNAS/TrueNAS config backup
@@ -12,24 +12,27 @@
 ### Version v1.4, v1.5, v1.6 FreeNAS/TrueNAS (joeschmuck)
 
 ### Changelog:
-# v1.6e-beta (02 November 2022)
+# v1.6e (11 November 2022)
 #   - Fixed gptid not showing in the text section for the cache drive (Scale only affected).
-#   - Fixed Zpool "Pool Size" - Wasn't calculating correctly periodically.
+#   - Fixed Zpool "Pool Size" - Wasn't calculating correctly under certain circumstances.
 #   - Added Toshiba MG07+ drive Helium value support.
-#   - Added Alphabetizing Device ID.
-#   - Added No HDD Chart Generation if not HDD's are identified.
-#   - Added Warranty Column to chart. (by request)
-#   - Removed Update option in -config since we have an automatic upgrade now.
+#   - Added Alphabetizing Zpool Names and Device ID's.
+#   - Added No HDD Chart Generation if no HDD's are identified (nice for SSD/NVMe Only Systems).
+#   - Added Warranty Column to chart (by request and must have a value in the Drive_Warranty variable).
+#   - Removed Update option in -config since the sript will automatically update now.
 #   - Updated instructions for multiple email addresses.
-#   - Updated instructions for "from:" address, apparently some email servers will not accept the default
-#   -- and must be changed to the email address account sending the email.
+#   - Updated instructions for "from:" address, some email servers will not accept the default
+#   -- value and must be changed to the email address of the account sending the email.
+#   - Added the No Text Section Option (enable_text) to remove the Text Section from the email output
+#   -- and display the chart only, if the value is not "true".
+#   - Added Phison Driven SSD attribute for correct Wear Level value.
 #
-#   - Need to add the No-Text Option, just leave the chart.
-#   - Need to add a supplemental chart for all the user options and enable/disable it.
-#   - Need to add to diable listing chart by no drives listed in the chart, example: No HDD.
+#   NOTES: If there is an error such as the host aborts a drive test and an error occurs, the script may
+#   report a script failure.  I do not desire to account for every possible drive error message.
+#   If you take a look at your drive data, you may notice a problem.  Fix the problem and the
+#   script should work normally.  If it still does not, then reach out for assistance.
 #
 #   The multi_report_config file will automatically update previous versions to add new features.
-#   
 #
 # v1.6d-2 (09 October 2022)
 #   - Bug fix for NVMe power on hours.
@@ -291,7 +294,7 @@ reAllocWarn=0             # Number of Reallocated sector events allowed.  Over t
 multiZoneWarn=0           # Number of MultiZone Errors to allow before a Warning color/message will be used.  Default is 0.
 multiZoneCrit=5           # Number of MultiZone Errors to allow before a Warning color/message will be used.  Default is 5.
 deviceRedFlag="true"      # Set to "true" to have the Device Column indicate RED for ANY alarm condition.  Default is true.
-heliumAlarm="true"        # Set to "true" to set for a critical alarm any He value below 100.  Default is true.
+heliumAlarm="true"        # Set to "true" to set for a critical alarm any He value below "heliumMin" value.  Default is true.
 heliumMin=100             # Set to 100 for a zero leak helium result.  An alert will occur below this value.
 rawReadWarn=5             # Number of read errors to allow before WARNING color/message will be used, this value should be less than rawReadCrit.
 rawReadCrit=100           # Number of read errors to allow before CRITICAL color/message will be used.
@@ -470,8 +473,8 @@ NVM_Power_On_Hours="true"
 NVM_Power_On_Hours_Title="Power On Time"
 NVM_Wear_Level="true"
 NVM_Wear_Level_Title="Wear Level"
- 
- 
+
+
 ###### Drive Ignore List
 # What does it do:
 #  Use this to list any drives to ignore and remove from the report.  This is very useful for ignoring USB Flash Drives
@@ -570,6 +573,11 @@ expiredWarrantyBoxColor="#000000"   # "#000000" = normal box perimeter color.
 WarrantyBoxPixels="1"   # Box line thickness. 1 = normal, 2 = thick, 3 = Very Thick, used for expired drives only.
 WarrantyBackgndColor="#f1ffad"  # Hex code or "none" = normal background, Only for expired drives. 
 
+
+######## Enable-Disable Text Portion ########
+enable_text="true"    # This will display the Text Section when = "true" or remove it when not "true".  Default="true"
+
+
 ###### Global table of colors
 # The colors selected you can change but you will need to look up the proper HEX code for a color.
 
@@ -596,6 +604,7 @@ yellowColor="#f1ffad"   # Hex code for pale yellow.
 softver=$(uname -s)
 host=$(hostname -s)
 truenas_ver=$(cat /etc/version)
+testdata_path="data"
 
 ### temp files have been converted to variable stored, not stored in /tmp/ as a file. ###
 logfile="/tmp/smart_report_body.tmp"
@@ -607,18 +616,20 @@ logfile_messages_temp="/tmp/smart_report_messages.tmp"
 boundary="gc0p4Jq0M2Yt08jU534c0p"
 
 if [[ $softver != "Linux" ]]; then
-programver="Multi-Report v1.6e-beta dtd:2022-11-02 (TrueNAS Core "$(cat /etc/version | cut -d " " -f1 | sed 's/TrueNAS-//')")"
+programver="Multi-Report v1.6e dtd:2022-11-11 (TrueNAS Core "$(cat /etc/version | cut -d " " -f1 | sed 's/TrueNAS-//')")"
 else
-programver="Multi-Report v1.6e-beta dtd:2022-11-02 (TrueNAS Scale "$(cat /etc/version)")"
+programver="Multi-Report v1.6e dtd:2022-11-11 (TrueNAS Scale "$(cat /etc/version)")"
 fi
 
 #If the config file format changes, this is the latest working date, anything older must be updated.
-valid_config_version_date="2022-10-23"
+valid_config_version_date="2022-11-11"
 
 ##########################
 ##########################
 ###                    ###
-###  PROGRAMING HACKS  ###
+###  PROGRAMING /      ###
+###  TROUBLESHOOTING   ###
+###       HACKS        ###
 ###                    ###
 ##########################
 ##########################
@@ -627,6 +638,7 @@ valid_config_version_date="2022-10-23"
 
 VMWareNVME="on"            # Set to "off" normally, "on" to assist in incorrect VMWare reporting.
 Silence="on"               # Set to "on" normally, "off" to provide Joe Schmuck troubleshooting feedback while running the script.
+Joes_System="false"        # Custom settings for my system.
 
 ##########################
 ##########################
@@ -635,6 +647,20 @@ Silence="on"               # Set to "on" normally, "off" to provide Joe Schmuck 
 ###                    ###
 ##########################
 ##########################
+
+
+############## CREATE TESTDATA TEXT FILE ################
+
+create_testdata_text_file () {
+echo "Creating testdata variable"
+testdata_a="$(ls $testdata_path/*.a)"
+testdata_x="$(ls $testdata_path/*.x)"
+echo "testdata_a="$testdata_a
+echo " "
+echo "testdata_x="$testdata_x
+}
+
+############## LOAD EXTERNAL CONFIGURATION FILE #############
 
 load_config () {
 
@@ -723,36 +749,6 @@ fi
 
 awk -v expireDate="$expireDate" -F, '{ if($1 >= expireDate) print $0;}' "$statistical_data_file" > "/tmp/temp_purge_file.csv"
 
-
-# {
-# input="$statistical_data_file"
-#
-#  if [ $softver != "Linux" ]; then
-#     expireDate=$(date -v -"$expDataPurge"d +%Y/%m/%d)
-#  else
-#     expireDate=$(date -d "$expDataPurge days ago" +%Y/%m/%d) 
-#  fi
-
-#  awk -v expireDate="$expireDate" '
-#  BEGIN {
-#    FS=OFS=","
-#    FPAT = "([^,]+)|(\"[^\"]+\")"
-#    count=0
-#    }
-#data=$1
-#    {
-#    FS=OFS=" "
-#
-#    if (count !=0) if ($1 >= expireDate) {
-#       printf ("%s\n", data) >> "/tmp/temp_purge_file.csv"
-#    }
-#    ++count
-#    }
-#
-#END {
-#    }
-#' $input >/dev/null
-# }
 cp -R "/tmp/temp_purge_file.csv" "$statistical_data_file"
 }
 
@@ -771,11 +767,6 @@ awk -F, '{ if($3 != "ada50") print $0;}' "/tmp/temp_purge_file1.csv" > "/tmp/tem
 
 cp -R "/tmp/temp_purge_file.csv" "$statistical_data_file"
 }
-
-
-
-
-
 
 ################## EMAIL EXPORT DATA CVS FILE #########################
 
@@ -832,11 +823,11 @@ process_ignore_drives () {
 ################## SORT DRIVES ROUTINE ########################
 
 sort_drives () {
-#echo "Incoming Drive List="$sort_drive_list
-sort_drive_list=$(for i in `echo $sort_drive_list`; do
+#echo "Incoming Drive List="$sort_list
+sort_list=$(for i in `echo $sort_list`; do
 echo "$i"
-done | sort)
-#echo "Outgoing Drive List="$sort_drive_list
+done | sort -V)
+#echo "Outgoing Drive List="$sort_list
 }
 
 #################### GET SMART HARD DRIVES ############################
@@ -862,9 +853,9 @@ fi
 
 # Call Sort Routine with the drive string.
 if [[ "$smartdrives" != "" ]]; then
-sort_drive_list=$smartdrives
+sort_list=$smartdrives
 sort_drives
-smartdrives=$sort_drive_list
+smartdrives=$sort_list
 fi
 }
 
@@ -892,9 +883,9 @@ fi
 
 # Call Sort Routine with the drive string.
 if [[ "$smartdrivesSSD" != "" ]]; then
-sort_drive_list=$smartdrivesSSD
+sort_list=$smartdrivesSSD
 sort_drives
-smartdrivesSSD=$sort_drive_list
+smartdrivesSSD=$sort_list
 fi
 }
 
@@ -924,9 +915,9 @@ smartdrivesNVM=$( echo "$smartdrivesNVM" | sed 's/nvd/nvme/g' )
 
 # Call Sort Routine with the drive string.
 if [[ "$smartdrivesNVM" != "" ]]; then
-sort_drive_list=$smartdrivesNVM
+sort_list=$smartdrivesNVM
 sort_drives
-smartdrivesNVM=$sort_drive_list
+smartdrivesNVM=$sort_list
 fi
 }
 
@@ -954,9 +945,9 @@ fi
 
 # Call Sort Routine with the drive string.
 if [[ "$nonsmartdrives" != "" ]]; then
-sort_drive_list=$nonsmartdrives
+sort_list=$nonsmartdrives
 sort_drives
-nonsmartdrives=$sort_drive_list
+nonsmartdrives=$sort_list
 fi
 }
 
@@ -1111,6 +1102,9 @@ zpool_report () {
 force_delay
 
 pools=$(zpool list -H -o name)
+sort_list=$pools
+sort_drives
+pools=$sort_list
 poolNum=0
 for pool in $pools; do
     # zpool health summary
@@ -1174,18 +1168,6 @@ for pool in $pools; do
     else
        zfs_pool_size="$(awk -v a="$zfs_pool_size" 'BEGIN { printf "%.2f", a }' </dev/null)G"
     fi
-
-
-#    if [[ $zfs_pool_used == *"T"* ]] || [[ zfs_pool_avail == *"T"* ]]; then
-#        zfs_pool_size="$(awk -v a="$zfs_pool_used" -v b="$zfs_pool_avail" 'BEGIN { printf a+b }' </dev/null)T"
-#    else
-#        zfs_pool_size="$(awk -v a="$zfs_pool_used" -v b="$zfs_pool_avail" 'BEGIN { printf a+b }' </dev/null)G"
-#    fi
-
-#echo "used="$zfs_pool_used
-#echo "avail="$zfs_pool_avail
-#echo "size="$zfs_pool_size
-
 
     # Get used capacity percentage of the zpool
     used="$(zpool list -H -p -o capacity "$pool")"
@@ -1479,8 +1461,15 @@ if [[ "$(echo "$smartdata" | grep "Load_Cycle_Count" | awk '{print $10}')" ]]; t
 if [[ "$(echo "$smartdata" | grep "Multi_Zone_Error_Rate" | awk '{print $10}')" ]]; then
    multiZone="$(echo "$smartdata" | grep "Multi_Zone_Error_Rate" | awk '{print $10 + 0}')"; fi
 
-if [[ "$(echo "$smartdata" | grep "SSD_Life_Left" | awk '{print $4}')" ]]; then
-   wearLevel="$(echo "$smartdata" | grep "SSD_Life_Left" | awk '{print $4 + 0}')"; fi
+if [[ "$(echo "$smartdata" | grep "Phison")" ]]; then
+if [[ "$(echo "$smartdata" | grep "SSD_Life_Left" | awk '{print $10}')" ]]; then
+   wearLevel="$(echo "$smartdata" | grep "SSD_Life_Left" | awk '{print $10 + 0}')"; fi
+fi
+
+if [[ ! "$(echo "$smartdata" | grep "Phison")" ]]; then
+   if [[ "$(echo "$smartdata" | grep "SSD_Life_Left" | awk '{print $4}')" ]]; then
+      wearLevel="$(echo "$smartdata" | grep "SSD_Life_Left" | awk '{print $4 + 0}')"; fi
+fi
 
 if [[ "$(echo "$smartdata" | grep "Wear_Leveling_Count" | awk '{print $4}')" ]]; then
    wearLevel="$(echo "$smartdata" | grep "Wear_Leveling_Count" | awk '{print $4 + 0}')"; fi
@@ -1504,10 +1493,6 @@ fi
 
 if [[ "$(echo "$smartdata" | grep "Reallocated_NAND_Blk_Cnt" | awk '{print $10}')" ]]; then
    reAlloc="$(echo "$smartdata" | grep "Reallocated_NAND_Blk_Cnt" | awk '{print $10}')"; fi
-
-#if [[ "$(echo "$smartdata" | grep "Current Drive Temperature:" | awk '{print $4}')" ]]; then
-#   temp="$((10#$(echo "$smartdata" | grep "Current Drive Temperature:" | awk '{print $4 + 0}')))"; fi
-
 
 if [[ "$(echo "$smartdata" | grep "Current Drive Temperature:" | awk '{print $4}')" ]]; then
    temp="$(echo "$smartdata" | grep "Current Drive Temperature:" | awk '{print $4 + 0}')"; fi
@@ -1574,9 +1559,6 @@ fi
 
 ######### Convert variables to Decimal #########
 
-#echo "---"
-#echo "Drive="$drive
-
 if [[ "$temp_min" != "" ]] && [[ "$temp_min" != "0" ]] && [[ "$temp_min" != "$non_exist_value" ]]; then convert_to_decimal $temp_min; temp_min=$Return_Value; fi
 if [[ "$temp_max" != "" ]] && [[ "$temp_max" != "0" ]] && [[ "$temp_max" != "$non_exist_value" ]]; then convert_to_decimal $temp_max; temp_max=$Return_Value; fi
 if [[ "$temp" != "" ]] && [[ "$temp" != "0" ]] && [[ "$temp" != "$non_exist_value" ]]; then convert_to_decimal $temp; temp=$Return_Value; fi
@@ -1597,12 +1579,12 @@ if [[ "$loadCycle" != "" ]] && [[ "$loadCycle" != "0" ]]; then convert_to_decima
 if [[ "$reAlloc" != "" ]] && [[ "$reAlloc" != "0" ]]; then convert_to_decimal $reAlloc; reAlloc=$Return_Value; fi
 if [[ "$onHours" != "" ]] && [[ "$onHours" != "0" ]]; then convert_to_decimal $onHours; onHours=$Return_Value; fi
 if [[ "$Helium" != "" ]] && [[ "$Helium" != "0" ]]; then convert_to_decimal $Helium; Helium=$Return_Value; fi
+lastTestHours="$(echo $lastTestHours | tr -d "()%/")"
 if [[ "$lastTestHours" != "" ]] && [[ "$lastTestHours" != "0" ]]; then convert_to_decimal $lastTestHours; lastTestHours=$Return_Value; fi
+altlastTestHours="$(echo $altlastTestHours | tr -d "()%/")"
 if [[ "$altlastTestHours" -gt "0" ]]; then convert_to_decimal $altlastTestHours; altlastTestHours=$Return_Value; fi
 
 # Some drives do not report test age after 65536 hours.
-#onHours=${onHours#0}
-#onHours="${onHours//,}"
 if [[ $onHours -gt "65536" ]] && [[ $lastTestHours -gt "0" && $lastTestHours -lt "65536" ]]; then lastTestHours=$(($lastTestHours + 65536)); fi
 
 ######## VMWare Hack to fix NVMe bad variables #####
@@ -1641,7 +1623,11 @@ generate_table () {
 detail_level="$1"
 
 # Lets add up how many columns we will need.
-
+if [[ "$Drive_Warranty" == "none" || "$Drive_Warranty" == "" ]]; then
+   HDD_Warranty="false"
+   SSD_Warranty="false"
+   NVM_Warranty="false"
+fi
 Columns=0;
 if [[ "$1" == "HDD" ]] && [[ "$HDD_Device_ID" == "true" ]]; then ((Columns=Columns+1)); fi;
 if [[ "$1" == "HDD" ]] && [[ "$HDD_Serial_Number" == "true" ]]; then ((Columns=Columns+1)); fi;
@@ -1830,7 +1816,6 @@ if [[ "$1" == "SSD" ]] && [[ "$SSD_Warranty" == "true" ]] && [[ "$WarrantyBoxCol
 if [[ "$1" == "NVM" ]] && [[ "$NVM_Warranty" == "true" ]] && [[ "$WarrantyBoxColor" == "$expiredWarrantyBoxColor" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:%spx solid %s; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$WarrantyBackgroundColor" "$WarrantyBoxPixels" "$WarrantyBoxColor" "$WarrantyClock"; fi
 if [[ "$1" == "NVM" ]] && [[ "$NVM_Warranty" == "true" ]] && [[ "$WarrantyBoxColor" != "$expiredWarrantyBoxColor" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid %s; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$WarrantyBackgroundColor" "$WarrantyBoxColor" "$WarrantyClock"; fi
 
-
 if [[ "$1" == "NVM" ]] && [[ "$NVM_Critical_Warning" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$NVMcriticalWarningColor" "$NVMcriticalWarning"; fi
 
 if [[ "$1" == "HDD" ]] && [[ "$HDD_Drive_Temp" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s$tempdisplay</td>\n" "$tempColor" "$temp"; fi
@@ -1943,7 +1928,6 @@ fi
 ### Lets write out the error messages if there are any, Critical first followed by Warning
 
 (
-#if test -e "$logfile_messages"; then
 if [[ ! $logfile_messages == "" ]]; then
 echo "<b>MESSAGES LOG FILE"
 echo $logfile_messages
@@ -2312,7 +2296,7 @@ detail_level=$1
 # This only works for positive numbers, not negative.  Thankfully I should not have negative
 # numbers in this script.
 
-# Make onHours a base 10 number and remove an commas
+# Make onHours a base 10 number and remove any commas
 onHours=${onHours#0}
 onHours="${onHours//,}"
 
@@ -2352,8 +2336,6 @@ IFS=',' read -ra ADDR <<< "$Drive_Warranty"
       warrantyday="$(echo $drivedt1 | cut -d '-' -f3)"
       tempnow="$((`date +%s`))"
 
-#echo "tempnow="$tempnow
-
 if [[ $softver != "Linux" ]]; then 
       warrantytemp="$((`date -j -v"$warrantyyear"y -v"$warrantymonth"m -v"$warrantyday"d +%s`))"
 else
@@ -2361,33 +2343,22 @@ else
 warrantytemp="$((`date -d "$drivedt1" +%s`))"
 fi
 
-#echo "warrantytemp="$warrantytemp
-
       warrantytemp="$((("$tempnow" - "$warrantytemp")/3600))"
-#echo "warrantytemp/3600="$warrantytemp
-
       let waryrs=$((($warrantytemp / 8760)))
       let warmos=$(((($warrantytemp % 8760) / 730)))
       let wardys=$((((($warrantytemp % 8760) % 730) / 24)))
       let warhrs=$(((($warrantytemp % 8760) % 730) % 24))
       let wardays=$((($warrantytemp / 24)))
-
       wartemp2=${wardays#-}
       wartemp3=${waryrs#-}
-#echo "wartemp2="$wartemp2
-
 
       if [[ $wartemp2 -gt 31 ]]; then
          if [[ $wartemp3 -gt 0 ]]; then wartext="${waryrs#-}y ${warmos#-}m ${wardys#-}d"
          else wartext="${warmos#-}m ${wardys#-}d"
          fi
-#echo "YMD Loop"
       else
          wartext="${wardays#-}d"
-#echo "Days Loop"
       fi
-
-#### Add a routine to display Days -> Months -> Years
 
          if [[ "$warrantytemp" > 0 ]]; then
             WarrantyClock=$wartext
@@ -2403,6 +2374,9 @@ fi
      fi
    fi
    done
+         if [[ "$WarrantyClock" == "" ]]; then
+            WarrantyClock=$non_exist_value
+         fi
  if [[ $s != "0" ]]; then
 onTimeColor=$yellowColor
 if [[ $WarrantyBackgndColor != "none" ]]; then WarrantyBackgroundColor=$WarrantyBackgndColor; fi
@@ -2437,7 +2411,6 @@ reAlloc=$(($reAlloc-$badsectdt2))
 
 ####################  TEMPERATURE SECTION ###################
 # LETS ZERO OUT BOGUS HIGH TEMPS and LOW TEMPS
-#if [[ $temp == "" ]]; then temp="0"; fi
 if [[ $temp -gt 150 ]]; then temp="$non_exist_value"; fi
 if [[ $temp -lt -60 ]]; then temp="$non_exist_value"; fi
 
@@ -2821,7 +2794,7 @@ echo "reAllocWarn=$reAllocWarn             # Number of Reallocated sector events
 echo "multiZoneWarn=$multiZoneWarn           # Number of MultiZone Errors to allow before a Warning color/message will be used.  Default is 0."
 echo "multiZoneCrit=$multiZoneCrit           # Number of MultiZone Errors to allow before a Warning color/message will be used.  Default is 5."
 echo 'deviceRedFlag="'$deviceRedFlag'"      # Set to "true" to have the Device Column indicate RED for ANY alarm condition.  Default is true.'
-echo 'heliumAlarm="'$heliumAlarm'"        # Set to "true" to set for a critical alarm any He value below 100.  Default is true.'
+echo 'heliumAlarm="'$heliumAlarm'"        # Set to "true" to set for a critical alarm any He value below "heliumMin" value.  Default is true.'
 echo "heliumMin=$heliumMin             # Set to 100 for a zero leak helium result.  An alert will occur below this value."
 echo "rawReadWarn=$rawReadWarn             # Number of read errors to allow before WARNING color/message will be used, this value should be less than rawReadCrit."
 echo "rawReadCrit=$rawReadCrit           # Number of read errors to allow before CRITICAL color/message will be used."
@@ -3014,6 +2987,7 @@ echo "#  from other systems and they will not have any effect on a system where 
 echo "#  to have one configuration file that can be used on several systems."
 echo "#"
 echo '# Example: "VMWare,1JUMLBD,21HNSAFC21410E"'
+if  [[ $Ignore_Drives == "VMWare,1JUMLBD,21HNSAFC21410E" ]]; then Ignore_Drives="none"; fi
 echo " "
 echo 'Ignore_Drives="'$Ignore_Drives'"'
 echo " "
@@ -3042,6 +3016,7 @@ echo "# The below example shows drive WD-WMC4N2578099 has 1 UDMA_CRC_Error, driv
 echo "#"
 echo '# Live Example: "WD-WMC4N2578099:1,S2X1J90CA48799:2,P02618119268:1"'
 echo " "
+# Below line retaned to be able to update from version 1.6c
 if [[ ! $CRC_ERRORS == "" ]]; then CRC_Errors=$CRC_ERRORS; fi
 echo 'CRC_Errors="'$CRC_Errors'"'
 echo " "
@@ -3053,6 +3028,7 @@ echo "#"
 echo "# How to use it:"
 echo '#   Use same format as CRC_Errors.'
 echo " "
+# Below line retaned to be able to update from version 1.6c
 if [[ ! $MULTI_Zone == "" ]]; then Multi_Zone=$MULTI_Zone; fi
 echo 'Multi_Zone="'$Multi_Zone'"'
 echo " "
@@ -3069,6 +3045,7 @@ echo "#"
 echo "# How to use it:"
 echo '#   Use same format as CRC_Errors.'
 echo " "
+# Below line retaned to be able to update from version 1.6c
 if [[ ! $BAD_SECTORS == "" ]]; then Bad_Sectors=$BAD_SECTORS; fi
 echo 'Bad_Sectors="'$Bad_Sectors'"'
 echo " "
@@ -3092,14 +3069,20 @@ echo "# If the drive does not exist, for example my drives are not on your syste
 echo "#"
 echo "# How to use it:"
 echo '#   Use the format ="Drive_Serial_Number:YYYY-MM-DD" and add a comma if you have more than one drive.'
+echo '#  Example: $Drive_Warranty="K1JUMLBD:2020-09-30,K1JRSWLD:2020-09-30,K1JUMW4D:2020-09-30,K1GVD84B:2020-10-12"'
 echo " "
+# Below line retained to be able to update from version 1.6c
 if [[ ! $DRIVE_WARRANTY == "" ]]; then Drive_Warranty=$DRIVE_WARRANTY; fi
+if [[ ! $Joes_System == "true" ]] && [[ $Drive_Warranty == "K1JUMLBD:2020-09-30,K1JRSWLD:2020-09-30,K1JUMW4D:2020-09-30,K1GVD84B:2020-10-12" ]]; then Drive_Warranty="none"; fi
 echo 'Drive_Warranty="'$Drive_Warranty'"'
 echo " "
 echo '######## Expired Drive Warranty Setup'
 echo 'expiredWarrantyBoxColor="'$expiredWarrantyBoxColor'"   # "black" = normal box perimeter color.'
 echo 'WarrantyBoxPixels="'$WarrantyBoxPixels'"   # Box line thickness. 1 = normal, 2 = thick, 3 = Very Thick, used for expired drives only.'
 echo 'WarrantyBackgndColor="'$WarrantyBackgndColor'"  # Background color for expired drives. "none" = normal background.'
+echo " "
+echo '######## Enable-Disable Text Portion ########'
+echo 'enable_text="'$enable_text'"    # This will display the Text Section when = "true" or remove it when not "true".  Default="true"'
 echo " "
 echo "###### Global table of colors"
 echo "# The colors selected you can change but you will need to look up the proper HEX code for a color."
@@ -3219,7 +3202,7 @@ echo " "
 echo "         Configuration File Management"
 echo " "
 if test -e "$Config_File_Name"; then
-echo " *** WARNING - A CONFIGURATION CURRENTLY FILE EXISTS ***"
+   echo " *** WARNING - A CONFIGURATION CURRENTLY FILE EXISTS ***"
 fi
 echo " "
 echo " "
@@ -3290,7 +3273,7 @@ case $Keyboard_var in
     echo " "
     echo "   G) Output Formats (Hours, Temp, Non-Existent, Pool Capacity)"
     echo " "
-    echo "   H) Report Header Titles (Edit Header Titles)" 
+    echo "   H) Report Header Titles (Edit Header Titles, Add/Remove Text Section)" 
     echo " "
     echo "   I) Statistical Data File Setup"
     echo " "
@@ -3470,7 +3453,8 @@ case $Keyboard_var in
                if [[ ! $Keyboard_yn == "" ]]; then heliumMin=$Keyboard_yn; fi
                echo "Set Value: ("$heliumMin")"
                echo " "
-               echo -n "Helium Critical Alert Message ("$heliumAlarm") "
+               echo "Helium Critical Alert Message ("$heliumAlarm") "
+               echo 'A "true" value will generate an email subjuct line alert for a error.'
                read -n 1 Keyboard_yn
                if [[ ! $Keyboard_yn == "" ]]; then
                   if [[ $Keyboard_yn == "t" ]]; then heliumAlarm="true"; else heliumAlarm="false"; fi
@@ -4144,20 +4128,31 @@ case $Keyboard_var in
         clear
         echo "Report Header Titles"
         echo " "
-        echo -n 'HDD Report Header "'$HDDreportTitle'" '
+        echo 'Current HDD Report Header: "'$HDDreportTitle'" '
+        echo -n 'Enter new value or Return to accept current value: '
         read Keyboard_yn
         if [[ ! $Keyboard_yn == "" ]]; then HDDreportTitle=$Keyboard_yn; fi
         echo 'Set Value: "'$HDDreportTitle'"'
         echo " "
-        echo -n 'SSD Report Header "'$SSDreportTitle'" '
+        echo 'Current SSD Report Header: "'$SSDreportTitle'" '
+        echo -n 'Enter new value or Return to accept current value: '
         read Keyboard_yn
         if [[ ! $Keyboard_yn == "" ]]; then SSDreportTitle=$Keyboard_yn; fi
         echo 'Set Value: "'$SSDreportTitle'"'
         echo " "
-        echo -n 'NVM Report Header "'$NVMreportTitle'" '
+        echo 'Current NVM Report Header: "'$NVMreportTitle'" '
+        echo -n 'Enter new value or Return to accept current value: '
         read Keyboard_yn
         if [[ ! $Keyboard_yn == "" ]]; then NVMreportTitle=$Keyboard_yn; fi
         echo 'Set Value: "'$NVMreportTitle'"'
+        echo " "
+        echo "Enable/Disable Text Section"
+        echo "This will display (true) or remove (false) the Text Section of the email report."
+        echo 'Current value: "'$enable_text'" '
+        echo -n 'Enter new value or Return to accept current value: '
+        read Keyboard_yn
+        if [[ ! $Keyboard_yn == "" ]]; then enable_text=$Keyboard_yn; fi
+        echo 'Set Value: "'$enable_text'"'
         echo " "
         echo "returning..."
         sleep 2
@@ -4436,6 +4431,7 @@ case $Keyboard_var in
         echo "Current: "$Drive_Warranty
         read Keyboard_yn
         if [[ ! $Keyboard_yn == "" ]]; then Drive_Warranty=$Keyboard_yn; fi
+        if [[ $Keyboard_yn == "j" ]]; then Drive_Warranty="K1JUMLBD:2020-09-30,K1JRSWLD:2020-09-30,K1JUMW4D:2020-09-30,K1GVD84B:2020-10-12"; fi
         if [[ $Keyboard_yn == "d" ]]; then Drive_Warranty=""; fi
         if [[ $Keyboard_yn == "e" ]]; then
            for drive in $smartdrivesall; do
@@ -4698,7 +4694,7 @@ echo "reAllocWarn=0             # Number of Reallocated sector events allowed.  
 echo "multiZoneWarn=0           # Number of MultiZone Errors to allow before a Warning color/message will be used.  Default is 0."
 echo "multiZoneCrit=5           # Number of MultiZone Errors to allow before a Warning color/message will be used.  Default is 5."
 echo 'deviceRedFlag="true"      # Set to "true" to have the Device Column indicate RED for ANY alarm condition.  Default is true.'
-echo 'heliumAlarm="true"        # Set to "true" to set for a critical alarm any He value below 100.  Default is true.'
+echo 'heliumAlarm="true"        # Set to "true" to set for a critical alarm any He value below "heliumMin" value.  Default is true.'
 echo 'heliumMin=100             # Set to 100 for a zero leak helium result.  An alert will occur below this value.'
 echo "rawReadWarn=5             # Number of read errors to allow before WARNING color/message will be used, this value should be less than rawReadCrit."
 echo "rawReadCrit=100           # Number of read errors to allow before CRITICAL color/message will be used."
@@ -4918,7 +4914,7 @@ echo "# Format: variable="Drive_Serial_Number:Current_UDMA_Error_Count" and add 
 echo "#"
 echo "# The below example shows drive WD-WMC4N2578099 has 1 UDMA_CRC_Error, drive S2X1J90CA48799 has 2 errors."
 echo "#"
-echo '# Live Example: "WD-WMC4N2578099:1,S2X1J90CA48799:2,P02618119268:1"'
+echo '# Example: CRC_Errors="WD-WMC4N2578099:1,S2X1J90CA48799:2,P02618119268:1"'
 echo " "
 if [[ $CRC_Errors == "" ]]; then echo 'CRC_Errors="none"'; else echo 'CRC_Errors="'$CRC_Errors'"'; fi 
 echo " "
@@ -4969,12 +4965,17 @@ echo "# If the drive does not exist, for example my drives are not on your syste
 echo "#"
 echo "# How to use it:"
 echo '#   Use the format ="Drive_Serial_Number:YYYY-MM-DD" and add a comma if you have more than one drive.'
+echo "#"
+echo '# Example: Drive_Warranty="K1JUMLBD:2020-09-30,K1JRSWLD:2020-09-30,K1JUMW4D:2020-09-30,K1GVD84B:2020-10-12"'
 echo " "
-echo 'Drive_Warranty="K1JUMLBD:2020-09-30,K1JRSWLD:2020-09-30,K1JUMW4D:2020-09-30,K1GVD84B:2020-10-12"'
+echo 'Drive_Warranty="none"'
 echo " "
 echo 'expiredWarrantyBoxColor="#000000"   # "#000000" = normal box perimeter color.'
 echo 'WarrantyBoxPixels="1"   # Box line thickness. 1 = normal, 2 = thick, 3 = Very Thick, used for expired drives only.'
 echo 'WarrantyBackgndColor="#f1ffad"  # Hex code or "none" = normal background, Only for expired drives.'
+echo " "
+echo '######## Enable-Disable Text Portion ########'
+echo 'enable_text="true"    # This will display the Text Section when = "true" or remove it when not "true".  Default="true"'
 echo " "
 echo "###### Global table of colors"
 echo "# The colors selected you can change but you will need to look up the proper HEX code for a color."
@@ -5066,11 +5067,12 @@ echo "      long-term monitoring. This script currently runs on both Core (FreeB
 echo "      and Scale (Debian Linux) versions."
 echo " "
 echo "OPTIONS"
-echo "      -h            This message."
+echo "      -help         This message."
+echo "      -h            List the most common options."
 echo "      -s            Record drive statistics only, do not generate a"
 echo "                    corresponding email."
-echo "      -config       Generate a configuration file in the directory the script"
-echo "                    is run from."
+echo "      -config       Generate or edit a configuration file in the directory the"
+echo "                    script is run from."
 echo "      -delete       Deletes the statistical data file if the file exists."
 echo "      -dump [all]   Generates an email with attachments of all drive data and the"
 echo "                    multi_report_config.txt additionally it also suppress the"
@@ -5084,13 +5086,16 @@ echo "      HDD | SSD | NVM input_file = (TEST) Use the selected drive data repo
 echo "        created from the -dump option.  This assists in developer recognition"
 echo "        of drives not properly reporting data."
 echo " "
+echo "      -purgetestdata This will purge all test data from the statistical data"
+echo "                     file."
+echo " "
 echo "      Running the script without any switches will collect statistical data"
 echo "      and generate a report."
 echo " "
 echo "CONFIGURATION"
 echo "      The script has become quite complex over time and with added features"
 echo "      ultimately required an external configuration file with version 1.6c"
-echo "      to simplify upgrades to the end users."
+echo "      to simplify upgrades to the end user."
 echo " "
 echo "      If the external configuration file does not exist, the script will use"
 echo "      the values hard code into the script (just like versions 1.6b and"
@@ -5099,11 +5104,10 @@ echo "      changed the email address within the script."
 echo " "
 echo "      In order to generate an external configuration file you must use the"
 echo "      [-config] parameter when running the script which is the preferred"
-echo "      method to configure your script.  Five options will be available:"
+echo "      method to configure your script.  Four options will be available:"
 echo " "
 echo "          N)ew configuration file"
 echo "          A)dvanced configuration"
-echo "          U)pdate configuration file to current version"
 echo "          H)ow to use this configuration tool"
 echo "          X) Exit"
 echo " "
@@ -5224,7 +5228,43 @@ echo "      problem."
 echo " "
 echo "      Please note that a -dump file is not the same as a cut/paste of a terminal"
 echo "      window.  Critical formatting data is lost that is required."
+echo " "
+echo "Advice:  When troubleshooting a problem you may be asked to provide dump data"
+echo "to assist in troubleshooting.  Use the "-dump all" to include all possible data."
+echo "Use "-dump" if you only need to provide the drive data and configuration file."
+echo " "
 
+}
+
+display_help_commands () {
+
+echo "NAME"
+echo "      Multi Report - System status reporting for TrueNAS Core and Scale"
+echo " "
+echo "SYNOPSIS"
+echo "      multi_report.sh [options]"
+echo " "
+echo "COPYRIGHT AND LICENSE"
+echo "      Multi Report is Copyright (C) by its authors and licensed under the"
+echo "      GNU General Public License v3.0"
+echo " "
+echo "COMMON OPTIONS"
+echo "      -h            This message."
+echo "      -help         Full Help message."
+echo "      -s            Record drive statistics only, do not generate a"
+echo "                    corresponding email."
+echo "      -config       Generate or edit a configuration file in the directory the"
+echo "                    script is run from."
+echo "      -dump [all]   Generates an email with attachments of all drive data and the"
+echo "                    multi_report_config.txt additionally it also suppress the"
+echo "                    config_backup file and statistics file from being attached"
+echo "                    to the email unless you use the [all] option, then the"
+echo "                    config_backup and statistics files will be appended."
+echo " "
+echo "Advice:  When troubleshooting a problem you may be asked to provide dump data"
+echo "to assist in troubleshooting.  Use the "-dump all" to include all possible data."
+echo "Use "-dump" if you only need to provide the drive data and configuration file."
+echo " "
 }
 
 ######################  DUMP DRIVE DATA ###################
@@ -5268,7 +5308,7 @@ force_delay
 echo $programver
 smartdata=""
 
-if ! [[ "$1" == "-config" || "$1" == "-h" || "$1" == "-delete" || "$1" == "HDD" || "$1" == "SSD" || "$1" == "NVM" || "$1" == "-s" || "$1" == "" || "$1" == "-dump" || "$1" == "-purgetestdata" ]]; then
+if ! [[ "$1" == "-config" || "$1" == "-help" || "$1" == "-delete" || "$1" == "HDD" || "$1" == "SSD" || "$1" == "NVM" || "$1" == "-s" || "$1" == "" || "$1" == "-dump" || "$1" == "-purgetestdata" || "$1" == "-h" ]]; then
 echo '"'$1'" is not a valid option.'
 echo "Use -h for help and look under OPTIONS."
 echo " "
@@ -5280,8 +5320,15 @@ generate_config_file
 exit 0
 fi
 
-if [[ "$1" == "-h" ]]; then
+if [[ "$1" == "-help" ]]; then
+clear
 display_help
+exit 0
+fi
+
+if [[ "$1" == "-h" ]]; then
+clear
+display_help_commands
 exit 0
 fi
 
@@ -5339,6 +5386,10 @@ if [[ $(date +"%m-%d") == "04-01" ]]; then Fun=1; echo "Fun Day"; else Fun=0; fi
 
 if [[ "$1" == "HDD" ]]; then
 ### Add a test routine if $2 is null, exit stating missing parameter and then spit out the HELP command
+
+# Read the data in the testdata_path location and create the testdata.txt file
+create_testdata_text_file
+
 testfile="$2"
 
 if test -f "$testfile"; then
@@ -5465,6 +5516,7 @@ if [[ $expDataPurge != 0 ]]; then
 purge_exportdata
 fi
 write_ata_errors="0"
+if [[ "$enable_text" == "true" ]]; then
 detailed_report $2
 
 if [[ $reportnonSMART == "true" ]]; then
@@ -5472,7 +5524,7 @@ if [[ $reportnonSMART == "true" ]]; then
     non_smart_report
   fi
 fi
-
+fi
 # Update multi_report_config.txt file if required.
    if [[ $write_ata_errors == "1" ]]; then
        ata_errors="$(echo "$temp_ata_errors" | sed 's/.$//')"
