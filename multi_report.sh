@@ -1,7 +1,9 @@
 #!/bin/bash
+# Set the language to English so the date calulations work correctly with zpool status results.
+LANG="en_US.UTF-8"
 
 # With version 1.6c and above you may use an external configuration file.
-# Use [-help] to read the Help Section.  For a short list of command commands use [-h].
+# Use [-help] to read the Help Section.  For a short list of commands use [-h].
 # Use [-config] to create a configuration file in the directory this script is run from.
 
 ###### ZPool & SMART status report with FreeNAS/TrueNAS config backup
@@ -12,6 +14,16 @@
 ### Version v1.4, v1.5, v1.6 FreeNAS/TrueNAS (joeschmuck)
 
 ### Changelog:
+# v1.6f (11 December 2022)
+#   - Added custom build for snowlucas2022 and diedrichg.
+#   - Adjusted the language to English for the Date calulations.
+#   - Added customizable alarm setpoints for up to 24 drives.
+#   -- This feature will allow for drives which do not fit the normal parameters.
+#   -- and is not intended to individualize each drive, but you could if you wanted.
+#   -- And this also will allow the removal of the three custom builds, after
+#   -- the experimental phase.
+#
+#
 # v1.6e (11 November 2022)
 #   - Fixed gptid not showing in the text section for the cache drive (Scale only affected).
 #   - Fixed Zpool "Pool Size" - Wasn't calculating correctly under certain circumstances.
@@ -238,7 +250,9 @@ from="TrueNAS@local.com"
 # Custom Hacks are for users with generally very unsupported drives and the data must be manually manipulated.
 # The goal is to not have any script customized so I will look for fixes where I can.
 #
-# Allowable custom hacks are: mistermanko
+# Please look at the new Experimental Custom Drive Settings under -config.
+#
+# Allowable custom hacks are: mistermanko, snowlucas2022, diedrichg, or none.
 custom_hack="none"
 
 ### Config File Name and Location ###
@@ -552,6 +566,15 @@ Bad_Sectors="none"
 #  Same as the CRC_Errors, [drive serial number:error count]
 
 ata_errors="none"
+
+####### Custom Drive Configuration (Experimental)
+# Used to define specific alarm values for specific drives by serial number.
+# This should only be used for drives where the default alarm settings
+# are not proper.  Up to 24 unique drive values may be stored.
+#
+# Use -config to set these values.
+
+Custom_Drives=""
  
 ####### Warranty Expiration Date
 # What does it do:
@@ -586,7 +609,7 @@ warnColor="#f765d0"     # Hex code for WARN color (default is purple, #f765d0).
 critColor="#ff0000"     # Hex code for CRITICAL color (default is red, #ff0000).
 altColor="#f4f4f4"      # Table background alternates row colors between white and this color (default is light gray, #f4f4f4).
 whtColor="#ffffff"      # Hex for White background.
-ovrdColor="#ffff66"     # Hex code for Override Yellow.
+ovrdColor="#ffffe4"     # Hex code for Override Yellow.
 blueColor="#87ceeb"     # Hex code for Sky Blue, used for the SCRUB In Progress background.
 yellowColor="#f1ffad"   # Hex code for pale yellow.
 
@@ -616,13 +639,13 @@ logfile_messages_temp="/tmp/smart_report_messages.tmp"
 boundary="gc0p4Jq0M2Yt08jU534c0p"
 
 if [[ $softver != "Linux" ]]; then
-programver="Multi-Report v1.6e dtd:2022-11-11 (TrueNAS Core "$(cat /etc/version | cut -d " " -f1 | sed 's/TrueNAS-//')")"
+programver="Multi-Report v1.6f-beta dtd:2022-12-11 (TrueNAS Core "$(cat /etc/version | cut -d " " -f1 | sed 's/TrueNAS-//')")"
 else
-programver="Multi-Report v1.6e dtd:2022-11-11 (TrueNAS Scale "$(cat /etc/version)")"
+programver="Multi-Report v1.6f-beta dtd:2022-12-11 (TrueNAS Scale "$(cat /etc/version)")"
 fi
 
 #If the config file format changes, this is the latest working date, anything older must be updated.
-valid_config_version_date="2022-11-11"
+valid_config_version_date="2022-12-11"
 
 ##########################
 ##########################
@@ -638,7 +661,8 @@ valid_config_version_date="2022-11-11"
 
 VMWareNVME="on"            # Set to "off" normally, "on" to assist in incorrect VMWare reporting.
 Silence="on"               # Set to "on" normally, "off" to provide Joe Schmuck troubleshooting feedback while running the script.
-Joes_System="false"        # Custom settings for my system.
+Joes_System="true"        # Custom settings for my system.
+Sample_Test="false"         # Setup static test values for testing.
 
 ##########################
 ##########################
@@ -1557,6 +1581,41 @@ if [[ "$sas" == 1 ]]; then
    lastTestType="$(echo "$smartdata" | grep "# 1" | awk '{print $4}')"; fi
 fi
 
+if [[ ! "$(echo "$smartdata" | grep "SSD")" && ! "$(echo "$smartdata" | grep "NVM")" ]]; then
+   Custom_DrivesDrive="HDD"
+fi
+
+if [[ "$(echo "$smartdata" | grep "Solid State")" ]]; then
+   Custom_DrivesDrive="SSD"
+fi
+
+if [[ "$(echo "$smartdata" | grep "NVM")" ]]; then
+   Custom_DrivesDrive="NVM"
+fi
+
+if [[ $Sample_Test == "true" ]]; then
+temp_min=10
+temp_max=50
+temp=35
+spinRetry=2
+reAllocEvent=2
+pending=5
+offlineUnc=3
+crcErrors=2
+seekErrorHealth=1
+seekErrorRate=10
+rawReadErrorRate=8
+multiZone=2
+wearLevel=20
+startStop=490
+loadCycle=500
+reAlloc=5
+onHours=50026
+Helium=100
+lastTestHours=50000
+fi
+
+
 ######### Convert variables to Decimal #########
 
 if [[ "$temp_min" != "" ]] && [[ "$temp_min" != "0" ]] && [[ "$temp_min" != "$non_exist_value" ]]; then convert_to_decimal $temp_min; temp_min=$Return_Value; fi
@@ -2291,6 +2350,108 @@ crunch_numbers () {
 
 detail_level=$1
 
+### Lets adjust for all the Media Alarms, Temp Alarms, and Wear Level for the new Custom_Drives
+# We need to change the values in the runnign script to use slight different variables
+# for example sectorsWarn will now be sectorsWarnx
+# Do this for all the pertinent variables and add a section to scan the Custom_Drives variable
+# and if a serial number matches, then use the variables there vs the defaults.
+
+### Order of data -- $serial":"$tempwarn":"$tempcrit":"$sectorswarn":"$sectorscrit":"$reallocwarn":"$multizonewarn":"$multizonecrit":"$rawreadwarn":"$rawreadcrit":"$seekerrorswarn":"$seekerrorscrit":"$testage":"$testAgeOvrd":"$heliummin
+
+#echo "Drive S/N:"$serial
+
+IFS=',' read -ra ADDR <<< "$Custom_Drives"
+ for i in "${ADDR[@]}"; do
+   cdrivesn1="$(echo $i | cut -d':' -f 1)"
+   if [[ $cdrivesn1 == $serial ]]; then
+ #     echo "S/N Matched"
+      if [[ $Custom_DrivesDrive == "HDD" ]]; then
+         HDDtempWarnx="$(echo $i | cut -d':' -f 2)"; HDDtempCritx="$(echo $i | cut -d':' -f 3)"
+      fi
+      if [[ $Custom_DrivesDrive == "SSD" ]]; then
+         SSDtempWarnx="$(echo $i | cut -d':' -f 2)"; SSDtempCritx="$(echo $i | cut -d':' -f 3)"
+      fi
+      if [[ $Custom_DrivesDrive == "NVM" ]]; then
+         NVMtempWarnx="$(echo $i | cut -d':' -f 2)"; NVMtempCritx="$(echo $i | cut -d':' -f 3)"
+      fi
+      sectorsWarnx="$(echo $i | cut -d':' -f 4)"
+      sectorsCritx="$(echo $i | cut -d':' -f 5)"
+      reAllocWarnx="$(echo $i | cut -d':' -f 6)"
+      multiZoneWarnx="$(echo $i | cut -d':' -f 7)"
+      multiZoneCritx="$(echo $i | cut -d':' -f 8)"
+      rawReadWarnx="$(echo $i | cut -d':' -f 9)"
+      rawReadCritx="$(echo $i | cut -d':' -f 10)"
+      seekErrorsWarnx="$(echo $i | cut -d':' -f 11)"
+      seekErrorsCritx="$(echo $i | cut -d':' -f 12)"
+      testAgeWarnx="$(echo $i | cut -d':' -f 13)"
+      testAgeOvrd="$(echo $i | cut -d':' -f 14)"
+      heliumMinx="$(echo $i | cut -d':' -f 15)"
+
+#echo $HDDtempWarnx
+#echo $HDDtempCritx
+#echo $sectorsWarnx
+#echo $sectorsCritx
+#echo $reAllocWarnx
+#echo $multiZoneWarnx
+#echo $multiZoneCritx
+#echo $rawReadWarnx
+#echo $rawReadCritx
+#echo $seekErrorsWarnx
+#echo $seekErrorsCritx
+#echo $testAgeWarnx
+#echo $testAgeOvrd
+#echo $heliumMinx
+
+   else
+#echo "No drive found, Using Default Values"
+     if [[ $Custom_DrivesDrive == "HDD" ]]; then
+         HDDtempWarnx=$HDDtempWarn; HDDtempCritx=$HDDtempCrit
+     fi
+     if [[ $Custom_DrivesDrive == "SSD" ]]; then
+          SSDtempWarnx=$SSDtempWarn; HDDtempCritx=$SSDtempCrit
+     fi
+     if [[ $Custom_DrivesDrive == "NVM" ]]; then
+         NVMtempWarnx=$NVMtempWarn; NVMtempCritx=$NVMtempCrit
+     fi 
+     sectorsWarnx=$sectorsWarn
+     sectorsCritx=$sectorsCrit
+     reAllocWarnx=$reAllocWarn
+     multiZoneWarnx=$multiZoneWarn
+     multiZoneCritx=$multiZoneCrit
+     rawReadWarnx=$rawReadWarn
+     rawReadCritx=$rawReadCrit
+     seekErrorsWarnx=$seekErrorsWarn
+     seekErrorsCritx=$seekErrorsCrit
+     testAgeWarnx=$testAgeWarn
+     testAgeOvrd="0"
+     heliumMinx=$heliumMin
+   fi
+ done
+   if [[ $Custom_Drives == "" ]]; then
+     #echo "Custom_Drives not defined"
+     if [[ $Custom_DrivesDrive == "HDD" ]]; then
+         HDDtempWarnx=$HDDtempWarn; HDDtempCritx=$HDDtempCrit
+     fi
+     if [[ $Custom_DrivesDrive == "SSD" ]]; then
+          SSDtempWarnx=$SSDtempWarn; HDDtempCritx=$SSDtempCrit
+     fi
+     if [[ $Custom_DrivesDrive == "NVM" ]]; then
+         NVMtempWarnx=$NVMtempWarn; NVMtempCritx=$NVMtempCrit
+     fi 
+     sectorsWarnx=$sectorsWarn
+     sectorsCritx=$sectorsCrit
+     reAllocWarnx=$reAllocWarn
+     multiZoneWarnx=$multiZoneWarn
+     multiZoneCritx=$multiZoneCrit
+     rawReadWarnx=$rawReadWarn
+     rawReadCritx=$rawReadCrit
+     seekErrorsWarnx=$seekErrorsWarn
+     seekErrorsCritx=$seekErrorsCrit
+     testAgeWarnx=$testAgeWarn
+     heliumMinx=$heliumMin
+   fi
+
+
 ### Remove Leading Zeros from all variables
 # This is important because double square brackets interpret a leading zero as Octal number
 # This only works for positive numbers, not negative.  Thankfully I should not have negative
@@ -2318,8 +2479,18 @@ if [[ $powerTimeFormat == "ymdh" ]]; then onTime="${yrs}y ${mos}m ${dys}d ${hrs}
 fi
 
 ##### CUSTOM DRIVE HACK Section #####
+# This will set the testAge value to 1 so it passes the math portion of the quality checks.
+
+if [[ $testAgeOvrd == "1" ]]; then testAge=1; fi
+
 if [[ $custom_hack == "mistermanko" ]]; then
     if [[ $serial == "1603F0161945" ]]; then testAge=1; fi
+fi
+if [[ $custom_hack == "snowlucas2022" ]]; then
+    if [[ $serial == "S1D5NSAF483620N" ]]; then testAge=1; fi
+fi
+if [[ $custom_hack == "diedrichg" ]]; then
+    if [[ $serial == "67F40744192400021305" ]]; then testAge=1; fi
 fi
 
 ### WARRANTY DATE
@@ -2416,41 +2587,41 @@ if [[ $temp -lt -60 ]]; then temp="$non_exist_value"; fi
 
 ### TEMP for HDD
 if [[ $detail_level == "HDD" ]]; then
-if [[ $temp != "$non_exist_value" ]]; then if [[ $temp -gt $HDDtempCrit ]]; then tempColor=$critColor; else if [[ $temp -gt $HDDtempWarn ]]; then tempColor=$warnColor; fi; fi; fi
-if [[ $temp != "$non_exist_value" ]]; then if [[ $temp -gt $HDDtempCrit ]]; then printf "Drive "$serial" Critical Drive Temp "$temp" - Threshold = "$HDDtempCrit"<br>" >> "$logfile_critical";
-else if [[ $temp -gt $HDDtempWarn ]]; then printf "Drive "$serial" High Drive Temp "$temp" - Threshold set at "$HDDtempWarn"<br>" >> "$logfile_warning"; fi; fi; fi
+if [[ $temp != "$non_exist_value" ]]; then if [[ $temp -gt $HDDtempCritx ]]; then tempColor=$critColor; else if [[ $temp -gt $HDDtempWarnx ]]; then tempColor=$warnColor; fi; fi; fi
+if [[ $temp != "$non_exist_value" ]]; then if [[ $temp -gt $HDDtempCritx ]]; then printf "Drive "$serial" Critical Drive Temp "$temp" - Threshold = "$HDDtempCritx"<br>" >> "$logfile_critical";
+else if [[ $temp -gt $HDDtempWarnx ]]; then printf "Drive "$serial" High Drive Temp "$temp" - Threshold set at "$HDDtempWarnx"<br>" >> "$logfile_warning"; fi; fi; fi
 
 if [[ $HDDmaxovrd != "true" ]]; then
-if [[ $temp_max != "$non_exist_value" ]]; then if [[ $temp_max -gt $HDDtempCrit ]]; then temp_maxColor=$critColor; else if [[ $temp_max -gt $HDDtempWarn ]]; then temp_maxColor=$warnColor; fi; fi; fi
-if [[ $temp_max != "$non_exist_value" ]]; then if [[ $temp_max -gt $HDDtempCrit ]]; then printf "Drive "$serial" Critical Drive Temp "$temp_max" - Temp Max Threshold = "$HDDtempCrit"<br>" >> "$logfile_critical";
-else if [[ $temp_max -gt $HDDtempWarn ]]; then printf "Drive "$serial" High Drive Temp "$temp_max" - Temp Max Threshold set at "$HDDtempWarn"<br>" >> "$logfile_warning"; fi; fi; fi
+if [[ $temp_max != "$non_exist_value" ]]; then if [[ $temp_max -gt $HDDtempCritx ]]; then temp_maxColor=$critColor; else if [[ $temp_max -gt $HDDtempWarnx ]]; then temp_maxColor=$warnColor; fi; fi; fi
+if [[ $temp_max != "$non_exist_value" ]]; then if [[ $temp_max -gt $HDDtempCritx ]]; then printf "Drive "$serial" Critical Drive Temp "$temp_max" - Temp Max Threshold = "$HDDtempCritx"<br>" >> "$logfile_critical";
+else if [[ $temp_max -gt $HDDtempWarnx ]]; then printf "Drive "$serial" High Drive Temp "$temp_max" - Temp Max Threshold set at "$HDDtempWarnx"<br>" >> "$logfile_warning"; fi; fi; fi
 fi
 fi
 
 ### TEMP for SSD
 if [[ $detail_level == "SSD" ]]; then
-if [[ $temp != "$non_exist_value" ]]; then if [[ $temp -gt $SSDtempCrit ]]; then tempColor=$critColor; else if [[ $temp -gt $SSDtempWarn ]]; then tempColor=$warnColor; fi; fi; fi
-if [[ $temp != "$non_exist_value" ]]; then if [[ $temp -gt $SSDtempCrit ]]; then printf "Drive "$serial" Critical Drive Temp "$temp" - Threshold = "$SSDtempCrit"<br>" >> "$logfile_critical";
-else if [[ $temp -gt $SSDtempWarn ]]; then printf "Drive "$serial" High Drive Temp "$temp" - Threshold set at "$SSDtempWarn"<br>" >> "$logfile_warning"; fi; fi; fi
+if [[ $temp != "$non_exist_value" ]]; then if [[ $temp -gt $SSDtempCritx ]]; then tempColor=$critColor; else if [[ $temp -gt $SSDtempWarnx ]]; then tempColor=$warnColor; fi; fi; fi
+if [[ $temp != "$non_exist_value" ]]; then if [[ $temp -gt $SSDtempCritx ]]; then printf "Drive "$serial" Critical Drive Temp "$temp" - Threshold = "$SSDtempCritx"<br>" >> "$logfile_critical";
+else if [[ $temp -gt $SSDtempWarnx ]]; then printf "Drive "$serial" High Drive Temp "$temp" - Threshold set at "$SSDtempWarnx"<br>" >> "$logfile_warning"; fi; fi; fi
 
 if [[ $SSDmaxovrd != "true" ]]; then
-if [[ $temp_max != "$non_exist_value" ]]; then if [[ $temp_max -gt $SSDtempCrit ]]; then temp_maxColor=$critColor; else if [[ $temp_max -gt $SSDtempWarn ]]; then temp_maxColor=$warnColor; fi; fi; fi
-if [[ $temp_max != "$non_exist_value" ]]; then if [[ $temp_max -gt $SSDtempCrit ]]; then printf "Drive "$serial" Critical Drive Temp "$temp_max" - Threshold = "$SSDtempCrit"<br>" >> "$logfile_critical";
-else if [[ $temp_max -gt $SSDtempWarn ]]; then printf "Drive "$serial" High Drive Temp "$temp_max" - Temp Max Threshold set at "$SSDtempWarn"<br>" >> "$logfile_warning"; fi; fi; fi
+if [[ $temp_max != "$non_exist_value" ]]; then if [[ $temp_max -gt $SSDtempCritx ]]; then temp_maxColor=$critColor; else if [[ $temp_max -gt $SSDtempWarnx ]]; then temp_maxColor=$warnColor; fi; fi; fi
+if [[ $temp_max != "$non_exist_value" ]]; then if [[ $temp_max -gt $SSDtempCritx ]]; then printf "Drive "$serial" Critical Drive Temp "$temp_max" - Threshold = "$SSDtempCritx"<br>" >> "$logfile_critical";
+else if [[ $temp_max -gt $SSDtempWarnx ]]; then printf "Drive "$serial" High Drive Temp "$temp_max" - Temp Max Threshold set at "$SSDtempWarnx"<br>" >> "$logfile_warning"; fi; fi; fi
 fi
 fi
 
 ### TEMP for NVM
 if [[ $detail_level == "NVM" ]]; then
-if [[ $temp != "$non_exist_value" ]]; then if [[ $temp -gt $NVMtempCrit ]]; then tempColor=$critColor; else if [[ $temp -gt $NVMtempWarn ]]; then tempColor=$warnColor; fi; fi; fi
-if [[ $temp != "$non_exist_value" ]]; then if [[ $temp -gt $NVMtempCrit ]]; then printf "Drive "$serial" Critical Drive Temp "$temp" - Threshold = "$NVMtempCrit"<br>" >> "$logfile_critical";
-else if [[ $temp -gt $NVMtempWarn ]]; then printf "Drive "$serial" High Drive Temp "$temp" - Threshold set at "$NVMtempWarn"<br>" >> "$logfile_warning"; fi; fi; fi
+if [[ $temp != "$non_exist_value" ]]; then if [[ $temp -gt $NVMtempCritx ]]; then tempColor=$critColor; else if [[ $temp -gt $NVMtempWarnx ]]; then tempColor=$warnColor; fi; fi; fi
+if [[ $temp != "$non_exist_value" ]]; then if [[ $temp -gt $NVMtempCritx ]]; then printf "Drive "$serial" Critical Drive Temp "$temp" - Threshold = "$NVMtempCritx"<br>" >> "$logfile_critical";
+else if [[ $temp -gt $NVMtempWarnx ]]; then printf "Drive "$serial" High Drive Temp "$temp" - Threshold set at "$NVMtempWarnx"<br>" >> "$logfile_warning"; fi; fi; fi
 
 ### TEMP_MAX for NVM
 if [[ $NVMmaxovrd != "true" ]]; then
-if [[ $temp_max != "$non_exist_value" ]]; then if [[ $temp_max -gt $NVMtempCrit ]]; then temp_maxColor=$critColor; else if [[ $temp_max -gt $NVMtempWarn ]]; then temp_maxColor=$warnColor; fi; fi; fi
-if [[ $temp_max != "$non_exist_value" ]]; then if [[ $temp_max -gt $NVMtempCrit ]]; then printf "Drive "$serial" Critical Drive Temp "$temp_max" - Threshold = "$NVMtempCrit"<br>" >> "$logfile_critical";
-else if [[ $temp_max -gt $NVMtempWarn ]]; then printf "Drive "$serial" High Drive Temp "$temp_max" - Threshold set at "$NVMtempWarn"<br>" >> "$logfile_warning"; fi; fi; fi
+if [[ $temp_max != "$non_exist_value" ]]; then if [[ $temp_max -gt $NVMtempCritx ]]; then temp_maxColor=$critColor; else if [[ $temp_max -gt $NVMtempWarnx ]]; then temp_maxColor=$warnColor; fi; fi; fi
+if [[ $temp_max != "$non_exist_value" ]]; then if [[ $temp_max -gt $NVMtempCritx ]]; then printf "Drive "$serial" Critical Drive Temp "$temp_max" - Threshold = "$NVMtempCritx"<br>" >> "$logfile_critical";
+else if [[ $temp_max -gt $NVMtempWarnx ]]; then printf "Drive "$serial" High Drive Temp "$temp_max" - Threshold set at "$NVMtempWarnx"<br>" >> "$logfile_warning"; fi; fi; fi
 fi
 fi
 
@@ -2469,7 +2640,7 @@ if [[ $detail_level == "HDD" ]]; then
 #Helium=99
 # Helium Critical Warning
 if [[ $Helium == "" ]]; then Helium="$non_exist_value"; HeliumColor="$bgColor"; fi
-if [[ $Helium == "$heliumMin" || $Helium == "$non_exist_value" ]]; then
+if [[ $Helium == "$heliumMinx" || $Helium == "$non_exist_value" ]]; then
  HeliumColor="$bgColor"
  else
  if [[ $heliumAlarm == "true" ]]; then
@@ -2490,25 +2661,25 @@ if [[ $spinRetry != "" ]]; then if [[ $spinRetry != "0" ]]; then printf "Drive "
 if [[ $spinRetry == "" ]]; then spinRetry="$non_exist_value"; fi
 
 ### REALLOC and REALLOCEVENT
-if [[ $reAlloc != "" ]]; then if [[ $(($reAlloc + 0)) -gt $sectorsCrit ]]; then reAllocColor=$critColor; else if [[ $(($reAlloc + 0)) -gt $sectorsWarn ]]; then reAllocColor=$warnColor; fi; fi; fi
-if [[ $reAlloc != "" ]]; then if [[ $(($reAlloc + 0)) -gt $sectorsCrit ]]; then printf "Drive "$serial" Critical Sectors "$reAlloc" - Threshold = "$sectorsCrit"<br>" >> "$logfile_critical";
-else if [[ $(($reAlloc + 0)) -gt $sectorsWarn ]]; then printf "Drive "$serial" Warning Sectors "$reAlloc" - Threshold = "$sectorsWarn"<br>" >> "$logfile_warning"; fi; fi; fi
+if [[ $reAlloc != "" ]]; then if [[ $(($reAlloc + 0)) -gt $sectorsCritx ]]; then reAllocColor=$critColor; else if [[ $(($reAlloc + 0)) -gt $sectorsWarnx ]]; then reAllocColor=$warnColor; fi; fi; fi
+if [[ $reAlloc != "" ]]; then if [[ $(($reAlloc + 0)) -gt $sectorsCritx ]]; then printf "Drive "$serial" Critical Sectors "$reAlloc" - Threshold = "$sectorsCritx"<br>" >> "$logfile_critical";
+else if [[ $(($reAlloc + 0)) -gt $sectorsWarnx ]]; then printf "Drive "$serial" Warning Sectors "$reAlloc" - Threshold = "$sectorsWarnx"<br>" >> "$logfile_warning"; fi; fi; fi
 if [[ $reAlloc == "" ]]; then reAlloc="$non_exist_value"; fi
 
-if [[ $reAllocEvent != "" ]]; then if [[ $reAllocEvent -gt $reAllocWarn ]]; then reAllocEventColor=$warnColor; fi; fi
-if [[ $reAllocEvent != "" ]]; then if [[ $reAllocEvent -gt $reAllocWarn ]]; then printf "Drive "$serial" Reallocating Sectors "$reAllocEvent" - Threshold = "$reAllocWarn"<br>" >> "$logfile_warning"; fi; fi
+if [[ $reAllocEvent != "" ]]; then if [[ $reAllocEvent -gt $reAllocWarnx ]]; then reAllocEventColor=$warnColor; fi; fi
+if [[ $reAllocEvent != "" ]]; then if [[ $reAllocEvent -gt $reAllocWarnx ]]; then printf "Drive "$serial" Reallocating Sectors "$reAllocEvent" - Threshold = "$reAllocWarnx"<br>" >> "$logfile_warning"; fi; fi
 if [[ $reAllocEvent == "" ]]; then reAllocEvent="$non_exist_value"; fi
 
 ### PENDING SECTORS
-if [[ $pending != "" ]]; then if [[ $(($pending + 0)) -gt $sectorsCrit ]]; then pendingColor=$critColor; else if [[ $(($pending + 0)) -gt $sectorsWarn ]]; then pendingColor=$warnColor; fi; fi; fi
-if [[ $pending != "" ]]; then if [[ $(($pending + 0)) -gt $sectorsCrit ]]; then printf "Drive "$serial" Sector Errors "$pending" - Threshold = "$sectorsCrit"<br>" >> "$logfile_critical";
-else if [[ $(($pending + 0)) -gt $sectorsWarn ]]; then printf "Drive "$serial" Sector Errors "$pending" - Threshold = "$sectorsWarn"<br>" >> "$logfile_warning"; fi; fi; fi
+if [[ $pending != "" ]]; then if [[ $(($pending + 0)) -gt $sectorsCritx ]]; then pendingColor=$critColor; else if [[ $(($pending + 0)) -gt $sectorsWarnx ]]; then pendingColor=$warnColor; fi; fi; fi
+if [[ $pending != "" ]]; then if [[ $(($pending + 0)) -gt $sectorsCritx ]]; then printf "Drive "$serial" Sector Errors "$pending" - Threshold = "$sectorsCritx"<br>" >> "$logfile_critical";
+else if [[ $(($pending + 0)) -gt $sectorsWarnx ]]; then printf "Drive "$serial" Sector Errors "$pending" - Threshold = "$sectorsWarnx"<br>" >> "$logfile_warning"; fi; fi; fi
 if [[ $pending == "" ]]; then pending="$non_exist_value"; fi
 
 ### OFFLINE UNCORRECTABLE SECTORS
-if [[ $offlineUnc != "" ]]; then if [[ $(($offlineUnc + 0)) > $sectorsCrit ]]; then offlineUncColor=$critColor; else if [[ $offlineUnc != 0 ]]; then offlineUncColor=$warnColor; fi; fi; fi
-if [[ $offlineUnc != "" ]]; then if [[ $(($offlineUnc + 0)) > $sectorsCrit ]]; then printf "Drive "$serial" Uncorrectable Errors "$offlineUnc"<br>" >> "$logfile_critical";
-else if [[ $offlineUnc -gt $sectorsWarn ]]; then printf "Drive "$serial" Uncorrectable Errors "$offlineUnc" - Threshold = "$sectorsWarn"<br>" >> "$logfile_warning";fi; fi; fi
+if [[ $offlineUnc != "" ]]; then if [[ $(($offlineUnc + 0)) > $sectorsCritx ]]; then offlineUncColor=$critColor; else if [[ $offlineUnc != 0 ]]; then offlineUncColor=$warnColor; fi; fi; fi
+if [[ $offlineUnc != "" ]]; then if [[ $(($offlineUnc + 0)) > $sectorsCritx ]]; then printf "Drive "$serial" Uncorrectable Errors "$offlineUnc"<br>" >> "$logfile_critical";
+else if [[ $offlineUnc -gt $sectorsWarnx ]]; then printf "Drive "$serial" Uncorrectable Errors "$offlineUnc" - Threshold = "$sectorsWarnx"<br>" >> "$logfile_warning";fi; fi; fi
 if [[ $offlineUnc == "" ]]; then offlineUnc="$non_exist_value"; fi
 
 ### CRC ERRORS
@@ -2530,13 +2701,13 @@ if [[ $chkreadfailure == "Completed:" ]]; then lastTestType="Read Failure"; last
 if [[ $seekErrorHealth -gt 0 ]]; then
 
 # Lets see if this is a NORMAL drive, not reporting crazy ass numbers.
-if [[ $seekErrorHealth -lt $seekErrorsWarn ]] && [[ $seekErrorHealth -le 4294967295 ]]; then seek="done"; fi
+if [[ $seekErrorHealth -lt $seekErrorsWarnx ]] && [[ $seekErrorHealth -le 4294967295 ]]; then seek="done"; fi
 
-if [[ $seekErrorHealth -gt $seekErrorsWarn ]] && [[ $seekErrorHealth -lt $seekErrorsCrit ]]; then
+if [[ $seekErrorHealth -gt $seekErrorsWarnx ]] && [[ $seekErrorHealth -lt $seekErrorsCritx ]]; then
    seekErrorHealthColor=$warnColor
    seek="done"
 fi
-if [[ $seekErrorHealth -gt $seekErrorsCrit ]] && [[ $seekErrorHealth -le 500 ]]; then
+if [[ $seekErrorHealth -gt $seekErrorsCritx ]] && [[ $seekErrorHealth -le 500 ]]; then
    seekErrorHealthColor=$critColor
    seek="done"
 fi
@@ -2547,13 +2718,13 @@ fi
   if [[ $seekErrorHealth -ge 4294967295 ]]; then seekErrorHealth=$(($seekErrorHealth / 4294967295)); fi
 
   if [[ $ignoreSeekError != "true" ]]; then
-   if [[ $(($seekErrorHealth + 0)) -gt $seekErrorsCrit ]]; then
+   if [[ $(($seekErrorHealth + 0)) -gt $seekErrorsCritx ]]; then
      seekErrorHealthColor=$critColor
-     printf "Drive "$serial" Seek Errors "$seekErrorHealth" - Threshold = "$seekErrorsCrit"<br>" >> "$logfile_critical"
+     printf "Drive "$serial" Seek Errors "$seekErrorHealth" - Threshold = "$seekErrorsCritx"<br>" >> "$logfile_critical"
    else
-     if [[ $(($seekErrorHealth + 0)) -gt $seekErrorsWarn ]]; then
+     if [[ $(($seekErrorHealth + 0)) -gt $seekErrorsWarnx ]]; then
        seekErrorHealthColor=$warnColor
-       printf "Drive "$serial" Seek Errors "$seekErrorHealth" - Threshold = "$seekErrorsWarn"<br>" >> "$logfile_warning"
+       printf "Drive "$serial" Seek Errors "$seekErrorHealth" - Threshold = "$seekErrorsWarnx"<br>" >> "$logfile_warning"
      fi
    fi
   fi
@@ -2568,13 +2739,13 @@ seek=""
 if [[ $rawReadErrorRate -gt 0 ]]; then
 
 # Lets see if this is a NORMAL drive, not reporting crazy ass numbers.
-if [[ $rawReadErrorRate -lt $rawReadWarn ]] && [[ $rawReadErrorRate -le 4294967295 ]]; then seek="done"; fi
+if [[ $rawReadErrorRate -lt $rawReadWarnx ]] && [[ $rawReadErrorRate -le 4294967295 ]]; then seek="done"; fi
 
-if [[ $rawReadErrorRate -gt $rawReadWarn ]] && [[ $rawReadErrorRate -lt $rawReadCrit ]]; then
+if [[ $rawReadErrorRate -gt $rawReadWarnx ]] && [[ $rawReadErrorRate -lt $rawReadCritx ]]; then
    rawReadErrorRateColor=$warnColor
    seek="done"
 fi
-if [[ $rawReadErrorRate -gt $rawReadCrit ]] && [[ $rawReadErrorRate -le 500 ]]; then
+if [[ $rawReadErrorRate -gt $rawReadCritx ]] && [[ $rawReadErrorRate -le 500 ]]; then
    rawReadErrorRateColor=$critColor
    seek="done"
 fi
@@ -2585,13 +2756,13 @@ fi
   if [[ $rawReadErrorRate -ge 4294967295 ]]; then rawReadErrorRate=$(($rawReadErrorRate / 4294967295)); fi
 
   if [[ $ignoreReadError != "true" ]]; then
-   if [[ $(($rawReadErrorRate + 0)) -gt $rawReadCrit ]]; then
+   if [[ $(($rawReadErrorRate + 0)) -gt $rawReadCritx ]]; then
      rawReadErrorRateColor=$critColor
-     printf "Drive "$serial" Raw Read Error Rate "$rawReadErrorRate" - Threshold = "$rawReadCrit"<br>" >> "$logfile_critical"
+     printf "Drive "$serial" Raw Read Error Rate "$rawReadErrorRate" - Threshold = "$rawReadCritx"<br>" >> "$logfile_critical"
    else
-     if [[ $(($rawReadErrorRate + 0)) -gt $rawReadWarn ]]; then
+     if [[ $(($rawReadErrorRate + 0)) -gt $rawReadWarnx ]]; then
        rawReadErrorRateColor=$warnColor
-       printf "Drive "$serial" Raw Read Error Rate "$rawReadErrorRate" - Threshold = "$rawReadWarn"<br>" >> "$logfile_warning"
+       printf "Drive "$serial" Raw Read Error Rate "$rawReadErrorRate" - Threshold = "$rawReadWarnx"<br>" >> "$logfile_warning"
      fi
    fi
   fi
@@ -2657,11 +2828,11 @@ multiZone=$(($multiZone-$badsectdt2))
  fi
 
 if [[ $Fun == "1" ]]; then deviceStatusColor=$critColor; printf "Drive "$serial" Data Bit Breakdown Occuring - Bits are flying off the media.<br>"  >> "$logfile_warning"; fi
-if [[ $ignoreMultiZone != "true" ]]; then if [[ $multiZone != "$non_exist_value" ]]; then if [[ $multiZone -gt $multiZoneWarn ]]; then multiZoneColor=$warnColor; printf "Drive: "$serial" - MultiZone Errors = "$multiZone"<br>" >> "$logfile_warning"; fi; fi; fi
-if [[ $ignoreMultiZone != "true" ]]; then if [[ $multiZone != "$non_exist_value" ]]; then if [[ $multiZone -gt $multiZoneCrit ]]; then multiZoneColor=$critColor; printf "Drive: "$serial" - MultiZone Errors = "$multiZone"<br>" >> "$logfile_critical";fi ;fi ;fi
+if [[ $ignoreMultiZone != "true" ]]; then if [[ $multiZone != "$non_exist_value" ]]; then if [[ $multiZone -gt $multiZoneWarnx ]]; then multiZoneColor=$warnColor; printf "Drive: "$serial" - MultiZone Errors = "$multiZone"<br>" >> "$logfile_warning"; fi; fi; fi
+if [[ $ignoreMultiZone != "true" ]]; then if [[ $multiZone != "$non_exist_value" ]]; then if [[ $multiZone -gt $multiZoneCritx ]]; then multiZoneColor=$critColor; printf "Drive: "$serial" - MultiZone Errors = "$multiZone"<br>" >> "$logfile_critical";fi ;fi ;fi
 if [[ $ignoreUDMA != "true" ]]; then if [[ $crcErrors != "$non_exist_value" ]]; then if [[ $crcErrors != "0" ]]; then printf "Drive "$serial" CRC Errors "$crcErrors"<br>" >> "$logfile_critical";fi; fi; fi
-if [[ $testAge -gt $testAgeWarn ]]; then testAgeColor=$warnColor; else testAgeColor=$bgColor; fi
-if [[ $testAge -gt $testAgeWarn ]]; then printf "Drive: "$serial" - Test Age = "$testAge" Days<br>" >> "$logfile_warning"; fi
+if [[ $testAge -gt $testAgeWarnx ]]; then testAgeColor=$warnColor; else testAgeColor=$bgColor; fi
+if [[ $testAge -gt $testAgeWarnx ]]; then printf "Drive: "$serial" - Test Age = "$testAge" Days<br>" >> "$logfile_warning"; fi
 if [[ $smartStatusColor != $okColor ]]; then if [[ $smartStatusColor != $altColor ]]; then if [[ $deviceRedFlag == "true" ]]; then deviceStatusColor=$critColor;fi; fi; fi
 if [[ $tempColor != $bgColor ]]; then if [[ $tempColor != $altColor ]]; then if [[ $deviceRedFlag == "true" ]]; then deviceStatusColor=$critColor;fi; fi; fi
 if [[ $temp_maxColor != $bgColor ]]; then if [[ $temp_maxColor != $altColor ]]; then if [[ $deviceRedFlag == "true" ]]; then deviceStatusColor=$critColor;fi; fi; fi
@@ -2718,6 +2889,20 @@ fi
      fi
  fi
 
+# This section will change the testAge value to the non_exist_value for proper display in the chart.  Displaying a bogus "1" is misleading.
+
+if [[ $testAgeOvrd == "1" ]]; then testAge=$non_exist_value; fi
+
+if [[ $custom_hack == "mistermanko" ]]; then
+    if [[ $serial == "1603F0161945" ]]; then testAge=$non_exist_value; fi
+fi
+if [[ $custom_hack == "snowlucas2022" ]]; then
+    if [[ $serial == "S1D5NSAF483620N" ]]; then testAge=$non_exist_value; fi
+fi
+if [[ $custom_hack == "diedrichg" ]]; then
+    if [[ $serial == "67F40744192400021305" ]]; then testAge=$non_exist_value; fi
+fi
+
 }
 
 ################################## UPDATE CONFIG FILE #############################################
@@ -2729,7 +2914,7 @@ echo "# This file is used exclusively to configure the multi_report version 1.6c
 echo "#"
 echo "# The configuration file will be created in the same directory as the script."
 echo "#"
-echo "# This configuration file will override the default values coded into the script."
+echo "# The configuration file will override the default values coded into the script."
 echo " "
 echo "###### Email Address ######"
 echo "# Enter your email address to send the report to.  The from address does not need to be changed unless you experience"
@@ -2742,12 +2927,14 @@ echo "###### Custom Hack ######"
 echo "# Custom Hacks are for users with generally very unsupported drives and the data must be manually manipulated."
 echo "# The goal is to not have any script customized so I will look for fixes where I can."
 echo "#"
-echo "# Allowable custom hacks are: mistermanko"
+echo "# Please look at the new Experimental Custom Drive Settings under -config."
+echo "#"
+echo "# Allowable custom hacks are: mistermanko, snowlucas2022, diedrichg, or none."
 echo 'custom_hack="'$custom_hack'"'
 echo " "
 echo "###### Zpool Status Summary Table Settings"
 echo " "
-echo "usedWarn=$usedWarn             # Pool used percentage for CRITICAL color to be used."
+echo "usedWarn=$usedWarn               # Pool used percentage for CRITICAL color to be used."
 echo "scrubAgeWarn=$scrubAgeWarn           # Maximum age (in days) of last pool scrub before CRITICAL color will be used (30 + 7 days for day of week). Default=37."
 echo " "
 echo "###### Temperature Settings"
@@ -3057,6 +3244,15 @@ echo "#  Same as the CRC_Errors, [drive serial number:error count]"
 echo " "
 echo 'ata_errors="'$ata_errors'"'
 echo " "
+echo "####### Custom Drive Configuration (Experimental)"
+echo "# Used to define specific alarm values for specific drives by serial number."
+echo "# This should only be used for drives where the default alarm settings"
+echo "# are not proper.  Up to 24 unique drive values may be stored."
+echo "#"
+echo "# Use -config to set these values."
+echo " "
+echo 'Custom_Drives="'$Custom_Drives'"'
+echo " "
 echo "####### Warranty Expiration Date"
 echo "# What does it do:"
 echo "# This section is used to add warranty expirations for designated drives and to create an alert when they expire."
@@ -3282,6 +3478,8 @@ case $Keyboard_var in
     echo "   K) Drive Errors and Custom Builds (Ignore Drives, UDMA CRC, MultiZone,"
     echo "            Reallocated Sectors, ATA Errors, Warranty Expiration,"
     echo "            and Person Specific Custom)"
+    echo  " "
+    echo "   S) Custom Drive Configuration (Experimental)"
     echo " "
     echo "   W) Write Configuration File (Save your changes)"
     echo " "
@@ -4439,7 +4637,7 @@ case $Keyboard_var in
               get_drive_data
               echo " "
               echo "Do you want to add this drive (y/n): Drive ID: "$drive" Serial Number: "$serial
-              read Keyboard_yn
+              read -s -n 1 Keyboard_yn
               if [[ $Keyboard_yn == "y" ]]; then
                  echo "Enter the date the drive expires in the following format: yyyy-mm-dd"
                  read Keyboard_yn
@@ -4454,7 +4652,7 @@ case $Keyboard_var in
         echo "Drive Warranty Expiration Chart Box Pixel Thickness"
         echo "Enter/Return = no change, or enter 1, 2, or 3"
         echo "Current: "$WarrantyBoxPixels
-        read Keyboard_yn
+        read -s -n 1 Keyboard_yn
         if [[ ! $Keyboard_yn == "" ]]; then WarrantyBoxPixels=$Keyboard_yn; fi
         echo "Set Value: "$WarrantyBoxPixels
         echo " "
@@ -4477,7 +4675,8 @@ case $Keyboard_var in
         echo " "
         echo " "
         echo "Custom Hacks ("$custom_hack") "
-        echo "Available: mistermanko"
+        echo "Available: mistermanko, snowlucas2022, diedrichg, or none."
+        echo 'Enter "d" to delete or enter "none"' 
         read Keyboard_yn
         if [[ ! $Keyboard_yn == "" ]]; then custom_hack=$Keyboard_yn; fi
         if [[ $Keyboard_yn == "d" ]]; then custom_hack="none"; fi
@@ -4487,6 +4686,281 @@ case $Keyboard_var in
         sleep 2
         ;; 
 
+        S)
+        clear
+        echo "Custom Drive Configuration Mode (Experimental)"
+        echo " "
+        echo "This series of questions will allow you to cutomize"
+        echo "each alarm setting for each individual drive on your system."
+        echo " "
+        echo "In the following screens we will step through each drive"
+        echo "and ask if you want to customize the values for the drive."
+        echo " "
+        echo "It is recommended that this be used only for drives which"
+        echo "have specific alarm thresholds where the normal thresholds"
+        echo "would be highly undesirable."
+        echo " "
+        echo "If you choose to customize a drive you will be presented with"
+        echo "the Drive ID, Drive Serial Number, and the default alarm setting"
+        echo "to which you will be able to change as desired."
+        echo " "
+        echo 'One additional setpoint is to disable "Last Test Age" which is the'
+        echo "only reason I have custom builds, this should eliminate that."
+        echo " "
+        echo "Up to 24 drives worth of custom alarm data can be stored."
+        echo "The intent is not to customize each drive, just the ones"
+        echo "that need it, but you could do every drive if you really"
+        echo "wanted to."
+        echo " "
+        echo "Follow the prompts."
+        echo " "
+        echo " "
+        echo "Press any key to continue"
+        read -s -n 1 key
+        clear
+# Now lets list each drive, one by one and make some changes.
+        echo "Collecting data, Please wait..."
+        # Lets go ahead and grab all the drive data we will need for the entire section.
+        get_smartHDD_listings
+        get_smartSSD_listings
+        get_smartNVM_listings
+        smartdrivesall="$smartdrives $smartdrivesSSD $smartdrivesNVM"
+# So we have all the drives listed now.
+# We will step through each drive and then compare the S/N's to Custom_Drives, if there
+# is a match then we display the values.  If no match then display default values.
+        if [[ $Custom_Drives != "" ]]; then
+           echo "Would you like to delete all Custom Configuration Data (y/n)?"
+           read -s -n 1 Keyboard_yn
+           if [[ $Keyboard_yn == "y" ]]; then
+              echo " "
+              Custom_Drives=""
+              echo "Data Deleted"
+              echo " "
+           fi
+        fi
+           echo "Would you like to exit (y/n)?"
+           read -s -n 1 Keyboard_exit
+           echo " "
+           if [[ $Keyboard_exit == "y" ]]; then
+              continue
+           fi
+           sleep .5
+           clear
+           echo "Collecting Data..."
+           echo " "
+           for drive in $smartdrivesall; do
+              clear_variables
+              get_drive_data
+              echo "Drive ID: "$drive
+              echo "Drive Serial Number: "$serial
+              echo " "
+
+# Check to see if the drive is listed in the Custom_Drives file, if yes then list the alarm setpoints.
+# If the drive is not listed then ask to add it tot he list.  Next list the set/default setpoint values.
+              if [[ "$(echo $Custom_Drives | grep $serial)" ]]; then
+                 echo "The drive serial number "$serial" is already listed."
+                 echo " "
+                 echo "Options are: Delete the entry for this drive, then you may"
+                 echo "re-add and edit it immediately."
+                 echo " "
+                 echo "Do you want to delete this drive from the custom configuration (y/n)?"
+                 read -s -n 1 Keyboard_yn
+                 if [[ $Keyboard_yn == "y" ]]; then
+                    echo "Custom Drive Configuration for "$serial" Deleted"
+                    echo " "
+                    
+### Roll through the Custom_Drives data until a match for $serial occurs, then copy all but that data back.
+                    tempstring=""
+                    for (( i=1; i<=24; i++ )); do
+                       tempvar="$(echo $Custom_Drives | cut -d',' -f $i)"
+                       if [[ ! $tempvar == "" ]]; then
+                          tempsn="$(echo $tempvar | cut -d":" -f 1)"
+                          if [[ ! $tempsn == $serial ]]; then
+                             if [[ ! $tempstring == "" ]]; then
+                                tempstring=$tempstring","$tempvar
+                             else
+                                tempstring=$tempvar
+                             fi
+                          fi
+                       fi
+                    done
+                    if [[ ! $tempstring == "" ]]; then
+                       Custom_Drives=$tempstring
+                     #  echo "New Custom_Drives="$Custom_Drives
+                     #  echo " "
+                    fi
+                 fi
+
+              fi
+
+# Lets assign the local variables with the default values.  They will be change
+# later if the drive is in the Custom_Drives variable.
+
+              sectorswarn=$sectorsWarn
+              sectorscrit=$sectorsCrit
+              reallocwarn=$reAllocWarn
+              multizonewarn=$multiZoneWarn
+              multizonecrit=$multiZoneCrit
+              rawreadwarn=$rawReadWarn
+              rawreadcrit=$rawReadCrit
+              seekerrorswarn=$seekErrorsWarn
+              seekerrorscrit=$seekErrorsCrit
+              testage=$testAgeWarn
+              testAgeOvrd="0"
+              heliummin=$heliumMin
+
+              if [[ ! "$(echo $Custom_Drives | grep $serial)" ]]; then
+                 echo "The drive is not in the Custom Drive Config database."
+                 echo " "
+                 echo "Displaying Default Values"
+
+                 if [[ $Custom_DrivesDrive == "HDD" ]]; then
+                    tempwarn=$HDDtempWarn; tempcrit=$HDDtempCrit
+                 fi
+                 if [[ $Custom_DrivesDrive == "SSD" ]]; then
+                    tempwarn=$SSDtempWarn; tempcrit=$SSDtempCrit
+                 fi
+                 if [[ $Custom_DrivesDrive == "NVM" ]]; then
+                    tempwarn=$NVMtempWarn; tempcrit=$NVMtempCrit
+                 fi
+ 
+                 echo " "
+                 echo "The current alarm setpoints are:"
+                 echo "Temperature Warning=("$tempwarn")  Temperature Critical=("$tempcrit")"
+                 echo "Sectors Warning=("$sectorswarn")  Sectors Critical=("$sectorscrit")  ReAllocated Sectors Warning=("$reallocwarn")"
+                 echo "MultiZone Warning=("$multizonewarn")  MultiZone Critical=("$multizonecrit")"
+                 echo "Raw Read Error Rate Warning=("$rawreadwarn")  Raw Read Error Rate Critical=("$rawreadcrit")"
+                 echo "Seek Error Rate Warning=("$seekerrorswarn")  Seek Error Rate Critical=("$seekerrorscrit")"
+                 echo "Test Age=("$testage")  Ignore Test Age=("$testAgeOvrd")"
+                 echo "Helium Minimum Level=("$heliummin")"
+                 echo " "
+
+                 echo "Would you like to customize an Alarm Setpoint for this drive?"
+                 echo "Return accepts current setting, 'y' to modify. "
+                 read -s -n 1 Keyboard_yn
+
+                 if [[ $Keyboard_yn == "y" ]]; then
+                    echo " "
+                    echo "Let's modify some values..."
+                    echo "Return to accept current value or enter a new value."
+                    echo " "
+                    echo "Temperature Warning=("$tempwarn") "
+                    read Keyboard_yn
+                      if [[ $Keyboard_yn != $tempwarn && $Keyboard_yn != "" ]]; then
+                         tempwarn=$Keyboard_yn
+                      fi
+                    echo "Temperature Critical=("$tempcrit") "
+                    read Keyboard_yn
+                      if [[ $Keyboard_yn != $tempcrit && $Keyboard_yn != "" ]]; then
+                         tempcrit=$Keyboard_yn
+                      fi
+
+                    echo "Sectors Warning=("$sectorswarn") "
+                    read Keyboard_yn
+                      if [[ $Keyboard_yn != $sectorswarn && $Keyboard_yn != "" ]]; then
+                         sectorswarn=$Keyboard_yn
+                      fi
+                    echo "Sectors Critical=("$sectorscrit") "
+                    read Keyboard_yn
+                      if [[ $Keyboard_yn != $sectorscrit && $Keyboard_yn != "" ]]; then
+                         sectorscrit=$Keyboard_yn
+                      fi
+
+                    echo "Reallocated Sectors Warning=("$reallocwarn") "
+                    read Keyboard_yn
+                      if [[ $Keyboard_yn != $reallocwarn && $Keyboard_yn != "" ]]; then
+                         reallocwarn=$Keyboard_yn
+                      fi
+
+                    echo "MultiZone Warning=("$multizonewarn") "
+                    read Keyboard_yn
+                      if [[ $Keyboard_yn != $mulitzonewarn && $Keyboard_yn != "" ]]; then
+                         multizonewarn=$Keyboard_yn
+                      fi
+
+                    echo "MultiZone Critical=("$multizonecrit") "
+                    read Keyboard_yn
+                      if [[ $Keyboard_yn != $mulitzonecrit && $Keyboard_yn != "" ]]; then
+                         multizonecrit=$Keyboard_yn
+                      fi
+
+                    echo "Raw Read Rate Warning=("$rawreadwarn") "
+                    read Keyboard_yn
+                      if [[ $Keyboard_yn != $rawreadwarn && $Keyboard_yn != "" ]]; then
+                         rawreadwarn=$Keyboard_yn
+                      fi
+                    echo "Raw Read Rate Critical=("$rawreadcrit") "
+                    read Keyboard_yn
+                      if [[ $Keyboard_yn != $rawreadcrit && $Keyboard_yn != "" ]]; then
+                         rawreadcrit=$Keyboard_yn
+                      fi
+
+                    echo "Seek Errors Warning=("$seekerrorswarn") "
+                    read Keyboard_yn
+                      if [[ $Keyboard_yn != $seekerrorswarn && $Keyboard_yn != "" ]]; then
+                         seekerrorswarn=$Keyboard_yn
+                      fi
+
+                    echo "Seek Errors Critical=("$seekerrorscrit") "
+                    read Keyboard_yn
+                      if [[ $Keyboard_yn != $seekerrorscrit && $Keyboard_yn != "" ]]; then
+                         seekerrorscrit=$Keyboard_yn
+                      fi
+
+                    echo "Test Age=("$testage") "
+                    read Keyboard_yn
+                      if [[ $Keyboard_yn != $testage && $Keyboard_yn != "" ]]; then
+                         testage=$Keyboard_yn
+                      fi
+
+                    echo "Ignore Test Age=("$testAgeOvrd") (0=No, 1=Yes)"
+                    read Keyboard_yn
+                    if [[ $Keyboard_yn != $testAgeOvrd && $Keyboard_yn != "" ]]; then
+                         testAgeOvrd=$Keyboard_yn
+                      fi
+
+                   echo "Helium Warning Level=("$heliummin") "
+                    read Keyboard_yn
+                      if [[ $Keyboard_yn != $heliummin && $Keyboard_yn != "" ]]; then
+                         heliummin=$Keyboard_yn
+                      fi
+
+                 echo " "
+                 echo "The current alarm setpoints are:"
+                 echo "Temperature Warning=("$tempwarn")  Temperature Critical=("$tempcrit")"
+                 echo "Sectors Warning=("$sectorswarn")  Sectors Critical=("$sectorscrit")  ReAllocated Sectors Warning=("$reallocwarn")"
+                 echo "MultiZone Warning=("$multizonewarn")  MultiZone Critical=("$multizonecrit")"
+                 echo "Raw Read Error Rate Warning=("$rawreadwarn")  Raw Read Error Rate Critical=("$rawreadcrit")"
+                 echo "Seek Error Rate Warning=("$seekerrorswarn")  Seek Error Rate Critical=("$seekerrorscrit")"
+                 echo "Test Age=("$testage")  Ignore Test Age=("$testAgeOvrd")"
+                 echo "Helium Minimum Level=("$heliummin")"
+                 echo " "
+
+                    echo "Adding "$drive" Serial Number: "$serial" to the custom configuration"
+                    echo "variable."
+                    echo " "
+         # Add all the current values for this $serial to the Custom_Drives variable.
+         
+                    if [[ $Custom_Drives == "" ]]; then
+                       Custom_Drives=$serial":"$tempwarn":"$tempcrit":"$sectorswarn":"$sectorscrit":"$reallocwarn":"$multizonewarn":"$multizonecrit":"$rawreadwarn":"$rawreadcrit":"$seekerrorswarn":"$seekerrorscrit":"$testage":"$testAgeOvrd":"$heliummin
+                    else
+                       Custom_Drives=$Custom_Drives","$serial":"$tempwarn":"$tempcrit":"$sectorswarn":"$sectorscrit":"$reallocwarn":"$multizonewarn":"$multizonecrit":"$rawreadwarn":"$rawreadcrit":"$seekerrorswarn":"$seekerrorscrit":"$testage":"$testAgeOvrd":"$heliummin
+                    fi
+            echo " "
+            else
+               echo "Drive skipped."
+            fi
+         fi
+            echo " "
+            echo "Press any key to continue"
+            read -s -n 1 key
+            clear
+           done
+        echo "Make sure you write your changes."
+        echo "Press any key to continue"
+        read -s -n 1 key       
+        sleep .5
+        ;;
 
         W)
         echo " "
@@ -4591,7 +5065,7 @@ case $Keyboard_var in
     echo "Set Value: "$Keyboard_statistics
     echo " "
     echo "Would you like to automatically setup for some basic drive offsets (y/n): "
-    read Keyboard_yn
+    read -s -n 1 Keyboard_yn
     if [[ $Keyboard_yn == "y" ]]; then
     echo " "
     echo "Collecting data, Please wait..."
@@ -4629,7 +5103,7 @@ echo "# This file is used exclusively to configure the multi_report version 1.6c
 echo "#"
 echo "# The configuration file will be created in the same directory as the script."
 echo "#"
-echo "# This configuration file will override the default values coded into the script."
+echo "# The configuration file will override the default values coded into the script."
 echo " "
 echo "###### Email Address ######"
 echo "# Enter your email address to send the report to.  The from address does not need to be changed unless you experience"
@@ -4642,7 +5116,9 @@ echo "###### Custom Hack ######"
 echo "# Custom Hacks are for users with generally very unsupported drives and the data must be manually manipulated."
 echo "# The goal is to not have any script customized so I will look for fixes where I can."
 echo "#"
-echo "# Allowable custom hacks are: mistermanko"
+echo" # Please look at the new Experimental Custom Drive Settings under -config."
+echo "#"
+echo "# Allowable custom hacks are: mistermanko, snowlucas2022, diedrichg, or none."
 echo 'custom_hack="none"'
 echo " "
 echo "###### Zpool Status Summary Table Settings"
@@ -4953,6 +5429,15 @@ echo "#   Same as the CRC_Errors, [drive serial number:error count]"
 echo " "
 echo 'ata_errors="none"'
 echo " "
+echo "####### Custom Drive Configuration (Experimental)"
+echo "# Used to define specific alarm values for specific drives by serial number."
+echo "# This should only be used for drives where the default alarm settings"
+echo "# are not proper.  Up to 24 unique drive values may be stored."
+echo "#"
+echo "# Use -config to set these values."
+echo " "
+echo 'Custom_Drives=""'
+echo " "
 echo "####### Warranty Expiration Date"
 echo "# What does it do:"
 echo "# This section is used to add warranty expirations for designated drives and to create an alert when they expire."
@@ -4985,7 +5470,7 @@ echo 'warnColor="#f765d0"     # Hex code for WARN color (default is purple, #f76
 echo 'critColor="#ff0000"     # Hex code for CRITICAL color (default is red, #ff0000).'
 echo 'altColor="#f4f4f4"      # Table background alternates row colors between white and this color (default is light gray, #f4f4f4).'
 echo 'whtColor="#ffffff"      # Hex for White background.'
-echo 'ovrdColor="#ffff66"     # Hex code for Override Yellow.'
+echo 'ovrdColor="#ffffe4"     # Hex code for Override Yellow.'
 echo 'blueColor="#87ceeb"     # Hex code for Sky Blue, used for the SCRUB In Progress background.'
 echo 'yellowColor="#f1ffad"   # Hex code for pale yellow.'
 ) > "$Config_File_Name"
