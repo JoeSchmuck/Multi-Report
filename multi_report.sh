@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # With version 1.6c and above you may use an external configuration file.
-# Use [-help] to read the Help Section.  For a short list of xommand commands use [-h].
+# Use [-help] to read the Help Section.  For a short list of command commands use [-h].
 # Use [-config] to create a configuration file in the directory this script is run from.
 
 ###### ZPool & SMART status report with FreeNAS/TrueNAS config backup
