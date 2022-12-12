@@ -14,7 +14,7 @@ LANG="en_US.UTF-8"
 ### Version v1.4, v1.5, v1.6 FreeNAS/TrueNAS (joeschmuck)
 
 ### Changelog:
-# v1.6f (11 December 2022)
+# v1.6f (12 December 2022)
 #   - Added custom build for snowlucas2022 and diedrichg.
 #   - Adjusted the language to English for the Date calulations.
 #   - Added customizable alarm setpoints for up to 24 drives.
@@ -639,13 +639,13 @@ logfile_messages_temp="/tmp/smart_report_messages.tmp"
 boundary="gc0p4Jq0M2Yt08jU534c0p"
 
 if [[ $softver != "Linux" ]]; then
-programver="Multi-Report v1.6f-beta dtd:2022-12-11 (TrueNAS Core "$(cat /etc/version | cut -d " " -f1 | sed 's/TrueNAS-//')")"
+programver="Multi-Report v1.6f-beta dtd:2022-12-12 (TrueNAS Core "$(cat /etc/version | cut -d " " -f1 | sed 's/TrueNAS-//')")"
 else
-programver="Multi-Report v1.6f-beta dtd:2022-12-11 (TrueNAS Scale "$(cat /etc/version)")"
+programver="Multi-Report v1.6f-beta dtd:2022-12-12 (TrueNAS Scale "$(cat /etc/version)")"
 fi
 
 #If the config file format changes, this is the latest working date, anything older must be updated.
-valid_config_version_date="2022-12-11"
+valid_config_version_date="2022-12-12"
 
 ##########################
 ##########################
@@ -661,7 +661,7 @@ valid_config_version_date="2022-12-11"
 
 VMWareNVME="on"            # Set to "off" normally, "on" to assist in incorrect VMWare reporting.
 Silence="on"               # Set to "on" normally, "off" to provide Joe Schmuck troubleshooting feedback while running the script.
-Joes_System="true"        # Custom settings for my system.
+Joes_System="false"        # Custom settings for my system.
 Sample_Test="false"         # Setup static test values for testing.
 
 ##########################
@@ -5116,7 +5116,7 @@ echo "###### Custom Hack ######"
 echo "# Custom Hacks are for users with generally very unsupported drives and the data must be manually manipulated."
 echo "# The goal is to not have any script customized so I will look for fixes where I can."
 echo "#"
-echo" # Please look at the new Experimental Custom Drive Settings under -config."
+echo "# Please look at the new Experimental Custom Drive Settings under -config."
 echo "#"
 echo "# Allowable custom hacks are: mistermanko, snowlucas2022, diedrichg, or none."
 echo 'custom_hack="none"'
