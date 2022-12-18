@@ -14,9 +14,10 @@ LANG="en_US.UTF-8"
 ### Version v1.4, v1.5, v1.6 FreeNAS/TrueNAS (joeschmuck)
 
 ### Changelog:
-# v1.6f (12 December 2022)
+# v1.6f (18 December 2022)
 #   - Added custom build for snowlucas2022 and diedrichg.
 #   - Adjusted the language to English for the Date calulations.
+#   - Updated datestamp2 "date" command to be compatable with FreeBSD 11 and earlier.
 #   - Added customizable alarm setpoints for up to 24 drives.
 #   -- This feature will allow for drives which do not fit the normal parameters.
 #   -- and is not intended to individualize each drive, but you could if you wanted.
@@ -639,9 +640,9 @@ logfile_messages_temp="/tmp/smart_report_messages.tmp"
 boundary="gc0p4Jq0M2Yt08jU534c0p"
 
 if [[ $softver != "Linux" ]]; then
-programver="Multi-Report v1.6f-beta dtd:2022-12-12 (TrueNAS Core "$(cat /etc/version | cut -d " " -f1 | sed 's/TrueNAS-//')")"
+programver="Multi-Report v1.6f-beta dtd:2022-12-18 (TrueNAS Core "$(cat /etc/version | cut -d " " -f1 | sed 's/TrueNAS-//')")"
 else
-programver="Multi-Report v1.6f-beta dtd:2022-12-12 (TrueNAS Scale "$(cat /etc/version)")"
+programver="Multi-Report v1.6f-beta dtd:2022-12-18 (TrueNAS Scale "$(cat /etc/version)")"
 fi
 
 #If the config file format changes, this is the latest working date, anything older must be updated.
@@ -5857,7 +5858,7 @@ if [[ "$dump_all" == "2" ]]; then configBackup="true"; expDataEmail="true"; conf
 # Not certain I need this here, comment out on final production tests.
 testfile=""
 
-datestamp2=$(date -Idate)
+datestamp2=$(date +%Y-%m-%d)
 datestamp=$(date +%Y/%m/%d)
 # FreeBSD gets second resolution unfortunately
   if [[ $softver != "Linux" ]]; then
