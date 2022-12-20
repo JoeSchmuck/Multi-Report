@@ -1,5 +1,5 @@
 #!/bin/bash
-# Set the language to English so the date calulations work correctly with zpool status results.
+# Set the language to English so the date calculations work correctly with zpool status results.
 LANG="en_US.UTF-8"
 
 # With version 1.6c and above you may use an external configuration file.
@@ -14,14 +14,14 @@ LANG="en_US.UTF-8"
 ### Version v1.4, v1.5, v1.6 FreeNAS/TrueNAS (joeschmuck)
 
 ### Changelog:
-# v1.6f (18 December 2022)
+# v1.6f (19 December 2022)
 #   - Added custom build for snowlucas2022 and diedrichg.
-#   - Adjusted the language to English for the Date calulations.
-#   - Updated datestamp2 "date" command to be compatable with FreeBSD 11 and earlier.
+#   - Adjusted the language to English for the Date calculations.
+#   - Updated datestamp2 "date" command to be compatible with FreeBSD 11 and earlier.
 #   - Added customizable alarm setpoints for up to 24 drives.
-#   -- This feature will allow for drives which do not fit the normal parameters.
-#   -- and is not intended to individualize each drive, but you could if you wanted.
-#   -- And this also will allow the removal of the three custom builds, after
+#   -- This feature will allow for drives which do not fit into the normal parameters.
+#   -- It is not intended to individualize each drive, but you could if you wanted.
+#   -- This should allow the future removal of the three custom build options, after
 #   -- the experimental phase.
 #
 #
@@ -32,7 +32,7 @@ LANG="en_US.UTF-8"
 #   - Added Alphabetizing Zpool Names and Device ID's.
 #   - Added No HDD Chart Generation if no HDD's are identified (nice for SSD/NVMe Only Systems).
 #   - Added Warranty Column to chart (by request and must have a value in the Drive_Warranty variable).
-#   - Removed Update option in -config since the sript will automatically update now.
+#   - Removed Update option in -config since the script will automatically update now.
 #   - Updated instructions for multiple email addresses.
 #   - Updated instructions for "from:" address, some email servers will not accept the default
 #   -- value and must be changed to the email address of the account sending the email.
@@ -52,15 +52,15 @@ LANG="en_US.UTF-8"
 #   --- Unfortunately as the script gets more complex it's very easy to induce a problem.  And since I do not have
 #   --- a lot of different hardware, I need the users to contact me and tell me there is an issue so I can fix it.
 #   --- It's unfortunate that I've have two bug fixes already but them's the breaks.
-#   - Updated to support more drives Min/Max temps and display the non-existant value if nothing is obtained vice "0".
+#   - Updated to support more drives Min/Max temps and display the non-existent value if nothing is obtained vice "0".
 #   
-#   The multi_report_config file is compatable with version back to v1.6d.
+#   The multi_report_config file is compatible with version back to v1.6d.
 #
 # v1.6d-1 (08 October 2022)
 #   - Bug Fix for converting multiple numbers from Octal to Decimal.  The previous process worked "most" of the time
 #   -- but we always aim for 100% working.
 #   
-#   The multi_report_config file is compatable with version back to v1.6d.
+#   The multi_report_config file is compatible with version back to v1.6d.
 #
 # v1.6d (05 October 2022)
 #   - Thanks goes out to ChrisRJ for offering some great suggestions to enhance and optimize the script.
@@ -640,13 +640,13 @@ logfile_messages_temp="/tmp/smart_report_messages.tmp"
 boundary="gc0p4Jq0M2Yt08jU534c0p"
 
 if [[ $softver != "Linux" ]]; then
-programver="Multi-Report v1.6f-beta dtd:2022-12-18 (TrueNAS Core "$(cat /etc/version | cut -d " " -f1 | sed 's/TrueNAS-//')")"
+programver="Multi-Report v1.6f-beta dtd:2022-12-19 (TrueNAS Core "$(cat /etc/version | cut -d " " -f1 | sed 's/TrueNAS-//')")"
 else
-programver="Multi-Report v1.6f-beta dtd:2022-12-18 (TrueNAS Scale "$(cat /etc/version)")"
+programver="Multi-Report v1.6f-beta dtd:2022-12-19 (TrueNAS Scale "$(cat /etc/version)")"
 fi
 
 #If the config file format changes, this is the latest working date, anything older must be updated.
-valid_config_version_date="2022-12-12"
+valid_config_version_date="2022-12-19"
 
 ##########################
 ##########################
@@ -658,7 +658,7 @@ valid_config_version_date="2022-12-12"
 ##########################
 ##########################
 
-#Unique progeramming hacks to properly emulate other hardware that is not actually on the system.
+#Unique programming hacks to properly emulate other hardware that is not actually on the system.
 
 VMWareNVME="on"            # Set to "off" normally, "on" to assist in incorrect VMWare reporting.
 Silence="on"               # Set to "on" normally, "off" to provide Joe Schmuck troubleshooting feedback while running the script.
@@ -730,7 +730,7 @@ if [[ $1 == "0" ]]; then Return_Value=0; fi
 }
 
 #################### CHECK OPEN FILE #####################
-# Checks if trhe file is open before continuing.
+# Checks if the file is open before continuing.
 # Passes $1=filename
 # Loop for up to 60 seconds waiting for the file to close.
 
@@ -2352,7 +2352,7 @@ crunch_numbers () {
 detail_level=$1
 
 ### Lets adjust for all the Media Alarms, Temp Alarms, and Wear Level for the new Custom_Drives
-# We need to change the values in the runnign script to use slight different variables
+# We need to change the values in the running script to use slight different variables
 # for example sectorsWarn will now be sectorsWarnx
 # Do this for all the pertinent variables and add a section to scan the Custom_Drives variable
 # and if a serial number matches, then use the variables there vs the defaults.
@@ -2361,11 +2361,32 @@ detail_level=$1
 
 #echo "Drive S/N:"$serial
 
+# Predefine some variables
+     if [[ $Custom_DrivesDrive == "HDD" ]]; then
+         HDDtempWarnx=$HDDtempWarn; HDDtempCritx=$HDDtempCrit
+     fi
+     if [[ $Custom_DrivesDrive == "SSD" ]]; then
+          SSDtempWarnx=$SSDtempWarn; SSDtempCritx=$SSDtempCrit
+     fi
+     if [[ $Custom_DrivesDrive == "NVM" ]]; then
+         NVMtempWarnx=$NVMtempWarn; NVMtempCritx=$NVMtempCrit
+     fi 
+     sectorsWarnx=$sectorsWarn
+     sectorsCritx=$sectorsCrit
+     reAllocWarnx=$reAllocWarn
+     multiZoneWarnx=$multiZoneWarn
+     multiZoneCritx=$multiZoneCrit
+     rawReadWarnx=$rawReadWarn
+     rawReadCritx=$rawReadCrit
+     seekErrorsWarnx=$seekErrorsWarn
+     seekErrorsCritx=$seekErrorsCrit
+     testAgeWarnx=$testAgeWarn
+     heliumMinx=$heliumMin
+
 IFS=',' read -ra ADDR <<< "$Custom_Drives"
  for i in "${ADDR[@]}"; do
    cdrivesn1="$(echo $i | cut -d':' -f 1)"
    if [[ $cdrivesn1 == $serial ]]; then
- #     echo "S/N Matched"
       if [[ $Custom_DrivesDrive == "HDD" ]]; then
          HDDtempWarnx="$(echo $i | cut -d':' -f 2)"; HDDtempCritx="$(echo $i | cut -d':' -f 3)"
       fi
@@ -2387,71 +2408,32 @@ IFS=',' read -ra ADDR <<< "$Custom_Drives"
       testAgeWarnx="$(echo $i | cut -d':' -f 13)"
       testAgeOvrd="$(echo $i | cut -d':' -f 14)"
       heliumMinx="$(echo $i | cut -d':' -f 15)"
-
-#echo $HDDtempWarnx
-#echo $HDDtempCritx
-#echo $sectorsWarnx
-#echo $sectorsCritx
-#echo $reAllocWarnx
-#echo $multiZoneWarnx
-#echo $multiZoneCritx
-#echo $rawReadWarnx
-#echo $rawReadCritx
-#echo $seekErrorsWarnx
-#echo $seekErrorsCritx
-#echo $testAgeWarnx
-#echo $testAgeOvrd
-#echo $heliumMinx
-
-   else
-#echo "No drive found, Using Default Values"
-     if [[ $Custom_DrivesDrive == "HDD" ]]; then
-         HDDtempWarnx=$HDDtempWarn; HDDtempCritx=$HDDtempCrit
-     fi
-     if [[ $Custom_DrivesDrive == "SSD" ]]; then
-          SSDtempWarnx=$SSDtempWarn; HDDtempCritx=$SSDtempCrit
-     fi
-     if [[ $Custom_DrivesDrive == "NVM" ]]; then
-         NVMtempWarnx=$NVMtempWarn; NVMtempCritx=$NVMtempCrit
-     fi 
-     sectorsWarnx=$sectorsWarn
-     sectorsCritx=$sectorsCrit
-     reAllocWarnx=$reAllocWarn
-     multiZoneWarnx=$multiZoneWarn
-     multiZoneCritx=$multiZoneCrit
-     rawReadWarnx=$rawReadWarn
-     rawReadCritx=$rawReadCrit
-     seekErrorsWarnx=$seekErrorsWarn
-     seekErrorsCritx=$seekErrorsCrit
-     testAgeWarnx=$testAgeWarn
-     testAgeOvrd="0"
-     heliumMinx=$heliumMin
    fi
  done
-   if [[ $Custom_Drives == "" ]]; then
-     #echo "Custom_Drives not defined"
-     if [[ $Custom_DrivesDrive == "HDD" ]]; then
-         HDDtempWarnx=$HDDtempWarn; HDDtempCritx=$HDDtempCrit
-     fi
-     if [[ $Custom_DrivesDrive == "SSD" ]]; then
-          SSDtempWarnx=$SSDtempWarn; HDDtempCritx=$SSDtempCrit
-     fi
-     if [[ $Custom_DrivesDrive == "NVM" ]]; then
-         NVMtempWarnx=$NVMtempWarn; NVMtempCritx=$NVMtempCrit
-     fi 
-     sectorsWarnx=$sectorsWarn
-     sectorsCritx=$sectorsCrit
-     reAllocWarnx=$reAllocWarn
-     multiZoneWarnx=$multiZoneWarn
-     multiZoneCritx=$multiZoneCrit
-     rawReadWarnx=$rawReadWarn
-     rawReadCritx=$rawReadCrit
-     seekErrorsWarnx=$seekErrorsWarn
-     seekErrorsCritx=$seekErrorsCrit
-     testAgeWarnx=$testAgeWarn
-     heliumMinx=$heliumMin
-   fi
 
+#   if [[ $Custom_Drives == "" ]]; then
+#     #echo "Custom_Drives not defined"
+#     if [[ $Custom_DrivesDrive == "HDD" ]]; then
+#         HDDtempWarnx=$HDDtempWarn; HDDtempCritx=$HDDtempCrit
+#     fi
+#     if [[ $Custom_DrivesDrive == "SSD" ]]; then
+#          SSDtempWarnx=$SSDtempWarn; HDDtempCritx=$SSDtempCrit
+#     fi
+#     if [[ $Custom_DrivesDrive == "NVM" ]]; then
+#         NVMtempWarnx=$NVMtempWarn; NVMtempCritx=$NVMtempCrit
+#     fi 
+#     sectorsWarnx=$sectorsWarn
+#     sectorsCritx=$sectorsCrit
+#     reAllocWarnx=$reAllocWarn
+#     multiZoneWarnx=$multiZoneWarn
+#     multiZoneCritx=$multiZoneCrit
+#     rawReadWarnx=$rawReadWarn
+#     rawReadCritx=$rawReadCrit
+#     seekErrorsWarnx=$seekErrorsWarn
+#     seekErrorsCritx=$seekErrorsCrit
+#     testAgeWarnx=$testAgeWarn
+#     heliumMinx=$heliumMin
+#   fi
 
 ### Remove Leading Zeros from all variables
 # This is important because double square brackets interpret a leading zero as Octal number
@@ -2828,7 +2810,7 @@ multiZoneColor=$ovrdColor
 multiZone=$(($multiZone-$badsectdt2))
  fi
 
-if [[ $Fun == "1" ]]; then deviceStatusColor=$critColor; printf "Drive "$serial" Data Bit Breakdown Occuring - Bits are flying off the media.<br>"  >> "$logfile_warning"; fi
+if [[ $Fun == "1" ]]; then deviceStatusColor=$critColor; printf "Drive "$serial" Data Bit Breakdown Occurring - Bits are flying off the media.<br>"  >> "$logfile_warning"; fi
 if [[ $ignoreMultiZone != "true" ]]; then if [[ $multiZone != "$non_exist_value" ]]; then if [[ $multiZone -gt $multiZoneWarnx ]]; then multiZoneColor=$warnColor; printf "Drive: "$serial" - MultiZone Errors = "$multiZone"<br>" >> "$logfile_warning"; fi; fi; fi
 if [[ $ignoreMultiZone != "true" ]]; then if [[ $multiZone != "$non_exist_value" ]]; then if [[ $multiZone -gt $multiZoneCritx ]]; then multiZoneColor=$critColor; printf "Drive: "$serial" - MultiZone Errors = "$multiZone"<br>" >> "$logfile_critical";fi ;fi ;fi
 if [[ $ignoreUDMA != "true" ]]; then if [[ $crcErrors != "$non_exist_value" ]]; then if [[ $crcErrors != "0" ]]; then printf "Drive "$serial" CRC Errors "$crcErrors"<br>" >> "$logfile_critical";fi; fi; fi
@@ -3204,7 +3186,7 @@ echo "# The below example shows drive WD-WMC4N2578099 has 1 UDMA_CRC_Error, driv
 echo "#"
 echo '# Live Example: "WD-WMC4N2578099:1,S2X1J90CA48799:2,P02618119268:1"'
 echo " "
-# Below line retaned to be able to update from version 1.6c
+# Below line retained to be able to update from version 1.6c
 if [[ ! $CRC_ERRORS == "" ]]; then CRC_Errors=$CRC_ERRORS; fi
 echo 'CRC_Errors="'$CRC_Errors'"'
 echo " "
@@ -3216,7 +3198,7 @@ echo "#"
 echo "# How to use it:"
 echo '#   Use same format as CRC_Errors.'
 echo " "
-# Below line retaned to be able to update from version 1.6c
+# Below line retained to be able to update from version 1.6c
 if [[ ! $MULTI_Zone == "" ]]; then Multi_Zone=$MULTI_Zone; fi
 echo 'Multi_Zone="'$Multi_Zone'"'
 echo " "
@@ -3233,7 +3215,7 @@ echo "#"
 echo "# How to use it:"
 echo '#   Use same format as CRC_Errors.'
 echo " "
-# Below line retaned to be able to update from version 1.6c
+# Below line retained to be able to update from version 1.6c
 if [[ ! $BAD_SECTORS == "" ]]; then Bad_Sectors=$BAD_SECTORS; fi
 echo 'Bad_Sectors="'$Bad_Sectors'"'
 echo " "
@@ -3653,7 +3635,7 @@ case $Keyboard_var in
                echo "Set Value: ("$heliumMin")"
                echo " "
                echo "Helium Critical Alert Message ("$heliumAlarm") "
-               echo 'A "true" value will generate an email subjuct line alert for a error.'
+               echo 'A "true" value will generate an email subject line alert for a error.'
                read -n 1 Keyboard_yn
                if [[ ! $Keyboard_yn == "" ]]; then
                   if [[ $Keyboard_yn == "t" ]]; then heliumAlarm="true"; else heliumAlarm="false"; fi
@@ -3864,7 +3846,7 @@ case $Keyboard_var in
          echo "Current from address: "$from" "
          echo 'While most people are able to use the default "from" address,'
          echo 'Some email servers will not work unless you use the email address'
-         echo 'the email address the server is assocciated with.'
+         echo 'the email address the server is associated with.'
          echo -n 'Enter nothing to accept the default or change it: '
          read Keyboard_email
          if [[ ! $Keyboard_email == "" ]]; then from=$Keyboard_email; fi
@@ -4363,7 +4345,7 @@ case $Keyboard_var in
         echo "Statistical Data Setup"
         echo " "
         echo "Statistical file location and name ("$statistical_data_file")"
-        echo "Enter new location and file name or press Enter/Return to accecpt current value:"
+        echo "Enter new location and file name or press Enter/Return to accept current value:"
         read Keyboard_yn
         if [[ ! $Keyboard_yn == "" ]]; then statistical_data_file=$Keyboard_yn; fi
         echo "Set Value: ("$statistical_data_file")"
@@ -4426,12 +4408,12 @@ case $Keyboard_var in
         if [[ $Keyboard_SCT_Warning == "3" ]]; then SCT_Warning="all"; fi
         echo "Set Value: ("$SCT_Warning")"
         echo " "
-        echo -n "SCT Read Timemout Setting ("$SCT_Read_Timeout") "
+        echo -n "SCT Read Timeout Setting ("$SCT_Read_Timeout") "
         read Keyboard_yn
         if [[ ! $Keyboard_yn == "" ]]; then SCT_Read_Timeout=$Keyboard_yn; fi
         echo "Set Value: ("$SCT_Read_Timeout")"
         echo " "
-        echo -n "SCT Write Timemout Setting ("$SCT_Write_Timeout") "
+        echo -n "SCT Write Timeout Setting ("$SCT_Write_Timeout") "
         read Keyboard_yn
         if [[ ! $Keyboard_yn == "" ]]; then SCT_Write_Timeout=$Keyboard_yn; fi
         echo "Set Value: ("$SCT_Write_Timeout")"
@@ -4589,7 +4571,7 @@ case $Keyboard_var in
         echo " "
         echo "Automatic ATA Error Count Updates - This will automatically have the script"
         echo "update the multi_report_config.txt file with the current Error Log count."
-        echo "This migth be desirable if you have a drive that keeps throwing minor errors."
+        echo "This might be desirable if you have a drive that keeps throwing minor errors."
         echo "Enter/Return to keep current value, 't' (enable), or 'f' (disable) this feature." 
         echo "Current: "$ata_auto_enable
         read Keyboard_yn
@@ -4691,7 +4673,7 @@ case $Keyboard_var in
         clear
         echo "Custom Drive Configuration Mode (Experimental)"
         echo " "
-        echo "This series of questions will allow you to cutomize"
+        echo "This series of questions will allow you to customize"
         echo "each alarm setting for each individual drive on your system."
         echo " "
         echo "In the following screens we will step through each drive"
@@ -4699,19 +4681,21 @@ case $Keyboard_var in
         echo " "
         echo "It is recommended that this be used only for drives which"
         echo "have specific alarm thresholds where the normal thresholds"
-        echo "would be highly undesirable."
+        echo "would be undesirable."
         echo " "
         echo "If you choose to customize a drive you will be presented with"
         echo "the Drive ID, Drive Serial Number, and the default alarm setting"
         echo "to which you will be able to change as desired."
         echo " "
-        echo 'One additional setpoint is to disable "Last Test Age" which is the'
-        echo "only reason I have custom builds, this should eliminate that."
+        echo 'One additional setpoint is to disable "Last Test Age" where some older'
+        echo "drives can only record a specific high value and then wraps around"
+        echo "or worse, seems almost random.  This was the main reason for having"
+        echo "the custom build option, to which I hope to remove that option soon."
         echo " "
         echo "Up to 24 drives worth of custom alarm data can be stored."
         echo "The intent is not to customize each drive, just the ones"
-        echo "that need it, but you could do every drive if you really"
-        echo "wanted to."
+        echo "that need it, but it has been tested to support 24 drives"
+        echo "and possibly many more if you really wanted to do that."
         echo " "
         echo "Follow the prompts."
         echo " "
@@ -4738,6 +4722,8 @@ case $Keyboard_var in
               echo "Data Deleted"
               echo " "
            fi
+        else
+           echo "No Custom Drive Configuration Exists."
         fi
            echo "Would you like to exit (y/n)?"
            read -s -n 1 Keyboard_exit
@@ -4757,41 +4743,84 @@ case $Keyboard_var in
               echo " "
 
 # Check to see if the drive is listed in the Custom_Drives file, if yes then list the alarm setpoints.
-# If the drive is not listed then ask to add it tot he list.  Next list the set/default setpoint values.
+# If the drive is not listed then ask to add it to the list.  Next list the set/default setpoint values.
               if [[ "$(echo $Custom_Drives | grep $serial)" ]]; then
-                 echo "The drive serial number "$serial" is already listed."
+                 echo "The drive serial number "$serial" is already listed as Custom."
                  echo " "
                  echo "Options are: Delete the entry for this drive, then you may"
                  echo "re-add and edit it immediately."
+
+
+IFS=',' read -ra ADDR <<< "$Custom_Drives"
+ for i in "${ADDR[@]}"; do
+   cdrivesn1="$(echo $i | cut -d':' -f 1)"
+   if [[ $cdrivesn1 == $serial ]]; then
+      tempWarnx="$(echo $i | cut -d':' -f 2)"
+      tempCritx="$(echo $i | cut -d':' -f 3)"
+      sectorsWarnx="$(echo $i | cut -d':' -f 4)"
+      sectorsCritx="$(echo $i | cut -d':' -f 5)"
+      reAllocWarnx="$(echo $i | cut -d':' -f 6)"
+      multiZoneWarnx="$(echo $i | cut -d':' -f 7)"
+      multiZoneCritx="$(echo $i | cut -d':' -f 8)"
+      rawReadWarnx="$(echo $i | cut -d':' -f 9)"
+      rawReadCritx="$(echo $i | cut -d':' -f 10)"
+      seekErrorsWarnx="$(echo $i | cut -d':' -f 11)"
+      seekErrorsCritx="$(echo $i | cut -d':' -f 12)"
+      testAgeWarnx="$(echo $i | cut -d':' -f 13)"
+      testAgeOvrd="$(echo $i | cut -d':' -f 14)"
+      heliumMinx="$(echo $i | cut -d':' -f 15)"
+   fi
+ done
+
+                 echo " "
+                 echo "The current alarm setpoints are:"
+                 echo "Temperature Warning=("$tempWarnx")  Temperature Critical=("$tempCritx")"
+                 echo "Sectors Warning=("$sectorsWarnx")  Sectors Critical=("$sectorsCritx")  ReAllocated Sectors Warning=("$reAllocWarnx")"
+                 echo "MultiZone Warning=("$multiZoneWarnx")  MultiZone Critical=("$multiZoneCritx")"
+                 echo "Raw Read Error Rate Warning=("$rawReadWarnx")  Raw Read Error Rate Critical=("$rawReadCritx")"
+                 echo "Seek Error Rate Warning=("$seekErrorsWarnx")  Seek Error Rate Critical=("$seekErrorsCritx")"
+                 echo "Test Age=("$testAgeWarnx")  Ignore Test Age=("$testAgeOvrd")"
+                 echo "Helium Minimum Level=("$heliumMinx")"
                  echo " "
                  echo "Do you want to delete this drive from the custom configuration (y/n)?"
                  read -s -n 1 Keyboard_yn
                  if [[ $Keyboard_yn == "y" ]]; then
-                    echo "Custom Drive Configuration for "$serial" Deleted"
+                    echo "Custom Drive Configuration for "$serial" Deleted."
                     echo " "
                     
 ### Roll through the Custom_Drives data until a match for $serial occurs, then copy all but that data back.
                     tempstring=""
-                    for (( i=1; i<=24; i++ )); do
+                    for (( i=1; i<=32; i++ )); do
                        tempvar="$(echo $Custom_Drives | cut -d',' -f $i)"
+        #               echo "tempvar "$i" ="$tempvar
+
                        if [[ ! $tempvar == "" ]]; then
                           tempsn="$(echo $tempvar | cut -d":" -f 1)"
-                          if [[ ! $tempsn == $serial ]]; then
-                             if [[ ! $tempstring == "" ]]; then
-                                tempstring=$tempstring","$tempvar
+                          if [[ $tempsn == $serial ]]; then
+        #                     echo "S/N Matches -> Let's Remove It"
+                          scrap=1
+                          else
+         #                    echo "S/N does not match"
+                             if [[ $tempstring == "" ]]; then
+                                tempstring=$tempvar                                
                              else
-                                tempstring=$tempvar
+                                tempstring=$tempstring","$tempvar
                              fi
                           fi
                        fi
                     done
-                    if [[ ! $tempstring == "" ]]; then
-                       Custom_Drives=$tempstring
-                     #  echo "New Custom_Drives="$Custom_Drives
-                     #  echo " "
-                    fi
-                 fi
+        #            echo "tempstring="$tempstring
 
+                   # if [[ ! $tempstring == "" ]]; then
+                       Custom_Drives=$tempstring
+                   # else
+                   #    Custom_Drives=$Custom_Drives","$tempstring
+                   # fi
+                 fi
+# Remove any leading comma 
+                 #Custom_Drives="$(echo $Custom_Drives | rev | sed 's/,//' | rev)"
+# echo "New Custom_Drives after deletion="$Custom_Drives
+# echo " "
               fi
 
 # Lets assign the local variables with the default values.  They will be change
@@ -4921,6 +4950,7 @@ case $Keyboard_var in
                       fi
 
                    echo "Helium Warning Level=("$heliummin") "
+                   echo "NOTE: Helium may not be used by this drive so enter the default."
                     read Keyboard_yn
                       if [[ $Keyboard_yn != $heliummin && $Keyboard_yn != "" ]]; then
                          heliummin=$Keyboard_yn
@@ -5053,7 +5083,7 @@ case $Keyboard_var in
     echo "Current from address: "$from" "
     echo 'While most people are able to use the default "from" address,'
     echo 'Some email servers will not work unless you use the email address'
-    echo 'the email address the server is assocciated with.'
+    echo 'the email address the server is associated with.'
     echo -n "Enter your from email address: "    
     read Keyboard_email
     if [[ ! $Keyboard_email == "" ]]; then from=$Keyboard_email; fi
