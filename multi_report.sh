@@ -14,16 +14,22 @@ LANG="en_US.UTF-8"
 ### Version v1.4, v1.5, v1.6 FreeNAS/TrueNAS (joeschmuck)
 
 ### Changelog:
-# v1.6f (19 December 2022)
-#   - Added custom build for snowlucas2022 and diedrichg.
+# v1.6f (26 December 2022)
+#   - Added recognition for WDC SSD "230 Media_Wearout_Indicator".
 #   - Adjusted the language to English for the Date calculations.
 #   - Updated datestamp2 "date" command to be compatible with FreeBSD 11 and earlier.
+#   - Updated Zpool Status Report to display Used Space Capacity when using the "zpool" reporting configuration.
 #   - Added customizable alarm setpoints for up to 24 drives.
-#   -- This feature will allow for drives which do not fit into the normal parameters.
+#   -- This feature allows for customizing drives which do not fit into the default parameters.
 #   -- It is not intended to individualize each drive, but you could if you wanted.
-#   -- This should allow the future removal of the three custom build options, after
-#   -- the experimental phase.
+#   -- This allows the option for removal of the three custom code options.
+#   - The configuration file in the email will now change to FreeNAS or TrueNAS based
+#   -- on the software running vice FreeNAS hard-coded.
+#   - Corrected several spelling errors throughout script.
 #
+#   The multi_report_config file will automatically update previous versions to add new features.
+#
+#   - Future Plan: Remove custom code for snowlucas2022, diedrichg, and mistermanko in version 2.0.
 #
 # v1.6e (11 November 2022)
 #   - Fixed gptid not showing in the text section for the cache drive (Scale only affected).
@@ -78,13 +84,6 @@ LANG="en_US.UTF-8"
 #   - Added 0.1 second delay after writing "$logfile" to eliminate intermittent file creation errors.
 #   - Fixed Text Report -> Drive Model Number not showing up for some drives.
 #   - Added option to email copy of multi_report_config.txt upon any automatic script modification and/or by day.
-#   
-#   -- Future Work
-#   ---- Change all the -config dialog to be consistent.
-#   ---- Optimizing Code
-#
-#   The multi_report_config file will be automatically updated.
-#
 # v1.6c (28 August 2022)
 #   - Supports external configuration file (but not required).
 #   - Completely Configurable by running the script -config parameter (this took a lot of work).
@@ -93,8 +92,6 @@ LANG="en_US.UTF-8"
 #   - Added support for drives which do not support recording over 65536 hours for SMART Tests and rolls over to start at zero again.
 #   - Added -dump parameter to create and email all of the drives smartctl outputs as text file email attachments.
 #   - Added support for Helium drives.
-#
-#
 # v1.6: (05 August 2022)
 #   Thanks to Jeff, Simon, and Sean for providing me more test data than I could shake a stick at and friendly constructive opinions/advice.
 #   - Complete rewrite of the script.  More organized and easier for future updates.
@@ -112,7 +109,6 @@ LANG="en_US.UTF-8"
 #   - Added Zpool Size, Free Space, and Temp Min/Max.
 #   - Added customizable temperature values and customizable Non-Value fields (use to be coded to "N/A").
 #   - Added support for SandForce SSD.
-#
 # v1.5:
 #   - Added NVMe support
 #   - Added clearer error reporting for Warning and Critical errors.
@@ -120,8 +116,6 @@ LANG="en_US.UTF-8"
 #   -- NVMe's are not all standardized so I expect tweaks as different drive data arrives.
 #   -- onHours that includes a comma will not record correctly in the statistical data file.  This is related to the NVMe problem above.
 #   -- Zpool Summary does not indicate Scrub Age warning, likely the entire summary has issues. 
-#
-#
 # v1.4d:
 #   - Fixed Scrub In Progress nuisance error when a scrub is in progress.
 #   - Added offsetting Reallocated Sectors for four drives.  This should be for testing only. Any drives
@@ -130,7 +124,6 @@ LANG="en_US.UTF-8"
 #   -- NOT TESTED ON OTHER THAN U.S. FORMATTED DATE YYYY-MM-DD.
 #   - Added HDD and SSD individual temperature settings.
 #   - Changed order of polling Temperature data from HDD/SSD.
-#
 # v1.4c:
 #   - Rewrite to create functions and enable easier editing.
 #   - Added Custom Reports.
@@ -155,7 +148,6 @@ LANG="en_US.UTF-8"
 #
 #   - Known Problem: One user reported UDMA_CRC_Errors is not subtracting correctly, have not been able to personally replicate it.
 #   -- This error seems to occur around line #1027
-#
 # v1.4b:
 #   - Added SMART test remaining percentage if Last Test has a SMART Test is in progress.
 #   - Fix for empty SMART fields, typically for unsupported SSD's.
@@ -254,6 +246,7 @@ from="TrueNAS@local.com"
 # Please look at the new Experimental Custom Drive Settings under -config.
 #
 # Allowable custom hacks are: mistermanko, snowlucas2022, diedrichg, or none.
+# This feature is going away with the next version release.
 custom_hack="none"
 
 ### Config File Name and Location ###
@@ -517,7 +510,7 @@ Ignore_Drives="none"
 #
 # How to use it:
 #  List each drive by serial number and include the current UDMA_CRC_Error_Count value.
-#  The format is very specific and will not work if you wing it, use the Live EXAMPLE.
+#  The format is very specific and will not work if you wing it, use the Live Example.
 #
 #  Set the FLAG in the FLAGS Section ignoreUDMA to false (the default setting).
 #
@@ -607,7 +600,7 @@ enable_text="true"    # This will display the Text Section when = "true" or remo
 
 okColor="#b5fcb9"       # Hex code for color to use in SMART Status column if drives pass (default is darker light green, #b5fcb9).
 warnColor="#f765d0"     # Hex code for WARN color (default is purple, #f765d0).
-critColor="#ff0000"     # Hex code for CRITICAL color (default is red, #ff0000).
+critColor="#f44336"     # Hex code for CRITICAL color (default is red, #ff0000).
 altColor="#f4f4f4"      # Table background alternates row colors between white and this color (default is light gray, #f4f4f4).
 whtColor="#ffffff"      # Hex for White background.
 ovrdColor="#ffffe4"     # Hex code for Override Yellow.
@@ -640,13 +633,15 @@ logfile_messages_temp="/tmp/smart_report_messages.tmp"
 boundary="gc0p4Jq0M2Yt08jU534c0p"
 
 if [[ $softver != "Linux" ]]; then
-programver="Multi-Report v1.6f-beta dtd:2022-12-19 (TrueNAS Core "$(cat /etc/version | cut -d " " -f1 | sed 's/TrueNAS-//')")"
+programver="Multi-Report v1.6f-beta dtd:2022-12-26 (TrueNAS Core "$(cat /etc/version | cut -d " " -f1 | sed 's/TrueNAS-//')")"
+programver2="$(cat /etc/version | cut -d"-" -f1)"
 else
-programver="Multi-Report v1.6f-beta dtd:2022-12-19 (TrueNAS Scale "$(cat /etc/version)")"
+programver="Multi-Report v1.6f-beta dtd:2022-12-26 (TrueNAS Scale "$(cat /etc/version)")"
+programver2="$(cat /etc/version | cut -d" " -f1)"
 fi
 
 #If the config file format changes, this is the latest working date, anything older must be updated.
-valid_config_version_date="2022-12-19"
+valid_config_version_date="2022-12-26"
 
 ##########################
 ##########################
@@ -730,6 +725,7 @@ if [[ $1 == "0" ]]; then Return_Value=0; fi
 }
 
 #################### CHECK OPEN FILE #####################
+# This routine is no longer used and can be deleted.
 # Checks if the file is open before continuing.
 # Passes $1=filename
 # Loop for up to 60 seconds waiting for the file to close.
@@ -884,7 +880,6 @@ smartdrives=$sort_list
 fi
 }
 
-
 ########################## GET SMART SOLID DISK DRIVES ################################
 
 get_smartSSD_listings () {
@@ -946,7 +941,6 @@ smartdrivesNVM=$sort_list
 fi
 }
 
-
 ########################## GET OTHER SMART DEVICES ##################################
 
 get_smartOther_listings () {
@@ -989,14 +983,13 @@ email_preformat () {
 force_delay
 }
 
-
 ########################### CONFIGURATION BACKUP ##############################
 
 config_backup () {
 
 ###### Config backup (if enabled)
     tarfile="/tmp/config_backup.tar.gz"
-    filename="$(date "+FreeNAS_Config_%Y-%m-%d")"
+    filename="$(date "+"$programver2"_Config_%Y-%m-%d")"
     filename2="Stat_Data"
 
 if [ "$configBackup" == "true" ]; then
@@ -1024,7 +1017,7 @@ if [ "$configBackup" == "true" ]; then
 
     # Set up file names, etc for later
     tarfile="/tmp/config_backup.tar.gz"
-    filename="$(date "+FreeNAS_Config_%Y-%m-%d")"
+    filename="$(date "+"$programver2"_Config_%Y-%m-%d")"
     filename2="Stat_Data"
     ### Test config integrity
 
@@ -1101,14 +1094,17 @@ fi
 
 zpool_report () {
 ###### Report Summary Section (html tables)
-### zpool status summary table
 
 (
   # Write HTML table headers to log file; HTML in an email requires 100% in-line styling (no CSS or <style> section), hence the massive tags
     echo $programver"<br>Report Run "$(date +%d-%b-%Y)" @ "$timestamp
     echo "<br><br>"
     echo "<table style=\"border: 1px solid black; border-collapse: collapse;\">"
+if [[ $pool_capacity == "zfs" ]]; then
+    echo "<tr><th colspan=\"12\" style=\"text-align:center; font-size:20px; height:40px; font-family:courier;\"><span style='color:gray;'>*</span>ZPool/ZFS Status Report Summary</th></tr>"
+else
     echo "<tr><th colspan=\"12\" style=\"text-align:center; font-size:20px; height:40px; font-family:courier;\"><span style='color:gray;'>*</span>ZPool Status Report Summary</th></tr>"
+fi
     echo "<tr>"
     echo "  <th style=\"text-align:center; width:130px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$Zpool_Pool_Name_Title"</th>"
     echo "  <th style=\"text-align:center; width:80px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$Zpool_Status_Title"</th>"
@@ -1131,11 +1127,13 @@ sort_list=$pools
 sort_drives
 pools=$sort_list
 poolNum=0
+
 for pool in $pools; do
     # zpool health summary
     status="$(zpool list -H -o health "$pool")"
     # Total all read, write, and checksum errors per pool
     errors="$(zpool status "$pool" | grep -E "(ONLINE|DEGRADED|FAULTED|UNAVAIL|REMOVED)[ \\t]+[0-9]+")"
+
     readErrors=0
     for err in $(echo "$errors" | awk '{print $3}'); do
         if echo "$err" | grep -E -q "[^0-9]+"; then
@@ -1160,9 +1158,6 @@ for pool in $pools; do
         fi
         cksumErrors=$((cksumErrors + err))
     done
-    # Not sure why this changes values larger than 1000 to ">1K", but I guess it works, so I'm leaving it
-    # Answer to question above: Because it formats the value to = ">1K" vice stating very large values to
-    # fit into the formatted table.  All we care about is it's way too high.
     if [ "$readErrors" -gt 999 ]; then readErrors=">1K"; fi
     if [ "$writeErrors" -gt 999 ]; then writeErrors=">1K"; fi
     if [ "$cksumErrors" -gt 999 ]; then cksumErrors=">1K"; fi
@@ -1170,8 +1165,7 @@ for pool in $pools; do
     # Get ZFS capacity (the real capacity)
     zfs_pool_used="$(zfs list $pool | awk '{print $2}' | sed -e '/USED/d')"
     zfs_pool_avail="$(zfs list $pool | awk '{print $3}' | sed -e '/AVAIL/d')"
-#zfs_pool_used="104G"
-#zfs_pool_avail="25.7T"
+
     if [[ $zfs_pool_used == *"T"* ]]; then
        zfs_pool_used1="$(awk -v a="$zfs_pool_used" 'BEGIN { printf a*1000 }' </dev/null)";
     else
@@ -1184,8 +1178,7 @@ for pool in $pools; do
     fi
 
     zfs_pool_size="$(awk -v a="$zfs_pool_used1" -v b="$zfs_pool_avail1" 'BEGIN { printf a+b }' </dev/null)"
-#echo "---"
-#echo "size="$zfs_pool_size
+
     zfs_pool_size1="$(awk -v a="$zfs_pool_size" 'BEGIN { printf "%.0f", a }' </dev/null)"
 
     if [[ $zfs_pool_size1 -gt 1000 ]]; then
@@ -1198,6 +1191,7 @@ for pool in $pools; do
     used="$(zpool list -H -p -o capacity "$pool")"
     pool_size="$(zpool list -H -o size "$pool")"
     pool_free="$(zpool list -H -o free "$pool")"
+    pool_used="$(zpool list -H -o allocated "$pool")"
 
     # Gather info from most recent scrub; values set to "$non_exist_value" initially and overwritten when (and if) it gathers scrub info
     scrubRepBytes="$non_exist_value"
@@ -1306,7 +1300,7 @@ pool_size=$zfs_pool_size
 pool_free=$zfs_pool_avail
 used=$zfs_pool_used" ("$used"%)"
 else
-used=$used"%"  
+used=$pool_used" ("$used"%)"  
 fi
     (
         # Use the information gathered above to write the date to the current table row
@@ -1333,10 +1327,10 @@ done
 echo "</table>" >> "$logfile"
 force_delay
 if [[ $pool_capacity == "zfs" ]]; then
-echo "<br><span style='color:gray;'>*Data obtained from zpool and zfs commands</span>" >> "$logfile"
+echo "<br><span style='color:gray;'>*Data obtained from zpool and zfs commands.</span>" >> "$logfile"
 force_delay
 else
-echo "<br><span style='color:gray;'>*Data obtained from zpool command</span>" >> "$logfile"
+echo "<br><span style='color:gray;'>*Data obtained from zpool command. Capacities include Parity Data.</span>" >> "$logfile"
 force_delay
 fi
 }
@@ -1505,6 +1499,10 @@ if [[ "$(echo "$smartdata" | grep "Percent_Lifetime_Remain" | awk '{print $4}')"
 if [[ "$(echo "$smartdata" | grep "Media_Wearout_Indicator" | awk '{print $4}')" ]]; then
    wearLevel="$(echo "$smartdata" | grep "Media_Wearout_Indicator" | awk '{print $4 + 0}')"; fi
 
+# This adjustment is for WDC drives with "230 Media_Wearout_Indicator" that reports 000 = 100
+if [[ "$(echo "$smartdata" | grep "Media_Wearout_Indicator" | awk '{print $1 + 0}')" == 230 ]]; then
+   wearLevel=$(( 100 - $wearLevel )); fi
+
 if [[ "$(echo "$smartdata" | grep "Percentage Used:" | awk '{print $3}')" ]]; then
    wearLevel="$(echo "$smartdata" | grep "Percentage Used:" | awk '{print $3 + 0}')"
    wearLevel=$(( 100 - $wearLevel ))
@@ -1615,7 +1613,6 @@ onHours=50026
 Helium=100
 lastTestHours=50000
 fi
-
 
 ######### Convert variables to Decimal #########
 
@@ -2359,9 +2356,7 @@ detail_level=$1
 
 ### Order of data -- $serial":"$tempwarn":"$tempcrit":"$sectorswarn":"$sectorscrit":"$reallocwarn":"$multizonewarn":"$multizonecrit":"$rawreadwarn":"$rawreadcrit":"$seekerrorswarn":"$seekerrorscrit":"$testage":"$testAgeOvrd":"$heliummin
 
-#echo "Drive S/N:"$serial
-
-# Predefine some variables
+# Predefine default variables
      if [[ $Custom_DrivesDrive == "HDD" ]]; then
          HDDtempWarnx=$HDDtempWarn; HDDtempCritx=$HDDtempCrit
      fi
@@ -2381,59 +2376,67 @@ detail_level=$1
      seekErrorsWarnx=$seekErrorsWarn
      seekErrorsCritx=$seekErrorsCrit
      testAgeWarnx=$testAgeWarn
+     testAgeOvrd="0"
      heliumMinx=$heliumMin
+
+### 'd' = Default Values
 
 IFS=',' read -ra ADDR <<< "$Custom_Drives"
  for i in "${ADDR[@]}"; do
    cdrivesn1="$(echo $i | cut -d':' -f 1)"
    if [[ $cdrivesn1 == $serial ]]; then
       if [[ $Custom_DrivesDrive == "HDD" ]]; then
-         HDDtempWarnx="$(echo $i | cut -d':' -f 2)"; HDDtempCritx="$(echo $i | cut -d':' -f 3)"
+         if [[ "$(echo $i | cut -d':' -f 2)" != "d" ]]; then
+            HDDtempWarnx="$(echo $i | cut -d':' -f 2)"
+         fi
+         if [[ "$(echo $i | cut -d':' -f 3)" != "d" ]]; then
+            HDDtempCritx="$(echo $i | cut -d':' -f 3)"
+         fi
       fi
+
       if [[ $Custom_DrivesDrive == "SSD" ]]; then
-         SSDtempWarnx="$(echo $i | cut -d':' -f 2)"; SSDtempCritx="$(echo $i | cut -d':' -f 3)"
+         if [[ "$(echo $i | cut -d':' -f 2)" != "d" ]]; then
+            SSDtempWarnx="$(echo $i | cut -d':' -f 2)"
+         fi
+         if [[ "$(echo $i | cut -d':' -f 3)" != "d" ]]; then
+            SSDtempCritx="$(echo $i | cut -d':' -f 3)"
+         fi
       fi
+
       if [[ $Custom_DrivesDrive == "NVM" ]]; then
-         NVMtempWarnx="$(echo $i | cut -d':' -f 2)"; NVMtempCritx="$(echo $i | cut -d':' -f 3)"
+         if [[ "$(echo $i | cut -d':' -f 2)" != "d" ]]; then
+            NVMtempWarnx="$(echo $i | cut -d':' -f 2)"
+         fi
+         if [[ "$(echo $i | cut -d':' -f 3)" != "d" ]]; then
+            NVMtempCritx="$(echo $i | cut -d':' -f 3)"
+         fi
       fi
-      sectorsWarnx="$(echo $i | cut -d':' -f 4)"
-      sectorsCritx="$(echo $i | cut -d':' -f 5)"
-      reAllocWarnx="$(echo $i | cut -d':' -f 6)"
-      multiZoneWarnx="$(echo $i | cut -d':' -f 7)"
-      multiZoneCritx="$(echo $i | cut -d':' -f 8)"
-      rawReadWarnx="$(echo $i | cut -d':' -f 9)"
-      rawReadCritx="$(echo $i | cut -d':' -f 10)"
-      seekErrorsWarnx="$(echo $i | cut -d':' -f 11)"
-      seekErrorsCritx="$(echo $i | cut -d':' -f 12)"
-      testAgeWarnx="$(echo $i | cut -d':' -f 13)"
+
+      if [[ "$(echo $i | cut -d':' -f 4)" != "d" ]]; then
+      sectorsWarnx="$(echo $i | cut -d':' -f 4)"; fi
+      if [[ "$(echo $i | cut -d':' -f 5)" != "d" ]]; then
+      sectorsCritx="$(echo $i | cut -d':' -f 5)"; fi
+      if [[ "$(echo $i | cut -d':' -f 6)" != "d" ]]; then
+      reAllocWarnx="$(echo $i | cut -d':' -f 6)"; fi
+      if [[ "$(echo $i | cut -d':' -f 7)" != "d" ]]; then
+      multiZoneWarnx="$(echo $i | cut -d':' -f 7)"; fi
+      if [[ "$(echo $i | cut -d':' -f 8)" != "d" ]]; then
+      multiZoneCritx="$(echo $i | cut -d':' -f 8)"; fi
+      if [[ "$(echo $i | cut -d':' -f 9)" != "d" ]]; then
+      rawReadWarnx="$(echo $i | cut -d':' -f 9)"; fi
+      if [[ "$(echo $i | cut -d':' -f 10)" != "d" ]]; then
+      rawReadCritx="$(echo $i | cut -d':' -f 10)"; fi
+      if [[ "$(echo $i | cut -d':' -f 11)" != "d" ]]; then
+      seekErrorsWarnx="$(echo $i | cut -d':' -f 11)"; fi
+      if [[ "$(echo $i | cut -d':' -f 12)" != "d" ]]; then
+      seekErrorsCritx="$(echo $i | cut -d':' -f 12)"; fi
+      if [[ "$(echo $i | cut -d':' -f 13)" != "d" ]]; then
+      testAgeWarnx="$(echo $i | cut -d':' -f 13)"; fi
       testAgeOvrd="$(echo $i | cut -d':' -f 14)"
-      heliumMinx="$(echo $i | cut -d':' -f 15)"
+      if [[ "$(echo $i | cut -d':' -f 15)" != "d" ]]; then
+      heliumMinx="$(echo $i | cut -d':' -f 15)"; fi
    fi
  done
-
-#   if [[ $Custom_Drives == "" ]]; then
-#     #echo "Custom_Drives not defined"
-#     if [[ $Custom_DrivesDrive == "HDD" ]]; then
-#         HDDtempWarnx=$HDDtempWarn; HDDtempCritx=$HDDtempCrit
-#     fi
-#     if [[ $Custom_DrivesDrive == "SSD" ]]; then
-#          SSDtempWarnx=$SSDtempWarn; HDDtempCritx=$SSDtempCrit
-#     fi
-#     if [[ $Custom_DrivesDrive == "NVM" ]]; then
-#         NVMtempWarnx=$NVMtempWarn; NVMtempCritx=$NVMtempCrit
-#     fi 
-#     sectorsWarnx=$sectorsWarn
-#     sectorsCritx=$sectorsCrit
-#     reAllocWarnx=$reAllocWarn
-#     multiZoneWarnx=$multiZoneWarn
-#     multiZoneCritx=$multiZoneCrit
-#     rawReadWarnx=$rawReadWarn
-#     rawReadCritx=$rawReadCrit
-#     seekErrorsWarnx=$seekErrorsWarn
-#     seekErrorsCritx=$seekErrorsCrit
-#     testAgeWarnx=$testAgeWarn
-#     heliumMinx=$heliumMin
-#   fi
 
 ### Remove Leading Zeros from all variables
 # This is important because double square brackets interpret a leading zero as Octal number
@@ -2466,15 +2469,15 @@ fi
 
 if [[ $testAgeOvrd == "1" ]]; then testAge=1; fi
 
-if [[ $custom_hack == "mistermanko" ]]; then
-    if [[ $serial == "1603F0161945" ]]; then testAge=1; fi
-fi
-if [[ $custom_hack == "snowlucas2022" ]]; then
-    if [[ $serial == "S1D5NSAF483620N" ]]; then testAge=1; fi
-fi
-if [[ $custom_hack == "diedrichg" ]]; then
-    if [[ $serial == "67F40744192400021305" ]]; then testAge=1; fi
-fi
+#if [[ $custom_hack == "mistermanko" ]]; then
+#    if [[ $serial == "1603F0161945" ]]; then testAge=1; fi
+#fi
+#if [[ $custom_hack == "snowlucas2022" ]]; then
+#    if [[ $serial == "S1D5NSAF483620N" ]]; then testAge=1; fi
+#fi
+#if [[ $custom_hack == "diedrichg" ]]; then
+#    if [[ $serial == "67F40744192400021305" ]]; then testAge=1; fi
+#fi
 
 ### WARRANTY DATE
 # Use Format: DriveWarranty="DriveSerialNumber YYYY-MM-DD,"
@@ -2876,15 +2879,15 @@ fi
 
 if [[ $testAgeOvrd == "1" ]]; then testAge=$non_exist_value; fi
 
-if [[ $custom_hack == "mistermanko" ]]; then
-    if [[ $serial == "1603F0161945" ]]; then testAge=$non_exist_value; fi
-fi
-if [[ $custom_hack == "snowlucas2022" ]]; then
-    if [[ $serial == "S1D5NSAF483620N" ]]; then testAge=$non_exist_value; fi
-fi
-if [[ $custom_hack == "diedrichg" ]]; then
-    if [[ $serial == "67F40744192400021305" ]]; then testAge=$non_exist_value; fi
-fi
+#if [[ $custom_hack == "mistermanko" ]]; then
+#    if [[ $serial == "1603F0161945" ]]; then testAge=$non_exist_value; fi
+#fi
+#if [[ $custom_hack == "snowlucas2022" ]]; then
+#    if [[ $serial == "S1D5NSAF483620N" ]]; then testAge=$non_exist_value; fi
+#fi
+#if [[ $custom_hack == "diedrichg" ]]; then
+#    if [[ $serial == "67F40744192400021305" ]]; then testAge=$non_exist_value; fi
+#fi
 
 }
 
@@ -2913,6 +2916,8 @@ echo "#"
 echo "# Please look at the new Experimental Custom Drive Settings under -config."
 echo "#"
 echo "# Allowable custom hacks are: mistermanko, snowlucas2022, diedrichg, or none."
+echo "# This feature is going away with the next version release."
+custom_hack="none"
 echo 'custom_hack="'$custom_hack'"'
 echo " "
 echo "###### Zpool Status Summary Table Settings"
@@ -3340,7 +3345,6 @@ test_ata_error=""
 WarrantyClock=""
 warrantytemp=""
 
-
 # And Reset bgColors
 if [[ "$bgColor" == "$altColor" ]]; then bgColor="#ffffff"; else bgColor="$altColor"; fi
 deviceStatusColor=$bgColor
@@ -3387,7 +3391,7 @@ echo " "
 echo " "
 echo "  Select an option and press Enter/Return:"
 echo " "
-echo "      N)ew configuration file  (creates a new clean configuration external file)"
+echo "      N)ew configuration file  (creates a new clean external configuration file)"
 echo " "
 echo "      A)dvanced configuration (must have a configuration file already present)"
 echo " "
@@ -3462,7 +3466,7 @@ case $Keyboard_var in
     echo "            Reallocated Sectors, ATA Errors, Warranty Expiration,"
     echo "            and Person Specific Custom)"
     echo  " "
-    echo "   S) Custom Drive Configuration (Experimental)"
+    echo "   S) Custom Drive Configuration"
     echo " "
     echo "   W) Write Configuration File (Save your changes)"
     echo " "
@@ -3481,6 +3485,8 @@ case $Keyboard_var in
          clear
          echo "            Alarm Configuration Settings"
          echo " "
+         echo "These setting affect all drives unless they are overridden"
+         echo "      using the Custom Drive Configuration option."
          echo " "
          echo "   A) Temperature Settings (Various Temperature Settings)" 
          echo " "
@@ -3737,7 +3743,8 @@ case $Keyboard_var in
                fi
                echo "Set Value: ("$disableWarranty")"
                echo " "
-               echo -n "ATA Auto Enable ("$ata_auto_enable") "
+               echo "ATA Auto Enable ("$ata_auto_enable") "
+               echo "Set to "true" to automatically update Log Error count to ONLY display a log error when a new one occurs."
                read -n 1 Keyboard_yn
                if [[ ! $Keyboard_yn == "" ]]; then
                   if [[ $Keyboard_yn == "t" ]]; then ata_auto_enable="true"; else ata_auto_enable="false"; fi
@@ -4282,13 +4289,13 @@ case $Keyboard_var in
         echo "Set Value: "$powerTimeFormat
         echo " "
         echo "Temperature Display ("$tempdisplay") "
-        echo -n "you may use what you want, Common formats are: *C, ^C, or ^c: "
+        echo -n "you may use anything you desire. Common formats are: *C, ^C, or ^c: "
         read Keyboard_yn
         if [[ ! $Keyboard_yn == "" ]]; then tempdisplay=$Keyboard_yn; fi
         echo "Set Value: "$tempdisplay
         echo " "
         echo "Non-existent Value ("$non_exist_value") "
-        echo -n "you may use what you want, Common formats are: ---, N/A, or a space character: "
+        echo -n "you may use anything you desire. Common formats are: ---, N/A, or a space character: "
         read Keyboard_yn
         if [[ ! $Keyboard_yn == "" ]]; then non_exist_value=$Keyboard_yn; fi
         echo "Set Value: "$non_exist_value
@@ -4298,6 +4305,11 @@ case $Keyboard_var in
         echo "Current Value:  ("$pool_capacity") "
         echo -n "Enter 'zfs' or 'zpool' or Enter/Return for unchanged: "
         read Keyboard_yn
+        if [[ $Keyboard_yn != "" ]] && [[ $Keyboard_yn != "zfs" ]] && [[ $Keyboard_yn != "zpool" ]]; then
+        echo "INCORRECT VALUE!: "$Keyboard_yn
+        echo "Setting default value: 'zfs'"
+        Keyboard_yn="zfs"
+        fi
         if [[ ! $Keyboard_yn == "" ]]; then pool_capacity=$Keyboard_yn; fi
         echo "Set Value: "$pool_capacity
         echo " "
@@ -4659,7 +4671,11 @@ case $Keyboard_var in
         echo " "
         echo "Custom Hacks ("$custom_hack") "
         echo "Available: mistermanko, snowlucas2022, diedrichg, or none."
-        echo 'Enter "d" to delete or enter "none"' 
+        echo "This feature is going away with the next version release."
+        echo "Please try the Custom Drive Configuration and ingore"
+        echo "Last Test Age before using this option."
+        echo " "
+        echo 'Enter "d" to delete, "none", or one of the valid options' 
         read Keyboard_yn
         if [[ ! $Keyboard_yn == "" ]]; then custom_hack=$Keyboard_yn; fi
         if [[ $Keyboard_yn == "d" ]]; then custom_hack="none"; fi
@@ -4671,7 +4687,7 @@ case $Keyboard_var in
 
         S)
         clear
-        echo "Custom Drive Configuration Mode (Experimental)"
+        echo "Custom Drive Configuration Mode"
         echo " "
         echo "This series of questions will allow you to customize"
         echo "each alarm setting for each individual drive on your system."
@@ -4680,17 +4696,22 @@ case $Keyboard_var in
         echo "and ask if you want to customize the values for the drive."
         echo " "
         echo "It is recommended that this be used only for drives which"
-        echo "have specific alarm thresholds where the normal thresholds"
-        echo "would be undesirable."
+        echo "have one or more specific alarm thresholds where the normal"
+        echo "thresholds would be undesirable."
         echo " "
-        echo "If you choose to customize a drive you will be presented with"
-        echo "the Drive ID, Drive Serial Number, and the default alarm setting"
-        echo "to which you will be able to change as desired."
+        echo "If you choose to customize a drive you will be presented with the"
+        echo 'Drive ID, Drive Serial Number, and the "system default" alarm setting.'
+        echo " "
+        echo "You will have two options:"
+        echo '1) Press Return to accept the "system default" value.  This means that if'
+        echo "the config file default value changes, this value changes appropriately."
+        echo " "
+        echo "2) Enter a numeric value.  This value will be hardcoded for this one drive."
         echo " "
         echo 'One additional setpoint is to disable "Last Test Age" where some older'
         echo "drives can only record a specific high value and then wraps around"
         echo "or worse, seems almost random.  This was the main reason for having"
-        echo "the custom build option, to which I hope to remove that option soon."
+        echo "the custom build option to which I hope to remove that option in the next build."
         echo " "
         echo "Up to 24 drives worth of custom alarm data can be stored."
         echo "The intent is not to customize each drive, just the ones"
@@ -4729,6 +4750,12 @@ case $Keyboard_var in
            read -s -n 1 Keyboard_exit
            echo " "
            if [[ $Keyboard_exit == "y" ]]; then
+              clear
+              echo "If you deleted the custom configuration data,"
+              echo "Make sure you write your changes."
+              echo " "
+              echo "Press any key to continue"
+              read -s -n 1 key 
               continue
            fi
            sleep .5
@@ -4792,15 +4819,11 @@ IFS=',' read -ra ADDR <<< "$Custom_Drives"
                     tempstring=""
                     for (( i=1; i<=32; i++ )); do
                        tempvar="$(echo $Custom_Drives | cut -d',' -f $i)"
-        #               echo "tempvar "$i" ="$tempvar
-
                        if [[ ! $tempvar == "" ]]; then
                           tempsn="$(echo $tempvar | cut -d":" -f 1)"
                           if [[ $tempsn == $serial ]]; then
-        #                     echo "S/N Matches -> Let's Remove It"
                           scrap=1
                           else
-         #                    echo "S/N does not match"
                              if [[ $tempstring == "" ]]; then
                                 tempstring=$tempvar                                
                              else
@@ -4809,18 +4832,7 @@ IFS=',' read -ra ADDR <<< "$Custom_Drives"
                           fi
                        fi
                     done
-        #            echo "tempstring="$tempstring
-
-                   # if [[ ! $tempstring == "" ]]; then
-                       Custom_Drives=$tempstring
-                   # else
-                   #    Custom_Drives=$Custom_Drives","$tempstring
-                   # fi
                  fi
-# Remove any leading comma 
-                 #Custom_Drives="$(echo $Custom_Drives | rev | sed 's/,//' | rev)"
-# echo "New Custom_Drives after deletion="$Custom_Drives
-# echo " "
               fi
 
 # Lets assign the local variables with the default values.  They will be change
@@ -4872,87 +4884,119 @@ IFS=',' read -ra ADDR <<< "$Custom_Drives"
                  if [[ $Keyboard_yn == "y" ]]; then
                     echo " "
                     echo "Let's modify some values..."
-                    echo "Return to accept current value or enter a new value."
+                    echo " "
+                    echo "You have the following two options..."
+                    echo ' Return to accept the "system default" value, or'
+                    echo " Enter a numeric value to override the system default value."
                     echo " "
                     echo "Temperature Warning=("$tempwarn") "
                     read Keyboard_yn
-                      if [[ $Keyboard_yn != $tempwarn && $Keyboard_yn != "" ]]; then
+                      if [[ $Keyboard_yn == "" ]]; then
+                         tempwarn="d"
+                      else
                          tempwarn=$Keyboard_yn
                       fi
+
                     echo "Temperature Critical=("$tempcrit") "
                     read Keyboard_yn
-                      if [[ $Keyboard_yn != $tempcrit && $Keyboard_yn != "" ]]; then
+                      if [[ $Keyboard_yn == "" ]]; then
+                         tempcrit="d"
+                      else
                          tempcrit=$Keyboard_yn
                       fi
 
                     echo "Sectors Warning=("$sectorswarn") "
                     read Keyboard_yn
-                      if [[ $Keyboard_yn != $sectorswarn && $Keyboard_yn != "" ]]; then
+                      if [[ $Keyboard_yn == "" ]]; then
+                         sectorswarn="d"
+                      else
                          sectorswarn=$Keyboard_yn
                       fi
+
                     echo "Sectors Critical=("$sectorscrit") "
                     read Keyboard_yn
-                      if [[ $Keyboard_yn != $sectorscrit && $Keyboard_yn != "" ]]; then
+                      if [[ $Keyboard_yn == "" ]]; then
+                         sectorscrit="d"
+                      else
                          sectorscrit=$Keyboard_yn
                       fi
 
                     echo "Reallocated Sectors Warning=("$reallocwarn") "
                     read Keyboard_yn
-                      if [[ $Keyboard_yn != $reallocwarn && $Keyboard_yn != "" ]]; then
+                      if [[ $Keyboard_yn == "" ]]; then
+                         reallocwarn="d"
+                      else
                          reallocwarn=$Keyboard_yn
                       fi
 
                     echo "MultiZone Warning=("$multizonewarn") "
                     read Keyboard_yn
-                      if [[ $Keyboard_yn != $mulitzonewarn && $Keyboard_yn != "" ]]; then
+                      if [[ $Keyboard_yn == "" ]]; then
+                         multizonewarn="d"
+                      else
                          multizonewarn=$Keyboard_yn
                       fi
 
                     echo "MultiZone Critical=("$multizonecrit") "
                     read Keyboard_yn
-                      if [[ $Keyboard_yn != $mulitzonecrit && $Keyboard_yn != "" ]]; then
+                      if [[ $Keyboard_yn == "" ]]; then
+                         multizonecrit="d"
+                      else
                          multizonecrit=$Keyboard_yn
                       fi
 
                     echo "Raw Read Rate Warning=("$rawreadwarn") "
                     read Keyboard_yn
-                      if [[ $Keyboard_yn != $rawreadwarn && $Keyboard_yn != "" ]]; then
+                      if [[ $Keyboard_yn == "" ]]; then
+                         rawreadwarn="d"
+                      else
                          rawreadwarn=$Keyboard_yn
                       fi
+
                     echo "Raw Read Rate Critical=("$rawreadcrit") "
                     read Keyboard_yn
-                      if [[ $Keyboard_yn != $rawreadcrit && $Keyboard_yn != "" ]]; then
+                      if [[ $Keyboard_yn == "" ]]; then
+                         rawreadcrit="d"
+                      else
                          rawreadcrit=$Keyboard_yn
                       fi
 
                     echo "Seek Errors Warning=("$seekerrorswarn") "
                     read Keyboard_yn
-                      if [[ $Keyboard_yn != $seekerrorswarn && $Keyboard_yn != "" ]]; then
+                      if [[ $Keyboard_yn == "" ]]; then
+                         seekerrorswarn="d"
+                      else
                          seekerrorswarn=$Keyboard_yn
                       fi
 
                     echo "Seek Errors Critical=("$seekerrorscrit") "
                     read Keyboard_yn
-                      if [[ $Keyboard_yn != $seekerrorscrit && $Keyboard_yn != "" ]]; then
+                      if [[ $Keyboard_yn == "" ]]; then
+                         seekerrorscrit="d"
+                      else
                          seekerrorscrit=$Keyboard_yn
                       fi
 
                     echo "Test Age=("$testage") "
                     read Keyboard_yn
-                      if [[ $Keyboard_yn != $testage && $Keyboard_yn != "" ]]; then
+                      if [[ $Keyboard_yn == "" ]]; then
+                         testage="d"
+                      else
                          testage=$Keyboard_yn
                       fi
 
                     echo "Ignore Test Age=("$testAgeOvrd") (0=No, 1=Yes)"
                     read Keyboard_yn
-                    if [[ $Keyboard_yn != $testAgeOvrd && $Keyboard_yn != "" ]]; then
+                      if [[ $Keyboard_yn != $testAgeOvrd && $Keyboard_yn != "" ]]; then
                          testAgeOvrd=$Keyboard_yn
                       fi
 
                    echo "Helium Warning Level=("$heliummin") "
                    echo "NOTE: Helium may not be used by this drive so enter the default."
                     read Keyboard_yn
-                      if [[ $Keyboard_yn != $heliummin && $Keyboard_yn != "" ]]; then
+                      if [[ $Keyboard_yn == "" ]]; then
+                         heliummin="d"
+                      else
                          heliummin=$Keyboard_yn
                       fi
 
@@ -5068,9 +5112,10 @@ IFS=',' read -ra ADDR <<< "$Custom_Drives"
 
     N)
     clear
-    echo "Creating a new configuration file.  This will overwrite an existing file (blank to abort)."
+    echo "Creating a new configuration file.  This will overwrite an existing file."
     echo " "
-    echo -n "Enter your email address to send the report to: "    
+    echo "Enter your email address to send the report to,"
+    echo -n "or press Return to abort: "    
     read Keyboard_email
     if [[ $Keyboard_email == "" ]]; then
        echo "Aborting"
@@ -5150,6 +5195,7 @@ echo "#"
 echo "# Please look at the new Experimental Custom Drive Settings under -config."
 echo "#"
 echo "# Allowable custom hacks are: mistermanko, snowlucas2022, diedrichg, or none."
+echo "# This feature is going away with the next version release."
 echo 'custom_hack="none"'
 echo " "
 echo "###### Zpool Status Summary Table Settings"
@@ -5498,7 +5544,7 @@ echo "# The colors selected you can change but you will need to look up the prop
 echo " "
 echo 'okColor="#b5fcb9"       # Hex code for color to use in SMART Status column if drives pass (default is darker light green, #b5fcb9).'
 echo 'warnColor="#f765d0"     # Hex code for WARN color (default is purple, #f765d0).'
-echo 'critColor="#ff0000"     # Hex code for CRITICAL color (default is red, #ff0000).'
+echo 'critColor="#f44336"     # Hex code for CRITICAL color (default is red, #ff0000).'
 echo 'altColor="#f4f4f4"      # Table background alternates row colors between white and this color (default is light gray, #f4f4f4).'
 echo 'whtColor="#ffffff"      # Hex for White background.'
 echo 'ovrdColor="#ffffe4"     # Hex code for Override Yellow.'
@@ -5562,7 +5608,7 @@ shopt -u nocasematch
 ################# HELP INSTRUCTIONS #################
 
 display_help () {
-
+clear
 echo "NAME"
 echo "      Multi Report - System status reporting for TrueNAS Core and Scale"
 echo " "
@@ -5709,6 +5755,8 @@ echo "          desired. This is great for removing a column with no relevant da
 echo "      Alarm Setpoints: Practically everything has an alarm setpoint, from pool"
 echo "          capacity to Scrub Age, to temperature Warnings and Critical Warnings,"
 echo "          and a plethora of options."
+echo "      Custom Drive Configuration: Allows unique customizing of alarms where"
+echo "          the general settings would not work properly for a drive."
 echo "      TLER: You can monitor and even have TLER automatically set if required,"
 echo "          for drives which support it. The default is to not automatically set"
 echo "          TLER on, I believe the user should make that decision."
@@ -5753,7 +5801,7 @@ echo " "
 }
 
 display_help_commands () {
-
+clear
 echo "NAME"
 echo "      Multi Report - System status reporting for TrueNAS Core and Scale"
 echo " "
@@ -5837,13 +5885,11 @@ exit 0
 fi
 
 if [[ "$1" == "-help" ]]; then
-clear
 display_help
 exit 0
 fi
 
 if [[ "$1" == "-h" ]]; then
-clear
 display_help_commands
 exit 0
 fi
@@ -5941,6 +5987,10 @@ echo "Test File Does Not Exist"
 exit 1
 fi
 fi
+
+if [[ $custom_hack != "" ]] && [[ $custom_hack != "none" ]]; then
+echo "Custom Hack presently configured.  Consider using Custom Drive Configuration as the custom hacks are going away."; fi
+
 get_smartNVM_listings
 testfile=""
 
