@@ -2475,15 +2475,15 @@ fi
 
 if [[ $testAgeOvrd == "1" ]]; then testAge=1; fi
 
-#if [[ $custom_hack == "mistermanko" ]]; then
-#    if [[ $serial == "1603F0161945" ]]; then testAge=1; fi
-#fi
-#if [[ $custom_hack == "snowlucas2022" ]]; then
-#    if [[ $serial == "S1D5NSAF483620N" ]]; then testAge=1; fi
-#fi
-#if [[ $custom_hack == "diedrichg" ]]; then
-#    if [[ $serial == "67F40744192400021305" ]]; then testAge=1; fi
-#fi
+if [[ $custom_hack == "mistermanko" ]]; then
+    if [[ $serial == "1603F0161945" ]]; then testAge=1; fi
+fi
+if [[ $custom_hack == "snowlucas2022" ]]; then
+    if [[ $serial == "S1D5NSAF483620N" ]]; then testAge=1; fi
+fi
+if [[ $custom_hack == "diedrichg" ]]; then
+    if [[ $serial == "67F40744192400021305" ]]; then testAge=1; fi
+fi
 
 ### WARRANTY DATE
 # Use Format: DriveWarranty="DriveSerialNumber YYYY-MM-DD,"
@@ -2885,15 +2885,15 @@ fi
 
 if [[ $testAgeOvrd == "1" ]]; then testAge=$non_exist_value; fi
 
-#if [[ $custom_hack == "mistermanko" ]]; then
-#    if [[ $serial == "1603F0161945" ]]; then testAge=$non_exist_value; fi
-#fi
-#if [[ $custom_hack == "snowlucas2022" ]]; then
-#    if [[ $serial == "S1D5NSAF483620N" ]]; then testAge=$non_exist_value; fi
-#fi
-#if [[ $custom_hack == "diedrichg" ]]; then
-#    if [[ $serial == "67F40744192400021305" ]]; then testAge=$non_exist_value; fi
-#fi
+if [[ $custom_hack == "mistermanko" ]]; then
+    if [[ $serial == "1603F0161945" ]]; then testAge=$non_exist_value; fi
+fi
+if [[ $custom_hack == "snowlucas2022" ]]; then
+    if [[ $serial == "S1D5NSAF483620N" ]]; then testAge=$non_exist_value; fi
+fi
+if [[ $custom_hack == "diedrichg" ]]; then
+    if [[ $serial == "67F40744192400021305" ]]; then testAge=$non_exist_value; fi
+fi
 
 }
 
