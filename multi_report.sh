@@ -14,7 +14,7 @@ LANG="en_US.UTF-8"
 ### Version v1.4, v1.5, v1.6 FreeNAS/TrueNAS (joeschmuck)
 
 ### Changelog:
-# v1.6f (26 December 2022)
+# v1.6f (27 December 2022)
 #   - Added recognition for WDC SSD "230 Media_Wearout_Indicator".
 #   - Adjusted the language to English for the Date calculations.
 #   - Updated datestamp2 "date" command to be compatible with FreeBSD 11 and earlier.
@@ -216,6 +216,12 @@ LANG="en_US.UTF-8"
 #
 
 ###### User-definable Parameters (IF YOU DO NOT WANT TO USE THE EXTERNAL CONFIGURATION FILE) #######
+#
+# Modifying the script below should ONLY be done if you are not using an External Configuration File.
+# The External Configuration File allows the end user not having to update the script every time a change comes out.
+# It is highly recommended to use the external configuration file, eventually the functionality may go away
+# using the script without the external configuration file.
+#
 # The sections below configure the script to your needs.  Please follow the instructions as it will matter, you cannot
 # just "wing it".  Configurations are exact.  We use basically three different formats, Variables = true/false,
 # Variables = NUMBER, and Variables = Comma Separated Variable (CSV) Strings.  Each variable will have a description
@@ -633,15 +639,15 @@ logfile_messages_temp="/tmp/smart_report_messages.tmp"
 boundary="gc0p4Jq0M2Yt08jU534c0p"
 
 if [[ $softver != "Linux" ]]; then
-programver="Multi-Report v1.6f-beta dtd:2022-12-26 (TrueNAS Core "$(cat /etc/version | cut -d " " -f1 | sed 's/TrueNAS-//')")"
+programver="Multi-Report v1.6f dtd:2022-12-27 (TrueNAS Core "$(cat /etc/version | cut -d " " -f1 | sed 's/TrueNAS-//')")"
 programver2="$(cat /etc/version | cut -d"-" -f1)"
 else
-programver="Multi-Report v1.6f-beta dtd:2022-12-26 (TrueNAS Scale "$(cat /etc/version)")"
+programver="Multi-Report v1.6f dtd:2022-12-27 (TrueNAS Scale "$(cat /etc/version)")"
 programver2="$(cat /etc/version | cut -d" " -f1)"
 fi
 
 #If the config file format changes, this is the latest working date, anything older must be updated.
-valid_config_version_date="2022-12-26"
+valid_config_version_date="2022-12-27"
 
 ##########################
 ##########################
@@ -3271,6 +3277,7 @@ echo " "
 echo "###### Global table of colors"
 echo "# The colors selected you can change but you will need to look up the proper HEX code for a color."
 echo " "
+if [[ $Update_Colors != "1" ]]; then
 echo 'okColor="'$okColor'"       # Hex code for color to use in SMART Status column if drives pass (default is darker light green, #b5fcb9).'
 echo 'warnColor="'$warnColor'"     # Hex code for WARN color (default is purple, #f765d0).'
 echo 'critColor="'$critColor'"     # Hex code for CRITICAL color (default is red, #ff0000).'
@@ -3279,6 +3286,16 @@ echo 'whtColor="'$whtColor'"      # Hex for White background.'
 echo 'ovrdColor="'$ovrdColor'"     # Hex code for Override Yellow.'
 echo 'blueColor="'$blueColor'"     # Hex code for Sky Blue, used for the SCRUB In Progress background.'
 echo 'yellowColor="'$yellowColor'"   # Hex code for pale yellow.'
+else
+echo 'okColor="#b5fcb9"       # Hex code for color to use in SMART Status column if drives pass (default is darker light green, #b5fcb9).'
+echo 'warnColor="#f765d0"     # Hex code for WARN color (default is purple, #f765d0).'
+echo 'critColor="#f44336"     # Hex code for CRITICAL color (default is red, #ff0000).'
+echo 'altColor="#f4f4f4"      # Table background alternates row colors between white and this color (default is light gray, #f4f4f4).'
+echo 'whtColor="#ffffff"      # Hex for White background.'
+echo 'ovrdColor="#ffffe4"     # Hex code for Override Yellow.'
+echo 'blueColor="#87ceeb"     # Hex code for Sky Blue, used for the SCRUB In Progress background.'
+echo 'yellowColor="#f1ffad"   # Hex code for pale yellow.'
+fi
 
 ) > "$Config_File_Name"
 if [[ $Config_Changed_Email == "true" ]]; then Attach_Config="1"; fi
@@ -3391,7 +3408,9 @@ echo " "
 echo " "
 echo "  Select an option and press Enter/Return:"
 echo " "
-echo "      N)ew configuration file  (creates a new clean external configuration file)"
+echo "      N)ew configuration file (creates a new clean external configuration file)"
+echo " "
+echo "      U)pdate configuration file (updates select static variables to default)"
 echo " "
 echo "      A)dvanced configuration (must have a configuration file already present)"
 echo " "
@@ -3411,7 +3430,7 @@ echo "or 'f' for false."
 echo " "
 echo " "
 echo -n "   Make your selection: "
-read -n 1 Keyboard_var
+read -s -n 1 Keyboard_var
 shopt -s nocasematch
 case $Keyboard_var in
 # First Level Start
@@ -3473,7 +3492,7 @@ case $Keyboard_var in
     echo "   X) Exit - Will not automatically save changes"
     echo " "
     echo -n "   Make your selection: "
-    read -n 1 Keyboard_var2
+    read -s -n 1 Keyboard_var2
     echo " " 
     shopt -s nocasematch
     case $Keyboard_var2 in
@@ -3501,7 +3520,7 @@ case $Keyboard_var in
          echo "   X) Exit - Return to previous menu"
          echo " "
          echo -n "   Make your selection: "
-         read -n 1 Keyboard_var3
+         read -s -n 1 Keyboard_var3
          echo " " 
          shopt -s nocasematch
          case $Keyboard_var3 in
@@ -3523,7 +3542,7 @@ case $Keyboard_var in
                echo "Set Value: ("$HDDtempCrit")"
                echo " "
                echo -n "HDD Max Temperature Override for Power Cycle Enabled ("$HDDmaxovrd") "
-               read -n 1 Keyboard_yn
+               read -s -n 1 Keyboard_yn
                if [[ ! $Keyboard_yn == "" ]]; then
                   if [[ $Keyboard_yn == "t" ]]; then HDDmaxovrd="true"; else HDDmaxovrd="false"; fi
                fi
@@ -3541,7 +3560,7 @@ case $Keyboard_var in
                echo " "
                echo "SSD Max Temperature Override for Power Cycle Enabled ("$SSDmaxovrd") "
                echo "This value when "true" will not alarm on any Current Power Cycle Max Temperature Limit."
-               read -n 1 Keyboard_yn
+               read -s -n 1 Keyboard_yn
                if [[ ! $Keyboard_yn == "" ]]; then
                   if [[ $Keyboard_yn == "t" ]]; then SSDmaxovrd="true"; else SSDmaxovrd="false"; fi
                fi
@@ -3642,7 +3661,7 @@ case $Keyboard_var in
                echo " "
                echo "Helium Critical Alert Message ("$heliumAlarm") "
                echo 'A "true" value will generate an email subject line alert for a error.'
-               read -n 1 Keyboard_yn
+               read -s -n 1 Keyboard_yn
                if [[ ! $Keyboard_yn == "" ]]; then
                   if [[ $Keyboard_yn == "t" ]]; then heliumAlarm="true"; else heliumAlarm="false"; fi
                fi
@@ -3654,7 +3673,7 @@ case $Keyboard_var in
                echo "Set Value: ("$testAgeWarn")"
                echo " "
                echo -n "Flag Device ID RED on Error ("$deviceRedFlag") "
-               read -n 1 Keyboard_yn
+               read -s -n 1 Keyboard_yn
                if [[ ! $Keyboard_yn == "" ]]; then
                   if [[ $Keyboard_yn == "t" ]]; then deviceRedFlag="true"; else deviceRedFlag="false"; fi
                fi
@@ -3670,7 +3689,7 @@ case $Keyboard_var in
                echo " "
                echo 'Set to "true" will engage SSD Automatic Detection and Reporting'
                echo -n "Include SSD's in report ("$includeSSD") "
-               read -n 1 Keyboard_yn
+               read -s -n 1 Keyboard_yn
                if [[ ! $Keyboard_yn == "" ]]; then
                   if [[ $Keyboard_yn == "t" ]]; then includeSSD="true"; else includeSSD="false"; fi
                fi
@@ -3678,7 +3697,7 @@ case $Keyboard_var in
                echo " "
                echo "Set to "true" will engage NVM Automatic Detection and Reporting"
                echo -n "Include NVMe's in report ("$includeNVM") "
-               read -n 1 Keyboard_yn
+               read -s -n 1 Keyboard_yn
                if [[ ! $Keyboard_yn == "" ]]; then
                   if [[ $Keyboard_yn == "t" ]]; then includeNVM="true"; else includeNVM="false"; fi
                fi
@@ -3686,7 +3705,7 @@ case $Keyboard_var in
                echo " "
                echo "Will force even non-SMART devices to be reported"
                echo -n "Report Non-SMART Devices ("$reportnonSMART") "
-               read -n 1 Keyboard_yn
+               read -s -n 1 Keyboard_yn
                if [[ ! $Keyboard_yn == "" ]]; then
                   if [[ $Keyboard_yn == "t" ]]; then reportnonSMART="true"; else reportnonSMART="false"; fi
                fi
@@ -3694,7 +3713,7 @@ case $Keyboard_var in
                echo " "
                echo 'Set to "true" to remove the smartctl -a data and non-smart data appended to the normal report.'
                echo -n "Remove Non-SMART Data from report ("$disableRAWdata") "
-               read -n 1 Keyboard_yn
+               read -s -n 1 Keyboard_yn
                if [[ ! $Keyboard_yn == "" ]]; then
                   if [[ $Keyboard_yn == "t" ]]; then disableRAWdata="true"; else disableRAWdata="false"; fi
                fi
@@ -3709,35 +3728,35 @@ case $Keyboard_var in
                echo "Ignore Alarm Settings"
                echo " "
                echo -n "Ignore UDMA CRC Errors ("$ignoreUDMA") "
-               read -n 1 Keyboard_yn
+               read -s -n 1 Keyboard_yn
                if [[ ! $Keyboard_yn == "" ]]; then
                   if [[ $Keyboard_yn == "t" ]]; then ignoreUDMA="true"; else ignoreUDMA="false"; fi
                fi
                echo "Set Value: ("$ignoreUDMA")"
                echo " "
                echo -n "Ignore Raw Read Errors ("$ignoreReadError") "
-               read -n 1 Keyboard_yn
+               read -s -n 1 Keyboard_yn
                if [[ ! $Keyboard_yn == "" ]]; then
                   if [[ $Keyboard_yn == "t" ]]; then ignoreReadError="true"; else ignoreReadError="false"; fi
                fi
                echo "Set Value: ("$ignoreReadError")"
                echo " "
                echo -n "Ignore Seek Errors ("$ignoreSeekError") "
-               read -n 1 Keyboard_yn
+               read -s -n 1 Keyboard_yn
                if [[ ! $Keyboard_yn == "" ]]; then
                   if [[ $Keyboard_yn == "t" ]]; then ignoreSeekError="true"; else ignoreSeekError="false"; fi
                fi
                echo "Set Value: ("$ignoreSeekError")"
                echo " "
                echo -n "Ignore MultiZone Errors ("$ignoreMultiZone") "
-               read -n 1 Keyboard_yn
+               read -s -n 1 Keyboard_yn
                if [[ ! $Keyboard_yn == "" ]]; then
                   if [[ $Keyboard_yn == "t" ]]; then ignoreMultiZone="true"; else ignoreMultiZone="false"; fi
                fi
                echo "Set Value: ("$ignoreMultiZone")"
                echo " "
                echo -n "Disable Warranty Email Header Warning ("$disableWarranty") "
-               read -n 1 Keyboard_yn
+               read -s -n 1 Keyboard_yn
                if [[ ! $Keyboard_yn == "" ]]; then
                   if [[ $Keyboard_yn == "t" ]]; then disableWarranty="true"; else disableWarranty="false"; fi
                fi
@@ -3745,7 +3764,7 @@ case $Keyboard_var in
                echo " "
                echo "ATA Auto Enable ("$ata_auto_enable") "
                echo "Set to "true" to automatically update Log Error count to ONLY display a log error when a new one occurs."
-               read -n 1 Keyboard_yn
+               read -s -n 1 Keyboard_yn
                if [[ ! $Keyboard_yn == "" ]]; then
                   if [[ $Keyboard_yn == "t" ]]; then ata_auto_enable="true"; else ata_auto_enable="false"; fi
                fi
@@ -3777,7 +3796,7 @@ case $Keyboard_var in
          echo "TrueNAS Configuration Backup Setup"
          echo " "
          echo -n "Save a local copy of the config-backup file (t/f) ("$saveBackup") "
-         read -n 1 Keyboard_yn
+         read -s -n 1 Keyboard_yn
          if [[ ! $Keyboard_yn == "" ]]; then
             if [[ $Keyboard_yn == "t" ]]; then saveBackup="true"; else saveBackup="false"; fi
          fi
@@ -3790,7 +3809,7 @@ case $Keyboard_var in
          echo "Set Value: ("$backupLocation")"
          echo " "
          echo -n "Configuration Backup Enabled ("$configBackup") "
-         read -n 1 Keyboard_yn
+         read -s -n 1 Keyboard_yn
          if [[ ! $Keyboard_yn == "" ]]; then
             if [[ $Keyboard_yn == "t" ]]; then configBackup="true"; else configBackup="false"; fi
          fi
@@ -3809,7 +3828,7 @@ case $Keyboard_var in
          echo '"multi_report_config.txt" Backup Setup'
          echo " "
          echo -n "Enable sending multi_report_config.txt file (will enable next two options if true) (t/f) ("$Config_Email_Enable") "
-         read -n 1 Keyboard_yn
+         read -s -n 1 Keyboard_yn
          if [[ ! $Keyboard_yn == "" ]]; then
             if [[ $Keyboard_yn == "t" ]]; then Config_Email_Enable="true"; else Config_Email_Enable="false"; fi
          fi
@@ -3825,7 +3844,7 @@ case $Keyboard_var in
          echo " "
          echo " "
          echo -n "Send email of multi_report_config.txt file for any change (t/f) ("$Config_Changed_Email") "
-         read -n 1 Keyboard_yn
+         read -s -n 1 Keyboard_yn
          if [[ ! $Keyboard_yn == "" ]]; then
             if [[ $Keyboard_yn == "t" ]]; then Config_Changed_Email="true"; else Config_Changed_Email="false"; fi
          fi
@@ -3869,175 +3888,175 @@ case $Keyboard_var in
          echo "HDD Column Selection"
          echo " "
          echo -n "Device ID ("$HDD_Device_ID") "  
-         read -n 1 Keyboard_yn
+         read -s -n 1 Keyboard_yn
          if [[ ! $Keyboard_yn == "" ]]; then
             if [[ $Keyboard_yn == "t" ]]; then HDD_Device_ID="true"; else HDD_Device_ID="false"; fi
          fi
          echo "Set Value: ("$HDD_Device_ID")"
          echo " "
          echo -n "Serial Number ("$HDD_Serial_Number") "
-         read -n 1 Keyboard_yn
+         read -s -n 1 Keyboard_yn
          if [[ ! $Keyboard_yn == "" ]]; then
             if [[ $Keyboard_yn == "t" ]]; then HDD_Serial_Number="true"; else HDD_Serial_Number="false"; fi
          fi
          echo "Set Value: ("$HDD_Serial_Number")"
          echo " "
          echo -n "Model Number ("$HDD_Model_Number") "
-         read -n 1 Keyboard_yn
+         read -s -n 1 Keyboard_yn
          if [[ ! $Keyboard_yn == "" ]]; then
             if [[ $Keyboard_yn == "t" ]]; then HDD_Model_Number="true"; else HDD_Model_Number="false"; fi
          fi
          echo "Set Value: ("$HDD_Model_Number")"
          echo " "
          echo -n "Capacity ("$HDD_Capacity") "
-         read -n 1 Keyboard_yn
+         read -s -n 1 Keyboard_yn
          if [[ ! $Keyboard_yn == "" ]]; then
             if [[ $Keyboard_yn == "t" ]]; then HDD_Capacity="true"; else HDD_Capacity="false"; fi
          fi
          echo "Set Value: ("$HDD_Capacity")"
          echo " "
          echo -n "Rotational Rate ("$HDD_Rotational_Rate") "
-         read -n 1 Keyboard_yn
+         read -s -n 1 Keyboard_yn
          if [[ ! $Keyboard_yn == "" ]]; then
             if [[ $Keyboard_yn == "t" ]]; then HDD_Rotational_Rate="true"; else HDD_Rotational_Rate="false"; fi
          fi
          echo "Set Value: ("$HDD_Rotational_Rate")"
          echo " "
          echo -n "SMART Status ("$HDD_SMART_Status") "
-         read -n 1 Keyboard_yn
+         read -s -n 1 Keyboard_yn
          if [[ ! $Keyboard_yn == "" ]]; then
             if [[ $Keyboard_yn == "t" ]]; then HDD_SMART_Status="true"; else HDD_SMART_Status="false"; fi
          fi
          echo "Set Value: ("$HDD_SMART_Status")"
          echo " "
          echo -n "Warranty ("$HDD_Warranty") "
-         read -n 1 Keyboard_yn
+         read -s -n 1 Keyboard_yn
          if [[ ! $Keyboard_yn == "" ]]; then
             if [[ $Keyboard_yn == "t" ]]; then HDD_Warranty="true"; else HDD_Warranty="false"; fi
          fi
          echo "Set Value: ("$HDD_Warranty")"
          echo " "
          echo -n "Drive Temp ("$HDD_Drive_Temp") "
-         read -n 1 Keyboard_yn
+         read -s -n 1 Keyboard_yn
          if [[ ! $Keyboard_yn == "" ]]; then
             if [[ $Keyboard_yn == "t" ]]; then HDD_Drive_Temp="true"; else HDD_Drive_Temp="false"; fi
          fi
          echo "Set Value: ("$HDD_Drive_Temp")"
          echo " "
          echo -n "Drive Temp Minimum for power cycle ("$HDD_Drive_Temp_Min") "
-         read -n 1 Keyboard_yn
+         read -s -n 1 Keyboard_yn
          if [[ ! $Keyboard_yn == "" ]]; then
             if [[ $Keyboard_yn == "t" ]]; then HDD_Drive_Temp_Min="true"; else HDD_Drive_Temp_Min="false"; fi
          fi
          echo "Set Value: ("$HDD_Drive_Temp_Min")"
          echo " "
          echo -n "Drive Temp Maximum for power cycle ("$HDD_Drive_Temp_Max") "
-         read -n 1 Keyboard_yn
+         read -s -n 1 Keyboard_yn
          if [[ ! $Keyboard_yn == "" ]]; then
             if [[ $Keyboard_yn == "t" ]]; then HDD_Drive_Temp_Max="true"; else HDD_Drive_Temp_Max="false"; fi
          fi
          echo "Set Value: ("$HDD_Drive_Temp_Max")"
          echo " "
          echo -n "Power On Hours ("$HDD_Power_On_Hours") "
-         read -n 1 Keyboard_yn
+         read -s -n 1 Keyboard_yn
          if [[ ! $Keyboard_yn == "" ]]; then
             if [[ $Keyboard_yn == "t" ]]; then HDD_Power_On_Hours="true"; else HDD_Power_On_Hours="false"; fi
          fi
          echo "Set Value: ("$HDD_Power_On_Hours")"
          echo " "
          echo -n "Start / Stop Count ("$HDD_Start_Stop_Count") "
-         read -n 1 Keyboard_yn
+         read -s -n 1 Keyboard_yn
          if [[ ! $Keyboard_yn == "" ]]; then
             if [[ $Keyboard_yn == "t" ]]; then HDD_Start_Stop_Count="true"; else HDD_Start_Stop_Count="false"; fi
          fi
          echo "Set Value: ("$HDD_Start_Stop_Count")"
          echo " "
          echo -n "Load Cycle Count ("$HDD_Load_Cycle") "
-         read -n 1 Keyboard_yn
+         read -s -n 1 Keyboard_yn
          if [[ ! $Keyboard_yn == "" ]]; then
             if [[ $Keyboard_yn == "t" ]]; then HDD_Load_Cycle="true"; else HDD_Load_Cycle="false"; fi
          fi
          echo "Set Value: ("$HDD_Load_Cycle")"
          echo " "
          echo -n "Spin Retry Count ("$HDD_Spin_Retry") "
-         read -n 1 Keyboard_yn
+         read -s -n 1 Keyboard_yn
          if [[ ! $Keyboard_yn == "" ]]; then
             if [[ $Keyboard_yn == "t" ]]; then HDD_Spin_Retry="true"; else HDD_Spin_Retry="false"; fi
          fi
          echo "Set Value: ("$HDD_Spin_Retry")"
          echo " "
          echo -n "Reallocated Sectors ("$HDD_Reallocated_Sectors") "
-         read -n 1 Keyboard_yn
+         read -s -n 1 Keyboard_yn
          if [[ ! $Keyboard_yn == "" ]]; then
             if [[ $Keyboard_yn == "t" ]]; then HDD_Reallocated_Sectors="true"; else HDD_Reallocated_Sectors="false"; fi
          fi
          echo "Set Value: ("$HDD_Reallocated_Sectors")"
          echo " "
          echo -n "Reallocated Events ("$HDD_Reallocated_Events") "
-         read -n 1 Keyboard_yn
+         read -s -n 1 Keyboard_yn
          if [[ ! $Keyboard_yn == "" ]]; then
             if [[ $Keyboard_yn == "t" ]]; then HDD_Reallocated_Events="true"; else HDD_Reallocated_Events="false"; fi
          fi
          echo "Set Value: ("$HDD_Reallocated_Events")"
          echo " "
          echo -n "Pending Sectors ("$HDD_Pending_Sectors") "
-         read -n 1 Keyboard_yn
+         read -s -n 1 Keyboard_yn
          if [[ ! $Keyboard_yn == "" ]]; then
             if [[ $Keyboard_yn == "t" ]]; then HDD_Pending_Sectors="true"; else HDD_Pending_Sectors="false"; fi
          fi
          echo "Set Value: ("$HDD_Pending_Sectors")"
          echo " "
          echo -n "Offline Uncorrectable Errors ("$HDD_Offline_Uncorrectable") "
-         read -n 1 Keyboard_yn
+         read -s -n 1 Keyboard_yn
          if [[ ! $Keyboard_yn == "" ]]; then
             if [[ $Keyboard_yn == "t" ]]; then HDD_Offline_Uncorrectable="true"; else HDD_Offline_Uncorrectable="false"; fi
          fi
          echo "Set Value: ("$HDD_Offline_Uncorrectable")"
          echo " "
          echo -n "UDMA CRC Errors ("$HDD_UDMA_CRC_Errors") "
-         read -n 1 Keyboard_yn
+         read -s -n 1 Keyboard_yn
          if [[ ! $Keyboard_yn == "" ]]; then
             if [[ $Keyboard_yn == "t" ]]; then HDD_UDMA_CRC_Errors="true"; else HDD_UDMA_CRC_Errors="false"; fi
          fi
          echo "Set Value: ("$HDD_UDMA_CRC_Errors")"
          echo " "
          echo -n "Raw Read Error Rate ("$HDD_Raw_Read_Error_Rate") "
-         read -n 1 Keyboard_yn
+         read -s -n 1 Keyboard_yn
          if [[ ! $Keyboard_yn == "" ]]; then
             if [[ $Keyboard_yn == "t" ]]; then HDD_Raw_Read_Error_Rate="true"; else HDD_Raw_Read_Error_Rate="false"; fi
          fi
          echo "Set Value: ("$HDD_Raw_Read_Error_Rate")"
          echo " "
          echo -n "Seek Error Rate ("$HDD_Seek_Error_Rate") "
-         read -n 1 Keyboard_yn
+         read -s -n 1 Keyboard_yn
          if [[ ! $Keyboard_yn == "" ]]; then
             if [[ $Keyboard_yn == "t" ]]; then HDD_Seek_Error_Rate="true"; else HDD_Seek_Error_Rate="false"; fi
          fi
          echo "Set Value: ("$HDD_Seek_Error_Rate")"
          echo " "
          echo -n "MultiZone Errors ("$HDD_MultiZone_Errors") "
-         read -n 1 Keyboard_yn
+         read -s -n 1 Keyboard_yn
          if [[ ! $Keyboard_yn == "" ]]; then
             if [[ $Keyboard_yn == "t" ]]; then HDD_MultiZone_Errors="true"; else HDD_MultiZone_Errors="false"; fi
          fi
          echo "Set Value: ("$HDD_MultiZone_Errors")"
          echo " "
          echo -n "Helium Level ("$HDD_Helium_Level") "
-         read -n 1 Keyboard_yn
+         read -s -n 1 Keyboard_yn
          if [[ ! $Keyboard_yn == "" ]]; then
             if [[ $Keyboard_yn == "t" ]]; then HDD_Helium_Level="true"; else HDD_Helium_Level="false"; fi
          fi
          echo "Set Value: ("$HDD_Helium_Level")"
          echo " "
          echo -n "Last Test Age ("$HDD_Last_Test_Age") "
-         read -n 1 Keyboard_yn
+         read -s -n 1 Keyboard_yn
          if [[ ! $Keyboard_yn == "" ]]; then
             if [[ $Keyboard_yn == "t" ]]; then HDD_Last_Test_Age="true"; else HDD_Last_Test_Age="false"; fi
          fi
          echo "Set Value: ("$HDD_Last_Test_Age")"
          echo " "
          echo -n "Last Test Type ("$HDD_Last_Test_Type") "
-         read -n 1 Keyboard_yn
+         read -s -n 1 Keyboard_yn
          if [[ ! $Keyboard_yn == "" ]]; then
             if [[ $Keyboard_yn == "t" ]]; then HDD_Last_Test_Type="true"; else HDD_Last_Test_Type="false"; fi
          fi
@@ -4054,126 +4073,126 @@ case $Keyboard_var in
          echo "SSD Column Selection"
          echo " "
          echo -n "Device ID ("$SSD_Device_ID") "
-         read -n 1 Keyboard_yn
+         read -s -n 1 Keyboard_yn
          if [[ ! $Keyboard_yn == "" ]]; then
             if [[ $Keyboard_yn == "t" ]]; then SSD_Device_ID="true"; else SSD_Device_ID="false"; fi
          fi
          echo "Set Value: ("$SSD_Device_ID")"
          echo " "
          echo -n "Serial Number ("$SSD_Serial_Number") "
-         read -n 1 Keyboard_yn
+         read -s -n 1 Keyboard_yn
          if [[ ! $Keyboard_yn == "" ]]; then
             if [[ $Keyboard_yn == "t" ]]; then SSD_Serial_Number="true"; else SSD_Serial_Number="false"; fi
          fi
          echo "Set Value: ("$SSD_Serial_Number")"
          echo " "
          echo -n "Model Number ("$SSD_Model_Number") "
-         read -n 1 Keyboard_yn
+         read -s -n 1 Keyboard_yn
          if [[ ! $Keyboard_yn == "" ]]; then
             if [[ $Keyboard_yn == "t" ]]; then SSD_Model_Number="true"; else SSD_Model_Number="false"; fi
          fi
          echo "Set Value: ("$SSD_Model_Number")"
          echo " "
          echo -n "Capacity ("$SSD_Capacity") "
-         read -n 1 Keyboard_yn
+         read -s -n 1 Keyboard_yn
          if [[ ! $Keyboard_yn == "" ]]; then
             if [[ $Keyboard_yn == "t" ]]; then SSD_Capacity="true"; else SSD_Capacity="false"; fi
          fi
          echo "Set Value: ("$SSD_Capacity")"
          echo " "
          echo -n "SMART Status ("$SSD_SMART_Status") "
-         read -n 1 Keyboard_yn
+         read -s -n 1 Keyboard_yn
          if [[ ! $Keyboard_yn == "" ]]; then
             if [[ $Keyboard_yn == "t" ]]; then SSD_SMART_Status="true"; else SSD_SMART_Status="false"; fi
          fi
          echo "Set Value: ("$SSD_SMART_Status")"
          echo " " 
          echo -n "Drive Temp ("$SSD_Drive_Temp") "
-         read -n 1 Keyboard_yn
+         read -s -n 1 Keyboard_yn
          if [[ ! $Keyboard_yn == "" ]]; then
             if [[ $Keyboard_yn == "t" ]]; then SSD_Drive_Temp="true"; else SSD_Drive_Temp="false"; fi
          fi
          echo "Set Value: ("$SSD_Drive_Temp")"
          echo " "
          echo -n "Warranty ("$SSD_Warranty") "
-         read -n 1 Keyboard_yn
+         read -s -n 1 Keyboard_yn
          if [[ ! $Keyboard_yn == "" ]]; then
             if [[ $Keyboard_yn == "t" ]]; then SSD_Warranty="true"; else SSD_Warranty="false"; fi
          fi
          echo "Set Value: ("$SSD_Warranty")"
          echo " "
          echo -n "Drive Temp Minimum for power cycle ("$SSD_Drive_Temp_Min") "
-         read -n 1 Keyboard_yn
+         read -s -n 1 Keyboard_yn
          if [[ ! $Keyboard_yn == "" ]]; then
             if [[ $Keyboard_yn == "t" ]]; then SSD_Drive_Temp_Min="true"; else SSD_Drive_Temp_Min="false"; fi
          fi
          echo "Set Value: ("$SSD_Drive_Temp_Min")"
          echo " "
          echo -n "Drive Temp Maximum for power cycle ("$SSD_Drive_Temp_Max") "
-         read -n 1 Keyboard_yn
+         read -s -n 1 Keyboard_yn
          if [[ ! $Keyboard_yn == "" ]]; then
             if [[ $Keyboard_yn == "t" ]]; then SSD_Drive_Temp_Max="true"; else SSD_Drive_Temp_Max="false"; fi
          fi
          echo "Set Value: ("$SSD_Drive_Temp_Max")"
          echo " "
          echo -n "Power On Hours ("$SSD_Power_On_Hours") "
-         read -n 1 Keyboard_yn
+         read -s -n 1 Keyboard_yn
          if [[ ! $Keyboard_yn == "" ]]; then
             if [[ $Keyboard_yn == "t" ]]; then SSD_Power_On_Hours="true"; else SSD_Power_On_Hours="false"; fi
          fi
          echo "Set Value: ("$SSD_Power_On_Hours")"
          echo " "
          echo -n "Wear Level ("$SSD_Wear_Level") "
-        read -n 1 Keyboard_yn
+        read -s -n 1 Keyboard_yn
         if [[ ! $Keyboard_yn == "" ]]; then
            if [[ $Keyboard_yn == "t" ]]; then SSD_Wear_Level="true"; else SSD_Wear_Level="false"; fi
         fi
         echo "Set Value: ("$SSD_Wear_Level")"
         echo " "
         echo -n "Reallocated Sectors ("$SSD_Reallocated_Sectors") "
-        read -n 1 Keyboard_yn
+        read -s -n 1 Keyboard_yn
         if [[ ! $Keyboard_yn == "" ]]; then
            if [[ $Keyboard_yn == "t" ]]; then SSD_Reallocated_Sectors="true"; else SSD_Reallocated_Sectors="false"; fi
         fi
         echo "Set Value: ("$SSD_Reallocated_Sectors")"
         echo " "
         echo -n "Reallocated Events ("$SSD_Reallocated_Events") "
-        read -n 1 Keyboard_yn
+        read -s -n 1 Keyboard_yn
         if [[ ! $Keyboard_yn == "" ]]; then
            if [[ $Keyboard_yn == "t" ]]; then SSD_Reallocated_Events="true"; else SSD_Reallocated_Events="false"; fi
         fi
         echo "Set Value: ("$SSD_Reallocated_Events")"
         echo " "
         echo -n "Pending Sectors ("$SSD_Pending_Sectors") "
-        read -n 1 Keyboard_yn
+        read -s -n 1 Keyboard_yn
         if [[ ! $Keyboard_yn == "" ]]; then
            if [[ $Keyboard_yn == "t" ]]; then SSD_Pending_Sectors="true"; else SSD_Pending_Sectors="false"; fi
         fi
         echo "Set Value: ("$SSD_Pending_Sectors")"
         echo " "
         echo -n "Offline Uncorrectable Errors ("$SSD_Offline_Uncorrectable") "
-        read -n 1 Keyboard_yn
+        read -s -n 1 Keyboard_yn
         if [[ ! $Keyboard_yn == "" ]]; then
            if [[ $Keyboard_yn == "t" ]]; then SSD_Offline_Uncorrectable="true"; else SSD_Offline_Uncorrectable="false"; fi
         fi
         echo "Set Value: ("$SSD_Offline_Uncorrectable")"
         echo " "
         echo -n "UDMA CRC Errors ("$SSD_UDMA_CRC_Errors") "
-        read -n 1 Keyboard_yn
+        read -s -n 1 Keyboard_yn
         if [[ ! $Keyboard_yn == "" ]]; then
            if [[ $Keyboard_yn == "t" ]]; then SSD_UDMA_CRC_Errors="true"; else SSD_UDMA_CRC_Errors="false"; fi
         fi
         echo "Set Value: ("$SSD_UDMA_CRC_Errors")"
         echo " "
         echo -n "Last Test Age ("$SSD_Last_Test_Age") "
-        read -n 1 Keyboard_yn
+        read -s -n 1 Keyboard_yn
         if [[ ! $Keyboard_yn == "" ]]; then
            if [[ $Keyboard_yn == "t" ]]; then SSD_Last_Test_Age="true"; else SSD_Last_Test_Age="false"; fi
         fi
         echo "Set Value: ("$SSD_Last_Test_Age")"
         echo " "
         echo -n "Last Test Type ("$SSD_Last_Test_Type") "
-        read -n 1 Keyboard_yn
+        read -s -n 1 Keyboard_yn
         if [[ ! $Keyboard_yn == "" ]]; then
            if [[ $Keyboard_yn == "t" ]]; then SSD_Last_Test_Type="true"; else SSD_Last_Test_Type="false"; fi
         fi
@@ -4189,84 +4208,84 @@ case $Keyboard_var in
         echo "NVMe Column Selection"
         echo " "
         echo -n "Device ID ("$NVM_Device_ID") "
-        read -n 1 Keyboard_yn
+        read -s -n 1 Keyboard_yn
         if [[ ! $Keyboard_yn == "" ]]; then
            if [[ $Keyboard_yn == "t" ]]; then NVM_Device_ID="true"; else NVM_Device_ID="false"; fi
         fi
         echo "Set Value: ("$NVM_Device_ID")"
         echo " "
         echo -n "Serial Number ("$NVM_Serial_Number") "
-        read -n 1 Keyboard_yn
+        read -s -n 1 Keyboard_yn
         if [[ ! $Keyboard_yn == "" ]]; then
            if [[ $Keyboard_yn == "t" ]]; then NVM_Serial_Number="true"; else NVM_Serial_Number="false"; fi
         fi
         echo "Set Value: ("$NVM_Serial_Number")"
         echo " "
         echo -n "Model Number ("$NVM_Model_Number") "
-        read -n 1 Keyboard_yn
+        read -s -n 1 Keyboard_yn
         if [[ ! $Keyboard_yn == "" ]]; then
            if [[ $Keyboard_yn == "t" ]]; then NVM_Model_Number="true"; else NVM_Model_Number="false"; fi
         fi
         echo "Set Value: ("$NVM_Model_Number")"
         echo " "
         echo -n "Capacity ("$NVM_Capacity") "
-        read -n 1 Keyboard_yn
+        read -s -n 1 Keyboard_yn
         if [[ ! $Keyboard_yn == "" ]]; then
            if [[ $Keyboard_yn == "t" ]]; then NVM_Capacity="true"; else NVM_Capacity="false"; fi
         fi
         echo "Set Value: ("$NVM_Capacity")"
         echo " "
         echo -n "SMART Status ("$NVM_SMART_Status") "
-        read -n 1 Keyboard_yn
+        read -s -n 1 Keyboard_yn
         if [[ ! $Keyboard_yn == "" ]]; then
            if [[ $Keyboard_yn == "t" ]]; then NVM_SMART_Status="true"; else NVM_SMART_Status="false"; fi
         fi
         echo "Set Value: ("$NVM_SMART_Status")"
         echo " "
         echo -n "Warranty ("$NVM_Warranty") "
-        read -n 1 Keyboard_yn
+        read -s -n 1 Keyboard_yn
         if [[ ! $Keyboard_yn == "" ]]; then
            if [[ $Keyboard_yn == "t" ]]; then NVM_Warranty="true"; else NVM_Warranty="false"; fi
         fi
         echo "Set Value: ("$NVM_Warranty")"
         echo " "
         echo -n "Critical Warning Status ("$NVM_Critical_Warning") "
-        read -n 1 Keyboard_yn
+        read -s -n 1 Keyboard_yn
         if [[ ! $Keyboard_yn == "" ]]; then
            if [[ $Keyboard_yn == "t" ]]; then NVM_Critical_Warning="true"; else NVM_Critical_Warning="false"; fi
         fi
         echo "Set Value: ("$NVM_Critical_Warning")"
         echo " "
         echo -n "Drive Temp ("$NVM_Drive_Temp") "
-        read -n 1 Keyboard_yn
+        read -s -n 1 Keyboard_yn
         if [[ ! $Keyboard_yn == "" ]]; then
            if [[ $Keyboard_yn == "t" ]]; then NVM_Drive_Temp="true"; else NVM_Drive_Temp="false"; fi
         fi
         echo "Set Value: ("$NVM_Drive_Temp")"
         echo " "
         echo -n "Drive Temp Minimum for power cycle ("$NVM_Drive_Temp_Min") "
-        read -n 1 Keyboard_yn
+        read -s -n 1 Keyboard_yn
         if [[ ! $Keyboard_yn == "" ]]; then
            if [[ $Keyboard_yn == "t" ]]; then NVM_Drive_Temp_Min="true"; else NVM_Drive_Temp_Min="false"; fi
         fi
         echo "Set Value: ("$NVM_Drive_Temp_Min")"
         echo " "
         echo -n "Drive Temp Maximum for power cycle ("$NVM_Drive_Temp_Max") "
-        read -n 1 Keyboard_yn
+        read -s -n 1 Keyboard_yn
         if [[ ! $Keyboard_yn == "" ]]; then
            if [[ $Keyboard_yn == "t" ]]; then NVM_Drive_Temp_Max="true"; else NVM_Drive_Temp_Max="false"; fi
         fi
         echo "Set Value: ("$NVM_Drive_Temp_Max")"
         echo " "
         echo -n "Power On Hours ("$NVM_Power_On_Hours") "
-        read -n 1 Keyboard_yn
+        read -s -n 1 Keyboard_yn
         if [[ ! $Keyboard_yn == "" ]]; then
            if [[ $Keyboard_yn == "t" ]]; then NVM_Power_On_Hours="true"; else NVM_Power_On_Hours="false"; fi
         fi
         echo "Set Value: ("$NVM_Power_On_Hours")"
         echo " "
         echo -n "Wear Level ("$NVM_Wear_Level") "
-        read -n 1 Keyboard_yn
+        read -s -n 1 Keyboard_yn
         if [[ ! $Keyboard_yn == "" ]]; then
            if [[ $Keyboard_yn == "t" ]]; then NVM_Wear_Level="true"; else NVM_Wear_Level="false"; fi
         fi
@@ -4343,7 +4362,7 @@ case $Keyboard_var in
         echo "This will display (true) or remove (false) the Text Section of the email report."
         echo 'Current value: "'$enable_text'" '
         echo -n 'Enter new value or Return to accept current value: '
-        read Keyboard_yn
+        read -s -n 1 Keyboard_yn
         if [[ ! $Keyboard_yn == "" ]]; then enable_text=$Keyboard_yn; fi
         echo 'Set Value: "'$enable_text'"'
         echo " "
@@ -4364,14 +4383,14 @@ case $Keyboard_var in
         echo " "
         echo " "
         echo -n "Statistical Data Recording Enabled ("$expDataEnable") "
-        read -n 1 Keyboard_yn
+        read -s -n 1 Keyboard_yn
         if [[ ! $Keyboard_yn == "" ]]; then
            if [[ $Keyboard_yn == "t" ]]; then expDataEnable="true"; else expDataEnable="false"; fi
         fi
         echo "Set Value: ("$expDataEnable")"
         echo " "
         echo -n "Statistical Data Email Enabled ("$expDataEmail") "
-        read -n 1 Keyboard_yn
+        read -s -n 1 Keyboard_yn
         if [[ ! $Keyboard_yn == "" ]]; then
            if [[ $Keyboard_yn == "t" ]]; then expDataEmail="true"; else expDataEmail="false"; fi
         fi
@@ -4402,7 +4421,7 @@ case $Keyboard_var in
         echo " "
         echo "Activate TLER ("$SCT_Drive_Enable") "
         echo "true = This will attempt to turn on TLER if the drive is reporting it is off."
-        read -n 1 Keyboard_yn
+        read -s -n 1 Keyboard_yn
         if [[ ! $Keyboard_yn == "" ]]; then
            if [[ $Keyboard_yn == "t" ]]; then SCT_Drive_Enable="true"; else SCT_Drive_Enable="false"; fi
         fi
@@ -4451,7 +4470,7 @@ case $Keyboard_var in
         echo "Current: "$Ignore_Drives
         echo " "
         echo "Enter/Return to accept the current value(s) or press 'e' to Edit"
-        read Keyboard_yn
+        read -s -n 1 Keyboard_yn
         if [[ ! $Keyboard_yn == "" ]]; then Ignore_Drives=$Keyboard_yn; fi
         if [[ $Keyboard_yn == "d" ]]; then Ignore_Drives="none"; fi
         if [[ $Keyboard_yn == "e" ]]; then
@@ -4461,8 +4480,9 @@ case $Keyboard_var in
               get_drive_data
               echo " "
               echo "Do you want to ignore this drive (y/n): Drive ID: "$drive" Serial Number: "$serial
-              read Keyboard_yn
+              read -s -n 1 Keyboard_yn
               if [[ $Keyboard_yn == "y" ]]; then ignoredriveslist=$ignoredriveslist$serial","; fi
+              echo "Updated Value="$ignoredriveslist
            done
            if [[ ! $ignoredriveslist == "" ]]; then Ignore_Drives="$(echo "$ignoredriveslist" | sed 's/.$//')"; else Ignore_Drives="none"; fi
         fi
@@ -4472,12 +4492,16 @@ case $Keyboard_var in
         echo "AUTOMATIC DRIVE COMPENSATION - UDMA_CRC, MultiZone, and Reallocated Sectors"
         echo " "
         echo "You have the option to automatically setup offset values for UDMA_CRC,"
-        echo "MultiZone, and Bad Sectors."
-        echo "This will scan your drives and for any non-zero value the offset will"
-        echo "automatically be added."
+        echo "MultiZone, and Bad Sectors that are permanently recorded on the drives."
         echo " "
-        echo "Enter 'y' for yes or 'n' for no to manually set the values, Return for no change."
-        read Keyboard_yn
+        echo "This will create an offset to be displayed in the charts resulting in a"
+        echo "zero value and the value will be colored in light yellow by default."
+        echo "You will be able to see any future changes/failures occur."
+        echo " "
+        echo "If you select No, you will be asked to manually enter each offset."
+        echo " "
+        echo "Enter 'y' for yes or 'n' for no and manually set the values, Return for no change."
+        read -s -n 1 Keyboard_yn
 
         if [[ $Keyboard_yn == "y" ]]; then
            autoselect=1
@@ -4505,7 +4529,7 @@ case $Keyboard_var in
            echo "Offset UDMA CRC Errors"
            echo "Press 'd' to delete, 'e' to edit, or Enter/Return to accept."
            echo "Current List: "$CRC_Errors
-           read Keyboard_yn
+           read -s -n 1 Keyboard_yn
            if [[ ! $Keyboard_yn == "" ]]; then CRC_Errors=$Keyboard_yn; fi
            if [[ $Keyboard_yn == "d" ]]; then CRC_Errors=""; Keyboard_yn=""; fi
            if [[ $Keyboard_yn == "e" ]]; then
@@ -4516,7 +4540,7 @@ case $Keyboard_var in
                  get_drive_data
                  echo " "
                  echo "Do you want to add this drive (y/n): Drive ID: "$drive" Serial Number: "$serial
-                 read Keyboard_yn
+                 read -s -n 1 Keyboard_yn
                  if [[ $Keyboard_yn == "y" ]]; then drive_select=$drive_select$serial":"
                  echo "Enter the sector count offset you desire: "
                  read Keyboard_yn
@@ -4531,7 +4555,7 @@ case $Keyboard_var in
            echo "Offset MultiZone Errors"
            echo "Press 'd' to delete, 'e' to edit, or Enter/Return to accept."
            echo "Current: "$Multi_Zone
-           read Keyboard_yn
+           read -s -n 1 Keyboard_yn
            if [[ ! $Keyboard_yn == "" ]]; then Multi_Zone=$Keyboard_yn; fi
            if [[ $Keyboard_yn == "d" ]]; then Multi_Zone=""; fi
            if [[ $Keyboard_yn == "e" ]]; then
@@ -4542,7 +4566,7 @@ case $Keyboard_var in
                  get_drive_data
                  echo " "
                  echo "Do you want to add this drive (y/n): Drive ID: "$drive" Serial Number: "$serial
-                 read Keyboard_yn
+                 read -s -n 1 Keyboard_yn
                  if [[ $Keyboard_yn == "y" ]]; then drive_select=$drive_select$serial":"
                  echo "Enter the Multi_Zone count offset you desire: "
                  read Keyboard_yn
@@ -4557,7 +4581,7 @@ case $Keyboard_var in
            echo "Offset Bad Sector Errors"
            echo "Press 'd' to delete, 'e' to edit, or Enter/Return to accept."
            echo "Current: "$Bad_Sectors
-           read Keyboard_yn
+           read -s -n 1 Keyboard_yn
            if [[ ! $Keyboard_yn == "" ]]; then Bad_Sectors=$Keyboard_yn; fi
            if [[ $Keyboard_yn == "d" ]]; then Bad_Sectors=""; fi
            if [[ $Keyboard_yn == "e" ]]; then
@@ -4568,7 +4592,7 @@ case $Keyboard_var in
                  get_drive_data
                  echo " "
                  echo "Do you want to add this drive (y/n): Drive ID: "$drive" Serial Number: "$serial
-                 read Keyboard_yn
+                 read -s -n 1 Keyboard_yn
                  if [[ $Keyboard_yn == "y" ]]; then drive_select=$drive_select$serial":"
                  echo "Enter the Bad Sector count offset you desire: "
                  read Keyboard_yn
@@ -4586,7 +4610,7 @@ case $Keyboard_var in
         echo "This might be desirable if you have a drive that keeps throwing minor errors."
         echo "Enter/Return to keep current value, 't' (enable), or 'f' (disable) this feature." 
         echo "Current: "$ata_auto_enable
-        read Keyboard_yn
+        read -s -n 1 Keyboard_yn
         if [[ ! $Keyboard_yn == "" ]]; then if [[ $Keyboard_yn == "t" ]]; then ata_auto_enable="true"; else ata_auto_enable="false"; fi; fi
         echo "Set Value: "$ata_auto_enable
         echo " "
@@ -4595,7 +4619,7 @@ case $Keyboard_var in
         echo "Error Log will be present again."
         echo "Enter 'd' to delete, 'e' to edit, or Enter/Return for no change."
         echo "Current: "$ata_errors
-        read Keyboard_yn
+        read -s -n 1 Keyboard_yn
         if [[ ! $Keyboard_yn == "" ]]; then ata_errors=$Keyboard_yn; fi
         if [[ $Keyboard_yn == "d" ]]; then ata_errors=""; fi
         if [[ $Keyboard_yn == "e" ]]; then
@@ -4605,7 +4629,7 @@ case $Keyboard_var in
               get_drive_data
               echo " "
               echo "Do you want to add this drive (y/n): Drive ID: "$drive" Serial Number: "$serial
-              read Keyboard_yn
+              read -s -n 1 Keyboard_yn
               if [[ $Keyboard_yn == "y" ]]; then
                  echo "Enter the Error Log threshold: "
                  read Keyboard_yn
@@ -4622,7 +4646,7 @@ case $Keyboard_var in
         echo "The format is: drive_serial_number:yyyy-mm-dd and separated by a comma for"
         echo "multiple drives. Enter 'd' to delete, 'e' to edit, or Enter/Return for no change."
         echo "Current: "$Drive_Warranty
-        read Keyboard_yn
+        read -s -n 1 Keyboard_yn
         if [[ ! $Keyboard_yn == "" ]]; then Drive_Warranty=$Keyboard_yn; fi
         if [[ $Keyboard_yn == "j" ]]; then Drive_Warranty="K1JUMLBD:2020-09-30,K1JRSWLD:2020-09-30,K1JUMW4D:2020-09-30,K1GVD84B:2020-10-12"; fi
         if [[ $Keyboard_yn == "d" ]]; then Drive_Warranty=""; fi
@@ -4672,8 +4696,8 @@ case $Keyboard_var in
         echo "Custom Hacks ("$custom_hack") "
         echo "Available: mistermanko, snowlucas2022, diedrichg, or none."
         echo "This feature is going away with the next version release."
-        echo "Please try the Custom Drive Configuration and ingore"
-        echo "Last Test Age before using this option."
+        echo "Please try the Custom Drive Configuration to ignore Last"
+        echo "Test Age parameter before using this option."
         echo " "
         echo 'Enter "d" to delete, "none", or one of the valid options' 
         read Keyboard_yn
@@ -4776,29 +4800,26 @@ case $Keyboard_var in
                  echo " "
                  echo "Options are: Delete the entry for this drive, then you may"
                  echo "re-add and edit it immediately."
-
-
-IFS=',' read -ra ADDR <<< "$Custom_Drives"
- for i in "${ADDR[@]}"; do
-   cdrivesn1="$(echo $i | cut -d':' -f 1)"
-   if [[ $cdrivesn1 == $serial ]]; then
-      tempWarnx="$(echo $i | cut -d':' -f 2)"
-      tempCritx="$(echo $i | cut -d':' -f 3)"
-      sectorsWarnx="$(echo $i | cut -d':' -f 4)"
-      sectorsCritx="$(echo $i | cut -d':' -f 5)"
-      reAllocWarnx="$(echo $i | cut -d':' -f 6)"
-      multiZoneWarnx="$(echo $i | cut -d':' -f 7)"
-      multiZoneCritx="$(echo $i | cut -d':' -f 8)"
-      rawReadWarnx="$(echo $i | cut -d':' -f 9)"
-      rawReadCritx="$(echo $i | cut -d':' -f 10)"
-      seekErrorsWarnx="$(echo $i | cut -d':' -f 11)"
-      seekErrorsCritx="$(echo $i | cut -d':' -f 12)"
-      testAgeWarnx="$(echo $i | cut -d':' -f 13)"
-      testAgeOvrd="$(echo $i | cut -d':' -f 14)"
-      heliumMinx="$(echo $i | cut -d':' -f 15)"
-   fi
- done
-
+                 IFS=',' read -ra ADDR <<< "$Custom_Drives"
+                 for i in "${ADDR[@]}"; do
+                    cdrivesn1="$(echo $i | cut -d':' -f 1)"
+                       if [[ $cdrivesn1 == $serial ]]; then
+                          tempWarnx="$(echo $i | cut -d':' -f 2)"
+                          tempCritx="$(echo $i | cut -d':' -f 3)"
+                          sectorsWarnx="$(echo $i | cut -d':' -f 4)"
+                          sectorsCritx="$(echo $i | cut -d':' -f 5)"
+                          reAllocWarnx="$(echo $i | cut -d':' -f 6)"
+                          multiZoneWarnx="$(echo $i | cut -d':' -f 7)"
+                          multiZoneCritx="$(echo $i | cut -d':' -f 8)"
+                          rawReadWarnx="$(echo $i | cut -d':' -f 9)"
+                          rawReadCritx="$(echo $i | cut -d':' -f 10)"
+                          seekErrorsWarnx="$(echo $i | cut -d':' -f 11)"
+                          seekErrorsCritx="$(echo $i | cut -d':' -f 12)"
+                          testAgeWarnx="$(echo $i | cut -d':' -f 13)"
+                          testAgeOvrd="$(echo $i | cut -d':' -f 14)"
+                          heliumMinx="$(echo $i | cut -d':' -f 15)"
+                       fi
+                 done
                  echo " "
                  echo "The current alarm setpoints are:"
                  echo "Temperature Warning=("$tempWarnx")  Temperature Critical=("$tempCritx")"
@@ -5067,6 +5088,56 @@ IFS=',' read -ra ADDR <<< "$Custom_Drives"
     done
     ;;
 
+    U)
+    clear
+    echo "Update Configuration File"
+    echo " "
+    echo "This update utility will update the variables listed in the"
+    echo "configuration file to the current version default values."
+    echo " "
+    echo "This option is now available because the script will not automatically"
+    echo "update variables which have already been set, making the assumption"
+    echo "that the user desires those settings to remain unchanged.  This option"
+    echo "will force the select variables to be updated."
+    echo " "
+    echo "Note: The list below may be small but if you have a suggestion"
+    echo "then forward it to Joe Schmuck for consideration.  Of course all"
+    echo "settings can be reset to default by creating a New configuration file."
+    echo " "
+    echo "1) Global Table of Colors"
+    echo " "
+    echo "a) Abort"
+    echo " "
+    echo -n "Enter your option: "
+    read -s -n 1 Keyboard_yn
+    if [[ $Keyboard_yn == "1" ]]; then
+       Update_Colors="1"
+       echo "Global Table of Colors"
+       sleep .2
+       echo " "
+       echo "Loading Configuration File Data..."
+       sleep .2
+       echo " "
+       if [[ ! -f "$Config_File_Name" ]]; then
+       echo "You do not have an external configuration file yet."
+       echo "Please create an external configuration file."
+       echo " "   
+       exit 1
+       fi
+       load_config
+       update_config_file
+       echo "File updated"
+    else
+       Update_Colors="0"
+    fi
+    if [[ $Keyboard_yn == "a" ]]; then
+       echo "Aborting"
+    fi
+    echo " "
+    echo -n "Press any key to continue "
+    read -s -n 1 key
+    ;;
+
 
     H)
     clear
@@ -5104,7 +5175,7 @@ IFS=',' read -ra ADDR <<< "$Custom_Drives"
     echo "located in the same directory as the script is located."
     echo " "
     echo -n "Press any key to continue"
-    read -n 1 key
+    read -s -n 1 key
     echo " "
     sleep 1
     ;;
