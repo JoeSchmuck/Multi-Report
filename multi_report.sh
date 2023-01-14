@@ -14,10 +14,27 @@ LANG="en_US.UTF-8"
 ### Version v1.4, v1.5, v1.6, v2.0 FreeNAS/TrueNAS (Core & Scale) (joeschmuck)
 
 ### Changelog:
-# v2.0 (31 December 2022)
+# v2.0 (14 January 2023)
+#
+#
 #   - Formatted all -config screens to fit into 80 column x 24 lines.
 #   - Removed custom builds
 #   - Fixed Custom Configuration Delete Function.
+#   - Fixed Zpool Scrub Bytes for FreeNAS 11.x
+#   - Fixed SMART Test to allow for 'Offline' value.
+#   - Modified Wear Level script to account for 'Reverse' Adjustment.
+#   - Added Wear Level Adjustment to the Custom Drive configuration.
+#   - Added Output.html to -dump command.
+#   - Added Alternate to Mouseover for normalized values.  Parens to support non-mouseover email clients.
+#
+#   ** Can I add a Mouse Over to the chart data that was overridden and display the actual value?
+#   ** Need to restructure and save any overridable values for the mouseover.
+#   ** Use <span title="$var">$adjustedvar</span></td>
+#
+#   ** Updated Testing Code to accept both drive_a and drive_x files.
+#   *** Update script to allow only drive_a file as it was before.  This could be a lot more IF statements.
+#
+#   ** Send this out for testing since there were some big changes.  Make sure the math works for everything, especially the new drive_x changes.
 #
 #
 #
@@ -485,6 +502,15 @@ NVM_Power_On_Hours_Title="Power On Time"
 NVM_Wear_Level="true"
 NVM_Wear_Level_Title="Wear Level"
 
+###### Mouseover
+# This will display the original value of an overriden value (one in yellow)
+# This is a tri-state value as explained below.
+#   "true" will displaying the actual value via a mouseover.
+#   "false" will not generate any special email and will run as previous versions.
+#   "alt" will place the actual value within parentheses.  A great option if you email cliet can't display mouseover.
+
+Mouseover="alt"
+
 
 ###### Drive Ignore List
 # What does it do:
@@ -555,6 +581,7 @@ Multi_Zone="none"
 #   Use same format as CRC_Errors (see above).
  
 Bad_Sectors="none"
+Bad_Sectors2="none"
 
 ######## ATA Error Log Silencing ##################
 # What does it do:
@@ -602,8 +629,8 @@ enable_text="true"    # This will display the Text Section when = "true" or remo
 # The colors selected you can change but you will need to look up the proper HEX code for a color.
 
 okColor="#b5fcb9"       # Hex code for color to use in SMART Status column if drives pass (default is darker light green, #b5fcb9).
-warnColor="#f765d0"     # Hex code for WARN color (default is purple, #f765d0).
-critColor="#f44336"     # Hex code for CRITICAL color (default is red, #ff0000).
+warnColor="#F38B16"     # Hex code for WARN color (default is orange, #F38B16).
+critColor="#f44336"     # Hex code for CRITICAL color (default is red, #f44336).
 altColor="#f4f4f4"      # Table background alternates row colors between white and this color (default is light gray, #f4f4f4).
 whtColor="#ffffff"      # Hex for White background.
 ovrdColor="#ffffe4"     # Hex code for Override Yellow.
@@ -635,16 +662,24 @@ logfile_warranty_temp="/tmp/smart_report_warranty_flag.tmp"
 logfile_messages_temp="/tmp/smart_report_messages.tmp"
 boundary="gc0p4Jq0M2Yt08jU534c0p"
 
+progverdate="2023-01-14"
+
 if [[ $softver != "Linux" ]]; then
-programver="Multi-Report v1.6f dtd:2022-12-31 (TrueNAS Core "$(cat /etc/version | cut -d " " -f1 | sed 's/TrueNAS-//')")"
-programver2="$(cat /etc/version | cut -d"-" -f1)"
+  if [[ "$(cat /etc/version | grep "FreeNAS")" ]]; then
+     programver="Multi-Report v2.0-Beta dtd:"$progverdate" (FreeNAS "$(cat /etc/version | cut -d " " -f1 | sed 's/FreeNAS-//')")"
+     programver2="$(cat /etc/version | cut -d"-" -f1)"
+  else
+     programver="Multi-Report v2.0-Beta dtd:"$progverdate" (TrueNAS Core "$(cat /etc/version | cut -d " " -f1 | sed 's/TrueNAS-//')")"
+     programver2="$(cat /etc/version | cut -d"-" -f1)"
+  fi
 else
-programver="Multi-Report v1.6f dtd:2022-12-31 (TrueNAS Scale "$(cat /etc/version)")"
-programver2="$(cat /etc/version | cut -d" " -f1)"
+  programver="Multi-Report v2.0-Beta dtd:"$progverdate" (TrueNAS Scale "$(cat /etc/version)")"
+  programver2="$(cat /etc/version | cut -d" " -f1)"
 fi
 
-#If the config file format changes, this is the latest working date, anything older must be updated.
-valid_config_version_date="2022-12-27"
+# If the config file format changes, this is the latest working date, anything older must be updated.
+# Format must be "yyyy-mm-dd"
+valid_config_version_date="2022-01-07"
 
 ##########################
 ##########################
@@ -659,9 +694,8 @@ valid_config_version_date="2022-12-27"
 #Unique programming hacks to properly emulate other hardware that is not actually on the system.
 
 VMWareNVME="on"            # Set to "off" normally, "on" to assist in incorrect VMWare reporting.
-Silence="on"               # Set to "on" normally, "off" to provide Joe Schmuck troubleshooting feedback while running the script.
-Joes_System="false"        # Custom settings for my system.
-Sample_Test="false"         # Setup static test values for testing.
+Joes_System="false"        # Custom settings for my system and to remove these from your system.
+Sample_Test="false"        # Setup static test values for testing.
 
 ##########################
 ##########################
@@ -696,12 +730,15 @@ echo "Configuration File Version Date: "$config_version_date
 if [[ $config_version_date < $valid_config_version_date ]]; then echo "Found Old Configuration File"; echo "Automatically updating configuration file..."; update_config_file; echo "Running normal script"; fi
    . "$Config_File_Name"
 else
-   echo "No Config File Exists"
-   echo "Checking for a valid email within the script..."
+   echo " "
+   echo "   No Config File Exists --- Checking for a valid email within the script..."
    if [[ $email == "YourEmail@Address.com" ]]; then
-      echo "No Valid Email Address..."
-      echo "Recommend running script with the '-config' switch and selecting the N)ew Configuration option."
-      echo "... Aborting"
+      echo " "
+      echo "   No Valid Email Address..."
+      echo "   Recommend running script with the '-config' switch and selecting"
+      echo "   the N)ew Configuration option."
+      echo " "
+      echo "... Exiting"
       echo " "
       exit 1
    else
@@ -1113,7 +1150,7 @@ fi
     echo "  <th style=\"text-align:center; width:80px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$Zpool_Status_Title"</th>"
     echo "  <th style=\"text-align:center; width:80px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$Zpool_Pool_Size_Title"</th>"
     echo "  <th style=\"text-align:center; width:80px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$Zpool_Free_Space_Title"</th>"
-    echo "  <th style=\"text-align:center; width:80px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$Zpool_Used_Space_Title"</th>"
+    echo "  <th style=\"text-align:center; width:120px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$Zpool_Used_Space_Title"</th>"
     echo "  <th style=\"text-align:center; width:80px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$Zpool_Read_Errors_Title"</th>"
     echo "  <th style=\"text-align:center; width:80px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$Zpool_Write_Errors_Title"</th>"
     echo "  <th style=\"text-align:center; width:80px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$Zpool_Checksum_Errors_Title"</th>"
@@ -1184,13 +1221,22 @@ for pool in $pools; do
 
     zfs_pool_size1="$(awk -v a="$zfs_pool_size" 'BEGIN { printf "%.0f", a }' </dev/null)"
 
+    if [[ $zfs_pool_size1 -gt 1000000 ]]; then
+       zfs_pool_size="$(awk -v a="$zfs_pool_size" 'BEGIN { printf "%.2f", a/1000000 }' </dev/null)P"
+    else
+    if [[ $zfs_pool_size1 -gt 100000 ]]; then
+       zfs_pool_size="$(awk -v a="$zfs_pool_size" 'BEGIN { printf "%.0f", a/1000 }' </dev/null)T"
+    else
     if [[ $zfs_pool_size1 -gt 1000 ]]; then
        zfs_pool_size="$(awk -v a="$zfs_pool_size" 'BEGIN { printf "%.2f", a/1000 }' </dev/null)T"
     else
        zfs_pool_size="$(awk -v a="$zfs_pool_size" 'BEGIN { printf "%.2f", a }' </dev/null)G"
     fi
+    fi
+    fi
 
     # Get used capacity percentage of the zpool
+    # 'used' is the same for zfs or zpool so get the data once.
     used="$(zpool list -H -p -o capacity "$pool")"
     pool_size="$(zpool list -H -o size "$pool")"
     pool_free="$(zpool list -H -o free "$pool")"
@@ -1224,7 +1270,9 @@ elif [ "$(echo "$statusOutput" | grep "scan" | awk '{print $2}')" = "scrub" ] &&
           scrubAge="Canceled"
        elif [ "$(echo "$statusOutput" | grep "scan" | awk '{print $2}')" = "scrub" ]; then
         scrubRepBytes="$(echo "$statusOutput" | grep "scan" | awk '{print $4}')"
-        scrubRepBytes="$(echo "$scrubRepBytes" | rev | cut -c2- | rev)"
+        if [ "$(echo "$programver" | grep "TrueNAS")" ]; then
+           scrubRepBytes="$(echo "$scrubRepBytes" | rev | cut -c2- | rev)"
+        fi
         scrubErrors="$(echo "$statusOutput" | grep "scan" | awk '{print $10}')"
         # Convert time/datestamp format presented by zpool status, compare to current date, calculate scrub age
 
@@ -1261,7 +1309,9 @@ elif [ "$(echo "$statusOutput" | grep "scan" | awk '{print $2}')" = "scrub" ] &&
           scrubAge="Canceled"
        elif [ "$(echo "$statusOutput" | grep "scan" | awk '{print $2}')" = "scrub" ]; then
         scrubRepBytes="$(echo "$statusOutput" | grep "scan" | awk '{print $4}')"
-        scrubRepBytes="$(echo "$scrubRepBytes" | rev | cut -c2- | rev)"
+        if [ "$(echo "$programver" | grep "TrueNAS")" ]; then
+           scrubRepBytes="$(echo "$scrubRepBytes" | rev | cut -c2- | rev)"
+        fi
         scrubErrors="$(echo "$statusOutput" | grep "scan" | awk '{print $8}')"
         # Convert time/datestamp format presented by zpool status, compare to current date, calculate scrub age
 
@@ -1343,10 +1393,12 @@ get_drive_data () {
 
 if [[ "$drive" == "nvme50" || "$drive" == "ada50" ]]; then
    smartdata="$(cat "$testfile")"
+   smartdata2="$(cat "$testfile2")"
    echo "Modified smartdata="
    cat "$testfile"
 else
    smartdata="$(smartctl -a /dev/"$drive")"
+   smartdata2="$(smartctl -x /dev/"$drive")"
      if [[ "$dump_all" == "1" || "$dump_all" == "2" ]]; then
         "$(echo "$smartdata" > /tmp/drive_${drive}_a.txt)" 2> /dev/null
         "$(smartctl -x /dev/"$drive" > /tmp/drive_${drive}_x.txt)" 2> /dev/null
@@ -1387,21 +1439,22 @@ else
    if [[ "$(echo "$smartdata" | grep "remaining" | awk '{print $1}')" ]]; then
       smarttesting="$(echo "$smartdata" | grep "remaining" | awk '{print $1}' | tr -d '[%]')"; fi
 
-   if [[ "$(echo "$smartdata" | grep "# 1" | awk '{print $5}')" ]]; then
-      chkreadfailure="$(echo "$smartdata" | grep "# 1" | awk '{print $5}')"; fi
+   if [[ "$(echo "$smartdata2" | grep "# 1" | awk '{print $5}')" ]]; then
+      chkreadfailure="$(echo "$smartdata2" | grep "# 1" | awk '{print $5}')"; fi
 
    if [[ "$sas" == 0 ]]; then
-      if [[ "$(echo "$smartdata" | grep "# 1" | awk '{print $9}')" =~ [%]+$ ]]; then
-         lastTestHours="$(echo "$smartdata" | grep "# 1" | awk '{print $10}' )"
-      else
-         if [[ "$(echo "$smartdata" | grep "# 1" | awk '{print $9}')" ]]; then
-         lastTestHours="$(echo "$smartdata" | grep "# 1" | awk '{print $9}' )"
-      fi
+      if [[ "$(echo "$smartdata2" | grep "# 1" | awk '{print $9}')" =~ [%]+$ ]]; then
+         lastTestHours="$(echo "$smartdata2" | grep "# 1" | awk '{print $10}' )"; fi
+      
+      if [[ "$(echo "$smartdata2" | grep "# 1" | awk '{print $8}')" =~ [%]+$ ]]; then
+         lastTestHours="$(echo "$smartdata2" | grep "# 1" | awk '{print $9}' )"; fi
+      
+      if [[ "$(echo "$smartdata2" | grep "# 1" | awk '{print $7}')" =~ [%]+$ ]]; then
+         lastTestHours="$(echo "$smartdata2" | grep "# 1" | awk '{print $8}' )"; fi
    fi
-fi
 
-if [[ "$(echo "$smartdata" | grep "# 1" | awk '{print $3}')" ]]; then
-   lastTestType="$(echo "$smartdata" | grep "# 1" | awk '{print $3}')"; fi
+if [[ "$(echo "$smartdata2" | grep "# 1" | awk '{print $3}')" ]]; then
+   lastTestType="$(echo "$smartdata2" | grep "# 1" | awk '{print $3}')"; fi
 
 if [[ "$(echo "$smartdata" | grep "SMART overall-health" | awk '{print $6}')" ]]; then
    smartStatus="$(echo "$smartdata" | grep "SMART overall-health" | awk '{print $6}')"; fi
@@ -1474,6 +1527,18 @@ if [[ "$(echo "$smartdata" | grep "Raw_Read_Error_Rate" | awk '{print $4}')" ]];
 if [[ "$(echo "$smartdata" | grep "Raw_Read_Error_Rate" | awk '{print $10}')" ]]; then
    rawReadErrorRate="$(echo "$smartdata" | grep "Raw_Read_Error_Rate" | head -1 | awk '{print $10 + 0}')"; fi
 
+### Try lookign for Custom_Drive data here. Need it for wearLevelAdj.
+
+IFS=',' read -ra ADDR <<< "$Custom_Drives"
+ for i in "${ADDR[@]}"; do
+   cdrivesn1="$(echo $i | cut -d':' -f 1)"
+   if [[ $cdrivesn1 == $serial ]]; then
+      if [[ "$(echo $i | cut -d':' -f 16)" != "d" ]]; then
+      wearLevelAdj="$(echo $i | cut -d':' -f 16)"; fi
+   fi
+ done
+
+
 ### Add search for Seagate and mark seagate=1
 if [[ "$(echo "$smartdata" | grep -i "Seagate" )" ]]; then seagate=1; else seagate=""; fi
 
@@ -1485,36 +1550,63 @@ if [[ "$(echo "$smartdata" | grep "Multi_Zone_Error_Rate" | awk '{print $10}')" 
 
 if [[ "$(echo "$smartdata" | grep "Phison")" ]]; then
 if [[ "$(echo "$smartdata" | grep "SSD_Life_Left" | awk '{print $10}')" ]]; then
-   wearLevel="$(echo "$smartdata" | grep "SSD_Life_Left" | awk '{print $10 + 0}')"; fi
+   wearLevel="$(echo "$smartdata" | grep "SSD_Life_Left" | awk '{print $10 + 0}')"
+   if [[ $wearLevelAdj == "r" ]]; then
+      wearLevel=$(( 100 - $wearLevel ))
+   fi
+fi
 fi
 
 if [[ ! "$(echo "$smartdata" | grep "Phison")" ]]; then
    if [[ "$(echo "$smartdata" | grep "SSD_Life_Left" | awk '{print $4}')" ]]; then
-      wearLevel="$(echo "$smartdata" | grep "SSD_Life_Left" | awk '{print $4 + 0}')"; fi
+      wearLevel="$(echo "$smartdata" | grep "SSD_Life_Left" | awk '{print $4 + 0}')"
+      if [[ $wearLevelAdj == "r" ]]; then
+         wearLevel=$(( 100 - $wearLevel ))
+      fi
+   fi
 fi
 
 if [[ "$(echo "$smartdata" | grep "Wear_Leveling_Count" | awk '{print $4}')" ]]; then
-   wearLevel="$(echo "$smartdata" | grep "Wear_Leveling_Count" | awk '{print $4 + 0}')"; fi
+   wearLevel="$(echo "$smartdata" | grep "Wear_Leveling_Count" | awk '{print $4 + 0}')"
+   if [[ $wearLevelAdj == "r" ]]; then
+      wearLevel=$(( 100 - $wearLevel ))
+   fi
+fi
 
 if [[ "$(echo "$smartdata" | grep "Percent_Lifetime_Remain" | awk '{print $4}')" ]]; then
-   wearLevel="$(echo "$smartdata" | grep "Percent_Lifetime_Remain" | awk '{print $4 + 0}')"; fi
+   wearLevel="$(echo "$smartdata" | grep "Percent_Lifetime_Remain" | awk '{print $4 + 0}')"
+   if [[ $wearLevelAdj == "r" ]]; then
+      wearLevel=$(( 100 - $wearLevel ))
+   fi
+fi
 
 if [[ "$(echo "$smartdata" | grep "Media_Wearout_Indicator" | awk '{print $4}')" ]]; then
-   wearLevel="$(echo "$smartdata" | grep "Media_Wearout_Indicator" | awk '{print $4 + 0}')"; fi
+   wearLevel="$(echo "$smartdata" | grep "Media_Wearout_Indicator" | awk '{print $4 + 0}')"
+   if [[ $wearLevelAdj == "r" ]]; then
+      wearLevel=$(( 100 - $wearLevel ))
+   fi
+fi
 
 # This adjustment is for WDC drives with "230 Media_Wearout_Indicator" that reports 000 = 100
 if [[ "$(echo "$smartdata" | grep "Media_Wearout_Indicator" | awk '{print $1 + 0}')" == 230 ]]; then
-   wearLevel=$(( 100 - $wearLevel )); fi
+   if [[ $wearLevelAdj == "d" ]]; then
+      wearLevel=$(( 100 - $wearLevel ))
+   fi
+fi
 
 if [[ "$(echo "$smartdata" | grep "Percentage Used:" | awk '{print $3}')" ]]; then
    wearLevel="$(echo "$smartdata" | grep "Percentage Used:" | awk '{print $3 + 0}')"
-   wearLevel=$(( 100 - $wearLevel ))
+   if [[ $wearLevelAdj == "d" ]]; then
+      wearLevel=$(( 100 - $wearLevel ))
+   fi
 fi
 
 if [[ "$(echo "$smartdata" | grep "Percentage used endurance indicator:" | awk '{print $5}')" ]]; then
    wearLevel="$(echo "$smartdata" | grep "Percentage used endurance indicator:" | awk '{print $5}' | cut -d '%' -f1)"
    # Adjusting Wear Level for amount used vice amount remaining #
-   wearLevel=$(( 100 - $wearLevel ))
+   if [[ $wearLevelAdj == "d" ]]; then
+     wearLevel=$(( 100 - $wearLevel ))
+   fi
 fi
 
 if [[ "$(echo "$smartdata" | grep "Reallocated_NAND_Blk_Cnt" | awk '{print $10}')" ]]; then
@@ -1569,18 +1661,18 @@ if [[ "$(echo "$smartdata" | grep "23 Unknown_Attribute" | awk '{print $4}')" ]]
 if [[ "$(echo "$smartdata" | grep "Background" | awk '{print $10}')" ]]; then
    lastTestHours="$(echo "$smartdata" | grep "Background" | awk '{print $10}')"; fi
 
-if [[ "$(echo "$smartdata" | grep "# 1" | awk '{print $7}')" ]]; then
+if [[ "$(echo "$smartdata2" | grep "# 1" | awk '{print $7}')" ]]; then
    altlastTestHours="$(echo "$smartdata" | grep "# 1" | awk '{print $7}')"; fi
 
 if [[ "$sas" == 1 ]]; then
-   lastTestHours="$(echo "$smartdata" | grep "# 1" | awk '{print $7}')"; fi
+   lastTestHours="$(echo "$smartdata2" | grep "# 1" | awk '{print $7}')"; fi
 
 if [[ "$(echo "$smartdata" | grep "# 1" | awk '{print $4}')" ]]; then
-   altlastTestType="$(echo "$smartdata" | grep "# 1" | awk '{print $4}')"; fi
+   altlastTestType="$(echo "$smartdata2" | grep "# 1" | awk '{print $4}')"; fi
 
 if [[ "$sas" == 1 ]]; then
    if [[ "$(echo "$smartdata" | grep "# 1" | awk '{print $4}')" ]]; then
-   lastTestType="$(echo "$smartdata" | grep "# 1" | awk '{print $4}')"; fi
+   lastTestType="$(echo "$smartdata2" | grep "# 1" | awk '{print $4}')"; fi
 fi
 
 if [[ ! "$(echo "$smartdata" | grep "SSD")" && ! "$(echo "$smartdata" | grep "NVM")" ]]; then
@@ -1596,25 +1688,29 @@ if [[ "$(echo "$smartdata" | grep "NVM")" ]]; then
 fi
 
 if [[ $Sample_Test == "true" ]]; then
-temp_min=10
-temp_max=50
-temp=35
-spinRetry=2
-reAllocEvent=2
-pending=5
-offlineUnc=3
-crcErrors=2
+echo "In Testing Mode"
+# Change any value below to override the actual drive values.
+# These are critical monitoring values
+#temp_min=10
+#temp_max=50
+#temp=35
+#spinRetry=0
+#reAlloc=1
+#reAllocEvent=2
+#pending=0
+#offlineUnc=0
+#crcErrors=2
+#multiZone=2
+#Helium=100
+#wearLevel=20
+# Below here are non-critical (No alarm generated)
 seekErrorHealth=1
 seekErrorRate=10
-rawReadErrorRate=8
-multiZone=2
-wearLevel=20
+rawReadErrorRate=3
 startStop=490
 loadCycle=500
-reAlloc=5
-onHours=50026
-Helium=100
-lastTestHours=50000
+#onHours=50026
+#lastTestHours=50000
 fi
 
 ######### Convert variables to Decimal #########
@@ -1901,11 +1997,33 @@ if [[ "$1" == "HDD" ]] && [[ "$HDD_Start_Stop_Count" == "true" ]]; then printf "
 if [[ "$1" == "HDD" ]] && [[ "$HDD_Load_Cycle" == "true" ]]; then printf "<td style=\"text-align:center; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$loadCycle"; fi
 if [[ "$1" == "HDD" ]] && [[ "$HDD_Spin_Retry" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$spinRetryColor" "$spinRetry"; fi
 
-if [[ "$1" == "HDD" ]] && [[ "$HDD_Reallocated_Sectors" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$reAllocColor" "$reAlloc"; fi
-if [[ "$1" == "SSD" ]] && [[ "$SSD_Reallocated_Sectors" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$reAllocColor" "$reAlloc"; fi
+if [[ $reAllocColor != $ovrdColor ]] || [[ $Mouseover == "false" ]]; then
+   if [[ "$1" == "HDD" ]] && [[ "$HDD_Reallocated_Sectors" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$reAllocColor" "$reAlloc"; fi
+   if [[ "$1" == "SSD" ]] && [[ "$SSD_Reallocated_Sectors" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$reAllocColor" "$reAlloc"; fi
+else
+   if [[ $Mouseover == "alt" ]]; then
+      if [[ "$1" == "HDD" ]] && [[ "$HDD_Reallocated_Sectors" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s(%s)</td>\n" "$reAllocColor" "$reAlloc" "$reAllocOrig"; fi
+      if [[ "$1" == "SSD" ]] && [[ "$SSD_Reallocated_Sectors" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s(%s)</td>\n" "$reAllocColor" "$reAlloc" "$reAllocOrig"; fi
+   fi
+   if [[ $Mouseover == "true" ]]; then
+      if [[ "$1" == "HDD" ]] && [[ "$HDD_Reallocated_Sectors" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\"><a href=%s>%s</a></td>\n" "$reAllocColor" "$reAllocOrig" "$reAlloc"; fi
+      if [[ "$1" == "SSD" ]] && [[ "$SSD_Reallocated_Sectors" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\"><a href=%s>%s</a></td>\n" "$reAllocColor" "$reAllocOrig" "$reAlloc"; fi
+   fi
+fi
 
-if [[ "$1" == "HDD" ]] && [[ "$HDD_Reallocated_Events" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$reAllocEventColor" "$reAllocEvent"; fi
-if [[ "$1" == "SSD" ]] && [[ "$SSD_Reallocated_Events" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$reAllocEventColor" "$reAllocEvent"; fi
+if [[ $reAllocEventColor != $ovrdColor ]] || [[ $Mouseover == "false" ]]; then
+   if [[ "$1" == "HDD" ]] && [[ "$HDD_Reallocated_Events" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$reAllocEventColor" "$reAllocEvent"; fi
+   if [[ "$1" == "SSD" ]] && [[ "$SSD_Reallocated_Events" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$reAllocEventColor" "$reAllocEvent"; fi
+else
+   if [[ $Mouseover == "alt" ]]; then
+      if [[ "$1" == "HDD" ]] && [[ "$HDD_Reallocated_Events" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s(%s)</td>\n" "$reAllocEventColor" "$reAllocEvent" "$reAllocEventOrig"; fi
+      if [[ "$1" == "SSD" ]] && [[ "$SSD_Reallocated_Events" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s(%s)</td>\n" "$reAllocEventColor" "$reAllocEvent" "$reAllocEventOrig"; fi
+   fi
+   if [[ $Mouseover == "true" ]]; then
+      if [[ "$1" == "HDD" ]] && [[ "$HDD_Reallocated_Events" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\"><a href=%s>%s</a></td>\n" "$reAllocEventColor" "$reAllocEventOrig" "$reAllocEvent"; fi
+      if [[ "$1" == "SSD" ]] && [[ "$SSD_Reallocated_Events" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\"><a href=%s>%s</a></td>\n" "$reAllocEventColor" "$reAllocEventOrig" "$reAllocEvent"; fi
+   fi
+fi
 
 if [[ "$1" == "HDD" ]] && [[ "$HDD_Pending_Sectors" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$pendingColor" "$pending"; fi
 if [[ "$1" == "SSD" ]] && [[ "$SSD_Pending_Sectors" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$pendingColor" "$pending"; fi
@@ -1913,13 +2031,33 @@ if [[ "$1" == "SSD" ]] && [[ "$SSD_Pending_Sectors" == "true" ]]; then printf "<
 if [[ "$1" == "HDD" ]] && [[ "$HDD_Offline_Uncorrectable" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$offlineUncColor" "$offlineUnc"; fi
 if [[ "$1" == "SSD" ]] && [[ "$SSD_Offline_Uncorrectable" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$offlineUncColor" "$offlineUnc"; fi
 
-if [[ "$1" == "HDD" ]] && [[ "$HDD_UDMA_CRC_Errors" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$crcErrorsColor" "$crcErrors"; fi
-if [[ "$1" == "SSD" ]] && [[ "$SSD_UDMA_CRC_Errors" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$crcErrorsColor" "$crcErrors"; fi
+if [[ $crcErrorsColor != $ovrdColor ]] || [[ $Mouseover == "false" ]]; then
+   if [[ "$1" == "HDD" ]] && [[ "$HDD_UDMA_CRC_Errors" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$crcErrorsColor" "$crcErrors"; fi
+   if [[ "$1" == "SSD" ]] && [[ "$SSD_UDMA_CRC_Errors" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$crcErrorsColor" "$crcErrors"; fi
+else
+   if [[ $Mouseover == "alt" ]]; then
+      if [[ "$1" == "HDD" ]] && [[ "$HDD_UDMA_CRC_Errors" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s(%s)</td>\n" "$crcErrorsColor" "$crcErrors" "$crcErrorsOrig"; fi
+      if [[ "$1" == "SSD" ]] && [[ "$SSD_UDMA_CRC_Errors" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s(%s)</td>\n" "$crcErrorsColor" "$crcErrors" "$crcErrorsOrig"; fi
+   fi
+   if [[ $Mouseover == "true" ]]; then
+      if [[ "$1" == "HDD" ]] && [[ "$HDD_UDMA_CRC_Errors" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\"><a href=%s>%s</a></td>\n" "$crcErrorsColor" "$crcErrorsOrig" "$crcErrors"; fi
+      if [[ "$1" == "SSD" ]] && [[ "$SSD_UDMA_CRC_Errors" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\"><a href=%s>%s</a></td>\n" "$crcErrorsColor" "$crcErrorsOrig" "$crcErrors"; fi
+   fi
+fi
 
 if [[ "$1" == "HDD" ]] && [[ "$HDD_Raw_Read_Error_Rate" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">$SER%s</td>\n" "$rawReadErrorRateColor" "$rawReadErrorRate"; fi
 if [[ "$1" == "HDD" ]] && [[ "$HDD_Seek_Error_Rate" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">$SER%s</td>\n" "$seekErrorHealthColor" "$seekErrorHealth"; fi
 
-if [[ "$1" == "HDD" ]] && [[ "$HDD_MultiZone_Errors" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$multiZoneColor" "$multiZone"; fi
+if [[ $multiZoneColor != $ovrdColor ]] || [[ $Mouseover == "false" ]]; then
+   if [[ "$1" == "HDD" ]] && [[ "$HDD_MultiZone_Errors" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$multiZoneColor" "$multiZone"; fi
+else
+   if [[ $Mouseover == "alt" ]]; then
+      if [[ "$1" == "HDD" ]] && [[ "$HDD_MultiZone_Errors" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s(%s)</td>\n" "$multiZoneColor" "$multiZone" "$multiZoneOrig"; fi
+   fi
+   if [[ $Mouseover == "true" ]]; then
+      if [[ "$1" == "HDD" ]] && [[ "$HDD_MultiZone_Errors" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\"><span title=%s>%s</span></td>\n" "$multiZoneColor" "$multiZoneOrig" "$multiZone"; fi
+   fi
+fi
 
 if [[ "$1" == "HDD" ]] && [[ "$HDD_Helium_Level" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$HeliumColor" "$Helium"; fi
 
@@ -1961,7 +2099,7 @@ echo "<pre style=\"font-size:14px\">"
 force_delay
  
 if test -e "$Config_File_Name"; then
-   echo "<b>External Configuration File in Use</b><br>" >> "$logfile"
+   echo "<b>External Configuration File in use dtd:$config_version_date </b><br>" >> "$logfile"
 force_delay
 else
    echo "<b>No External Configuration File Exists</b><br>" >> "$logfile"
@@ -2239,7 +2377,7 @@ fi
 ############################## REMOVE UN-NEEDED JUNK AND FINALIZE EMAIL MESSAGE END #####################
 
 remove_junk_report () {
- 
+output_x=0 
 ### Remove some un-needed junk from the output
 sed -i -e '/smartctl/d' "$logfile"
 force_delay
@@ -2301,7 +2439,21 @@ fi
       echo "Content-Disposition: attachment; filename=multi_report_config.txt"
       base64 $Config_File_Name
       ) >> "$logfile"
-force_delay
+      force_delay
+      if [[ $output_x == 0 ]]; then
+         cp $logfile /tmp/output.html
+         sed -i -e '/End of data section/q' /tmp/output.html
+         force_delay   
+         output_x=1
+         (
+         # Write MIME section header for file attachment (encoded with base64)
+         echo "--${boundary}"
+         echo "Content-Type: text/html"
+         echo "Content-Transfer-Encoding: base64"
+         echo "Content-Disposition: attachment; filename=output.html"
+         base64 /tmp/output.html
+         ) >> "$logfile"
+      fi
    fi
  
 ### End details section, close MIME section
@@ -2357,7 +2509,7 @@ detail_level=$1
 # Do this for all the pertinent variables and add a section to scan the Custom_Drives variable
 # and if a serial number matches, then use the variables there vs the defaults.
 
-### Order of data -- $serial":"$tempwarn":"$tempcrit":"$sectorswarn":"$sectorscrit":"$reallocwarn":"$multizonewarn":"$multizonecrit":"$rawreadwarn":"$rawreadcrit":"$seekerrorswarn":"$seekerrorscrit":"$testage":"$testAgeOvrd":"$heliummin
+### Order of data -- $serial":"$tempwarn":"$tempcrit":"$sectorswarn":"$sectorscrit":"$reallocwarn":"$multizonewarn":"$multizonecrit":"$rawreadwarn":"$rawreadcrit":"$seekerrorswarn":"$seekerrorscrit":"$testage":"$testAgeOvrd":"$heliummin":"$wearleveladj
 
 # Predefine default variables
      if [[ $Custom_DrivesDrive == "HDD" ]]; then
@@ -2438,6 +2590,17 @@ IFS=',' read -ra ADDR <<< "$Custom_Drives"
       testAgeOvrd="$(echo $i | cut -d':' -f 14)"
       if [[ "$(echo $i | cut -d':' -f 15)" != "d" ]]; then
       heliumMinx="$(echo $i | cut -d':' -f 15)"; fi
+      if [[ "$(echo $i | cut -d':' -f 16)" != "d" ]]; then
+#      wearLevelAdj="$(echo $i | cut -d':' -f 16)"; fi
+### Remove this check in future version
+         if [[ "$(echo $i | cut -d':' -f 16)" == "" ]] || [[ "$(echo $i | cut -d':' -f 16)" == "," ]]; then
+            wearLevelAdj="d"
+            echo "Illegal Custom Drive Configuration Data...  Delete and recreate the Custom Drive configuration data."
+            echo "Temporary patch applied for Wear Level Adjustment."
+         else
+            wearLevelAdj="$(echo $i | cut -d':' -f 16)"
+         fi
+      fi
    fi
  done
 
@@ -2556,7 +2719,28 @@ IFS=',' read -ra ADDR <<< "$Bad_Sectors"
    done
  if [[ $s != "0" ]]; then
 reAllocColor=$ovrdColor
+reAllocOrig=$reAlloc
 reAlloc=$(($reAlloc-$badsectdt2))
+ fi
+
+### BAD SECTORS2
+
+s="0"
+IFS=',' read -ra ADDR <<< "$Bad_Sectors2"
+ for i in "${ADDR[@]}"; do
+   badsectsn3="$(echo $i | cut -d':' -f 1)"
+   badsectdt3="$(echo $i | cut -d':' -f 2)"
+   if [[ $badsectsn3 == $serial ]]; then
+    s="1"
+    badsectsn4=$badsectsn3
+    badsectdt4=$badsectdt3
+    continue
+   fi
+   done
+ if [[ $s != "0" ]]; then
+reAllocEventColor=$ovrdColor
+reAllocEventOrig=$reAllocEvent
+reAllocEvent=$(($reAllocEvent-$badsectdt4))
  fi
 
 ####################  TEMPERATURE SECTION ###################
@@ -2645,8 +2829,9 @@ if [[ $reAlloc != "" ]]; then if [[ $(($reAlloc + 0)) -gt $sectorsCritx ]]; then
 else if [[ $(($reAlloc + 0)) -gt $sectorsWarnx ]]; then printf "Drive "$serial" Warning Sectors "$reAlloc" - Threshold = "$sectorsWarnx"<br>" >> "$logfile_warning"; fi; fi; fi
 if [[ $reAlloc == "" ]]; then reAlloc="$non_exist_value"; fi
 
-if [[ $reAllocEvent != "" ]]; then if [[ $reAllocEvent -gt $reAllocWarnx ]]; then reAllocEventColor=$warnColor; fi; fi
-if [[ $reAllocEvent != "" ]]; then if [[ $reAllocEvent -gt $reAllocWarnx ]]; then printf "Drive "$serial" Reallocating Sectors "$reAllocEvent" - Threshold = "$reAllocWarnx"<br>" >> "$logfile_warning"; fi; fi
+if [[ $reAllocEvent != "" ]]; then if [[ $(($reAllocEvent + 0)) -gt $sectorsCritx ]]; then reAllocEventColor=$critColor; else if [[ $(($reAllocEvent + 0)) -gt $sectorsWarnx ]]; then reAllocEventColor=$warnColor; fi; fi; fi
+if [[ $reAllocEvent != "" ]]; then if [[ $(($reAllocEvent + 0)) -gt $sectorsCritx ]]; then printf "Drive "$serial" Critical Sectors "$reAllocEvent" - Threshold = "$sectorsCritx"<br>" >> "$logfile_critical";
+else if [[ $(($reAllocEvent + 0)) -gt $sectorsWarnx ]]; then printf "Drive "$serial" Warning Sectors "$reAllocEvent" - Threshold = "$sectorsWarnx"<br>" >> "$logfile_warning"; fi; fi; fi
 if [[ $reAllocEvent == "" ]]; then reAllocEvent="$non_exist_value"; fi
 
 ### PENDING SECTORS
@@ -2658,7 +2843,7 @@ if [[ $pending == "" ]]; then pending="$non_exist_value"; fi
 ### OFFLINE UNCORRECTABLE SECTORS
 if [[ $offlineUnc != "" ]]; then if [[ $(($offlineUnc + 0)) > $sectorsCritx ]]; then offlineUncColor=$critColor; else if [[ $offlineUnc != 0 ]]; then offlineUncColor=$warnColor; fi; fi; fi
 if [[ $offlineUnc != "" ]]; then if [[ $(($offlineUnc + 0)) > $sectorsCritx ]]; then printf "Drive "$serial" Uncorrectable Errors "$offlineUnc"<br>" >> "$logfile_critical";
-else if [[ $offlineUnc -gt $sectorsWarnx ]]; then printf "Drive "$serial" Uncorrectable Errors "$offlineUnc" - Threshold = "$sectorsWarnx"<br>" >> "$logfile_warning";fi; fi; fi
+else if [[ $(($offlineUnc + 0)) -gt $sectorsWarnx ]]; then printf "Drive "$serial" Uncorrectable Errors "$offlineUnc" - Threshold = "$sectorsWarnx"<br>" >> "$logfile_warning";fi; fi; fi
 if [[ $offlineUnc == "" ]]; then offlineUnc="$non_exist_value"; fi
 
 ### CRC ERRORS
@@ -2786,6 +2971,7 @@ IFS=',' read -ra ADDR <<< "$CRC_Errors"
    done
  if [[ $s != "0" ]]; then
 crcErrorsColor=$ovrdColor
+crcErrorsOrig=$crcErrors
 crcErrors=$(($crcErrors-$crc_errst2))
  fi
 
@@ -2803,6 +2989,7 @@ IFS=',' read -ra ADDR <<< "$Multi_Zone"
    done
  if [[ $s != "0" ]]; then
 multiZoneColor=$ovrdColor
+multiZoneOrig=$multiZone
 multiZone=$(($multiZone-$badsectdt2))
  fi
 
@@ -2812,21 +2999,21 @@ if [[ $ignoreMultiZone != "true" ]]; then if [[ $multiZone != "$non_exist_value"
 if [[ $ignoreUDMA != "true" ]]; then if [[ $crcErrors != "$non_exist_value" ]]; then if [[ $crcErrors != "0" ]]; then printf "Drive "$serial" CRC Errors "$crcErrors"<br>" >> "$logfile_critical";fi; fi; fi
 if [[ $testAge -gt $testAgeWarnx ]]; then testAgeColor=$warnColor; else testAgeColor=$bgColor; fi
 if [[ $testAge -gt $testAgeWarnx ]]; then printf "Drive: "$serial" - Test Age = "$testAge" Days<br>" >> "$logfile_warning"; fi
-if [[ $smartStatusColor != $okColor ]]; then if [[ $smartStatusColor != $altColor ]]; then if [[ $deviceRedFlag == "true" ]]; then deviceStatusColor=$critColor;fi; fi; fi
-if [[ $tempColor != $bgColor ]]; then if [[ $tempColor != $altColor ]]; then if [[ $deviceRedFlag == "true" ]]; then deviceStatusColor=$critColor;fi; fi; fi
-if [[ $temp_maxColor != $bgColor ]]; then if [[ $temp_maxColor != $altColor ]]; then if [[ $deviceRedFlag == "true" ]]; then deviceStatusColor=$critColor;fi; fi; fi
-if [[ $spinRetryColor != $bgColor ]]; then if [[ $spinRetryColor != $altColor ]]; then if [[ $deviceRedFlag == "true" ]]; then deviceStatusColor=$critColor; fi; fi; fi
-if [[ $reAllocColor != $bgColor ]]; then if [[ $reAllocColor != $altColor ]]; then if [[ $reAllocColor != $ovrdColor ]]; then if [[ $deviceRedFlag == "true" ]]; then deviceStatusColor=$critColor;fi ;fi ;fi ;fi
-if [[ $reAllocEventColor != $bgColor ]]; then if [[ $reAllocEventColor != $altColor ]]; then if [[ $deviceRedFlag == "true" ]]; then deviceStatusColor=$critColor; fi; fi; fi
-if [[ $pendingColor != $bgColor ]]; then if [[ $pendingColor != $altColor ]]; then if [[ $deviceRedFlag == "true" ]]; then deviceStatusColor=$critColor;fi ;fi; fi
-if [[ $offlineUncColor != $bgColor ]]; then if [[ $offlineUncColor != $altColor ]]; then if [[ $deviceRedFlag == "true" ]]; then deviceStatusColor=$critColor;fi ;fi; fi
-if [[ $crcErrorsColor != $bgColor ]]; then if [[ $crcColor != $altColor ]]; then if [[ $crcErrorsColor != $ovrdColor ]]; then if [[ $deviceRedFlag == "true" ]]; then deviceStatusColor=$critColor;fi ;fi ;fi ;fi
-if [[ $seekErrorHealthColor != $bgColor ]]; then if [[ $seekErrorHealthColor != $altColor ]]; then if [[ $deviceRedFlag == "true" ]]; then deviceStatusColor=$critColor;fi; fi; fi
-if [[ $rawReadErrorRateColor != $bgColor ]]; then if [[ $rawReadErrorRateColor != $altColor ]]; then if [[ $deviceRedFlag == "true" ]]; then deviceStatusColor=$critColor;fi; fi; fi
-if [[ $testAgeColor != $bgColor ]]; then if [[ $testAgeColor != $altColor ]]; then if [[ $deviceRedFlag == "true" ]]; then deviceStatusColor=$critColor;fi ;fi ;fi
-if [[ $lastTestTypeColor != $bgColor ]]; then if [[ $lastTestTypeColor != $altColor ]]; then if [[ $deviceRedFlag == "true" ]]; then deviceStatusColor=$critColor;fi ;fi ;fi
-if [[ $multiZoneColor != $bgColor ]]; then if [[ $multiZoneColor != $altColor ]]; then if [[ $multiZoneColor != $ovrdColor ]]; then if [[ $deviceRedFlag == "true" ]]; then deviceStatusColor=$critColor;fi ;fi ;fi ;fi
-if [[ $wearLevelColor != $bgColor ]]; then if [[ $wearLevelColor != $altColor ]]; then if [[ $deviceRedFlag == "true" ]]; then deviceStatusColor=$critColor;fi ;fi ;fi
+
+if [[ $deviceRedFlag == "true" ]]; then if [[ $deviceStatusColor != $critColor ]]; then if [[ $deviceStatusColor != $warnColor ]]; then deviceStatusColor=$reAllocColor; fi; fi; fi
+if [[ $deviceRedFlag == "true" ]]; then if [[ $deviceStatusColor != $critColor ]]; then if [[ $deviceStatusColor != $warnColor ]]; then deviceStatusColor=$reAllocEventColor; fi; fi; fi
+if [[ $deviceRedFlag == "true" ]]; then if [[ $deviceStatusColor != $critColor ]]; then if [[ $deviceStatusColor != $warnColor ]]; then deviceStatusColor=$crcErrorsColor; fi; fi; fi
+if [[ $deviceRedFlag == "true" ]]; then if [[ $deviceStatusColor != $critColor ]]; then if [[ $deviceStatusColor != $warnColor ]]; then deviceStatusColor=$pendingColor; fi; fi; fi
+if [[ $deviceRedFlag == "true" ]]; then if [[ $deviceStatusColor != $critColor ]]; then if [[ $deviceStatusColor != $warnColor ]]; then deviceStatusColor=$offlineUncColor; fi; fi; fi
+if [[ $deviceRedFlag == "true" ]]; then if [[ $deviceStatusColor != $critColor ]]; then if [[ $deviceStatusColor != $warnColor ]]; then deviceStatusColor=$seekErrorHealthColor; fi; fi; fi
+if [[ $deviceRedFlag == "true" ]]; then if [[ $deviceStatusColor != $critColor ]]; then if [[ $deviceStatusColor != $warnColor ]]; then deviceStatusColor=$rawReadErrorRateColor; fi; fi; fi
+if [[ $deviceRedFlag == "true" ]]; then if [[ $deviceStatusColor != $critColor ]]; then if [[ $deviceStatusColor != $warnColor ]]; then deviceStatusColor=$testAgeColor; fi; fi; fi
+if [[ $deviceRedFlag == "true" ]]; then if [[ $deviceStatusColor != $critColor ]]; then if [[ $deviceStatusColor != $warnColor ]]; then deviceStatusColor=$multiZoneColor; fi; fi; fi
+if [[ $deviceRedFlag == "true" ]]; then if [[ $deviceStatusColor != $critColor ]]; then if [[ $deviceStatusColor != $warnColor ]]; then deviceStatusColor=$wearLevelColor; fi; fi; fi
+if [[ $deviceRedFlag == "true" ]]; then if [[ $deviceStatusColor != $critColor ]]; then if [[ $deviceStatusColor != $warnColor ]]; then deviceStatusColor=$spinRetryColor; fi; fi; fi
+if [[ $deviceRedFlag == "true" ]]; then if [[ $deviceStatusColor != $critColor ]]; then if [[ $deviceStatusColor != $warnColor ]]; then deviceStatusColor=$temp_maxColor; fi; fi; fi
+if [[ $deviceRedFlag == "true" ]]; then if [[ $deviceStatusColor != $critColor ]]; then if [[ $deviceStatusColor != $warnColor ]]; then deviceStatusColor=$tempColor; fi; fi; fi
+if [[ $smartStatusColor != $okColor ]]; then if [[ $deviceRedFlag == "true" ]]; then if [[ $deviceStatusColor != $critColor ]]; then if [[ $deviceStatusColor != $warnColor ]]; then deviceStatusColor=$smartStatusColor; fi; fi; fi; fi
 
 # SCT Error Recovery Control Report
 
@@ -3122,6 +3309,16 @@ echo 'NVM_Wear_Level="'$NVM_Wear_Level'"'
 echo 'NVM_Wear_Level_Title="'$NVM_Wear_Level_Title'"'
 echo " "
 echo " "
+echo "###### Mouseover"
+echo "# This will display the original value of an overriden value (one in yellow)"
+echo "# This is a tri-state value as explained below."
+echo '#   "true" will displaying the actual value via a mouseover.'
+echo '#   "false" will not generate any special email and will run as previous versions.'
+echo '#   "alt" will place the actual value within parentheses.  A great option if you email cliet cannot display mouseover.'
+echo " "
+echo 'Mouseover="'$Mouseover'"'
+echo " "
+echo " "
 echo "###### Drive Ignore List"
 echo "# What does it do:"
 echo "#  Use this to list any drives to ignore and remove from the report.  This is very useful for ignoring USB Flash Drives"
@@ -3195,6 +3392,7 @@ echo " "
 # Below line retained to be able to update from version 1.6c
 if [[ ! $BAD_SECTORS == "" ]]; then Bad_Sectors=$BAD_SECTORS; fi
 echo 'Bad_Sectors="'$Bad_Sectors'"'
+echo 'Bad_Sectors2="'$Bad_Sectors2'"'
 echo " "
 echo "######## ATA Error Log Silencing ##################"
 echo "# What does it do:"
@@ -3211,6 +3409,11 @@ echo "# are not proper.  Up to 24 unique drive values may be stored."
 echo "#"
 echo "# Use -config to set these values."
 echo " "
+
+# Need to adjust for Wear Level field if required.
+# Check to see if the value exists and if it does, append 'd' to the end of each entry.
+
+
 echo 'Custom_Drives="'$Custom_Drives'"'
 echo " "
 echo "####### Warranty Expiration Date"
@@ -3245,8 +3448,8 @@ echo "# The colors selected you can change but you will need to look up the prop
 echo " "
 if [[ $Update_Colors != "1" ]]; then
 echo 'okColor="'$okColor'"       # Hex code for color to use in SMART Status column if drives pass (default is darker light green, #b5fcb9).'
-echo 'warnColor="'$warnColor'"     # Hex code for WARN color (default is purple, #f765d0).'
-echo 'critColor="'$critColor'"     # Hex code for CRITICAL color (default is red, #ff0000).'
+echo 'warnColor="'$warnColor'"     # Hex code for WARN color (default is orange, #F38B16).'
+echo 'critColor="'$critColor'"     # Hex code for CRITICAL color (default is red, #f44336).'
 echo 'altColor="'$altColor'"      # Table background alternates row colors between white and this color (default is light gray, #f4f4f4).'
 echo 'whtColor="'$whtColor'"      # Hex for White background.'
 echo 'ovrdColor="'$ovrdColor'"     # Hex code for Override Yellow.'
@@ -3254,8 +3457,8 @@ echo 'blueColor="'$blueColor'"     # Hex code for Sky Blue, used for the SCRUB I
 echo 'yellowColor="'$yellowColor'"   # Hex code for pale yellow.'
 else
 echo 'okColor="#b5fcb9"       # Hex code for color to use in SMART Status column if drives pass (default is darker light green, #b5fcb9).'
-echo 'warnColor="#f765d0"     # Hex code for WARN color (default is purple, #f765d0).'
-echo 'critColor="#f44336"     # Hex code for CRITICAL color (default is red, #ff0000).'
+echo 'warnColor="#F38B16"     # Hex code for WARN color (default is orange, #F38B16).'
+echo 'critColor="#f44336"     # Hex code for CRITICAL color (default is red, #f44336).'
 echo 'altColor="#f4f4f4"      # Table background alternates row colors between white and this color (default is light gray, #f4f4f4).'
 echo 'whtColor="#ffffff"      # Hex for White background.'
 echo 'ovrdColor="#ffffe4"     # Hex code for Override Yellow.'
@@ -3327,6 +3530,11 @@ seek=""
 test_ata_error=""
 WarrantyClock=""
 warrantytemp=""
+wearLevelAdj=""
+crcErrorsOrig=""
+reAllocOrig=""
+reAllocEventOrig=""
+multiZoneOrig=""
 
 # And Reset bgColors
 if [[ "$bgColor" == "$altColor" ]]; then bgColor="#ffffff"; else bgColor="$altColor"; fi
@@ -4277,6 +4485,27 @@ case $Keyboard_var in
         if [[ ! $Keyboard_yn == "" ]]; then pool_capacity=$Keyboard_yn; fi
         echo "Set Value: "$pool_capacity
         echo " "
+        echo "Mouseover"
+        echo "This will allow any 'normalized' value to display the actual value"
+        echo "using one of three options:"
+        echo "'t'=true - Mouseover will popup the actual number over the normalized number."
+        echo "'f'=false - Only display the normalized value. (default)"
+        echo "'alt'=alternate - Will display the actual number in parentheses."
+        echo " "
+        echo "Current value: ("$Mouseover")"
+        echo "Enter 't' (true), 'f' (false), or 'a' (alt) :"
+        read -s -n 1 Keyboard_yn
+        if [[ $Keyboard_yn != "" ]] && [[ $Keyboard_yn != "t" ]] && [[ $Keyboard_yn != "f" ]] && [[ $Keyboard_yn != "a" ]]; then
+           echo "INCORRECT VALUE!: "$Keyboard_yn
+           echo "Setting default value"
+           Keyboard_yn="f"
+        fi
+        if [[ $Keyboard_yn == "t" ]]; then Keyboard_yn="true"; fi
+        if [[ $Keyboard_yn == "f" ]]; then Keyboard_yn="false"; fi
+        if [[ $Keyboard_yn == "a" ]]; then Keyboard_yn="alt"; fi
+        if [[ ! $Keyboard_yn == "" ]]; then Mouseover=$Keyboard_yn; fi
+        echo "Set Value: ("$Mouseover")"
+        echo " "
         echo "returning..."
         sleep 2
         ;;
@@ -4465,16 +4694,19 @@ case $Keyboard_var in
               if [[ ! $crcErrors == "0" ]] && [[ ! $crcErrors == "" ]]; then listofdrivescrc="$listofdrivescrc$serial":"$crcErrors,"; fi
               if [[ ! $multiZone == "0" ]] && [[ ! $multiZone == "" ]]; then listofdrivesmulti="$listofdrivesmulti$serial":"$multiZone,"; fi
               if [[ ! $reAlloc == "0" ]] && [[ ! $reAlloc == "" ]]; then listofdrivesbad="$listofdrivesbad$serial":"$reAlloc,"; fi
+              if [[ ! $reAllocEvent == "0" ]] && [[ ! $reAllocEvent == "" ]]; then listofdrivesbad2="$listofdrivesbad2$serial":"$reAllocEvent,"; fi
            done
            echo "Scanning Results:"
            if [[ ! $listofdrivescrc == "" ]]; then CRC_Errors="$(echo "$listofdrivescrc" | sed 's/.$//')"; echo "UDMA_CRC Errors detected"; else CRC_Errors=""; echo "No UDMA_CRC Errors"; fi
            if [[ ! $listofdrivesmulti == "" ]]; then Multi_Zone="$(echo "$listofdrivesmulti" | sed 's/.$//')"; echo "MultiZone Errors Detected"; else Multi_Zone=""; echo "No MultiZone Errors"; fi
            if [[ ! $listofdrivesbad == "" ]]; then Bad_Sectors="$(echo "$listofdrivesbad" | sed 's/.$//')"; echo "Bad Sectors Detected"; else Bad_Sectors=""; echo "No Reallocated Sectors"; fi
+           if [[ ! $listofdrivesbad2 == "" ]]; then Bad_Sectors2="$(echo "$listofdrivesbad2" | sed 's/.$//')"; echo "Bad Sectors Detected"; else Bad_Sectors2=""; echo "No Reallocated Sectors"; fi
            echo " "
            echo "Values Set:"
            echo "CRC_Errors: "$CRC_Errors
            echo "Multi_Zone_Errors: "$Multi_Zone
            echo "Reallocated_Sectors: "$Bad_Sectors
+           echo "Reallocated_Sectors_Events: "$Bad_Sectors2
            echo " "
         fi
         if [[ ! $autoselect == "1" ]] && [[ $Keyboard_yn == "n" ]]; then
@@ -4555,6 +4787,37 @@ case $Keyboard_var in
               if [[ ! $drive_select == "" ]]; then Bad_Sectors="$(echo "$drive_select" | sed 's/.$//')"; else Bad_Sectors="none"; fi
            fi
            echo "Set Value: "$Bad_Sectors
+
+
+           echo " "
+           echo "Offset Bad Sector Event Errors"
+           echo "Press 'd' to delete, 'e' to edit, or Enter/Return to accept."
+           echo "Current: "$Bad_Sectors2
+           read -s -n 1 Keyboard_yn
+           if [[ ! $Keyboard_yn == "" ]]; then Bad_Sectors2=$Keyboard_yn; fi
+           if [[ $Keyboard_yn == "d" ]]; then Bad_Sectors2=""; fi
+           if [[ $Keyboard_yn == "e" ]]; then
+           # Let's list each drive and ask to keep or reject
+              drive_select=""
+              for drive in $smartdrivesall; do
+                 clear_variables
+                 get_drive_data
+                 echo " "
+                 echo "Do you want to add this drive (y/n): Drive ID: "$drive" Serial Number: "$serial
+                 read -s -n 1 Keyboard_yn
+                 if [[ $Keyboard_yn == "y" ]]; then drive_select=$drive_select$serial":"
+                 echo "Enter the Bad Sector count offset you desire: "
+                 read Keyboard_yn
+                 drive_select=$drive_select$Keyboard_yn","
+                 echo "drive_select="$drive_select
+                 fi
+              done
+              if [[ ! $drive_select == "" ]]; then Bad_Sectors2="$(echo "$drive_select" | sed 's/.$//')"; else Bad_Sectors2="none"; fi
+           fi
+           echo "Set Value: "$Bad_Sectors2
+
+
+
         fi
         echo " "
         echo "Automatic ATA Error Count Updates - This will automatically have the script"
@@ -4745,6 +5008,7 @@ case $Keyboard_var in
                           testAgeWarnx="$(echo $i | cut -d':' -f 13)"
                           testAgeOvrd="$(echo $i | cut -d':' -f 14)"
                           heliumMinx="$(echo $i | cut -d':' -f 15)"
+                          wearLevelAdj="$(echo $i | cut -d":" -f 16)"
                        fi
                  done
                  echo " "
@@ -4756,6 +5020,7 @@ case $Keyboard_var in
                  echo "Seek Error Rate Warning=("$seekErrorsWarnx")  Seek Error Rate Critical=("$seekErrorsCritx")"
                  echo "Test Age=("$testAgeWarnx")  Ignore Test Age=("$testAgeOvrd")"
                  echo "Helium Minimum Level=("$heliumMinx")"
+                 echo "Wear Level Adjustment=("$wearLevelAdj")"
                  echo " "
                  echo "Do you want to delete this drive from the custom configuration (y/n)?"
                  read -s -n 1 Keyboard_yn
@@ -4786,7 +5051,7 @@ case $Keyboard_var in
                  fi
               fi
 
-              # Lets assign the local variables with the default values.  They will be change
+              # Lets assign the local variables with the default values.  They will be changed
               # later if the drive is in the Custom_Drives variable.
 
               sectorswarn=$sectorsWarn
@@ -4801,6 +5066,7 @@ case $Keyboard_var in
               testage=$testAgeWarn
               testAgeOvrd="0"
               heliummin=$heliumMin
+              wearleveladj="d"
 
               if [[ ! "$(echo $Custom_Drives | grep $serial)" ]]; then
                  echo "The drive "$serial" is not in the Custom Drive Config database."
@@ -4826,6 +5092,7 @@ case $Keyboard_var in
                  echo "Seek Error Rate Warning=("$seekerrorswarn")  Seek Error Rate Critical=("$seekerrorscrit")"
                  echo "Test Age=("$testage")  Ignore Test Age=("$testAgeOvrd")"
                  echo "Helium Minimum Level=("$heliummin")"
+                 echo "Wear Level Adjusment=("$wearleveladj")"
                  echo " "
 
                  echo "Would you like to customize an Alarm Setpoint for this drive?"
@@ -4950,6 +5217,30 @@ case $Keyboard_var in
                       else
                          heliummin=$Keyboard_yn
                       fi
+                   echo "Wear Level Adjustment=("$wearleveladj") "
+                   echo "NOTE: Wear Level Adjustment is set to 'd' for default or 'r' for Reverse value."
+                    read Keyboard_yn
+                      if [[ $Keyboard_yn == "" ]]; then
+                         wearleveladj="d"
+                      else
+                         wearleveladj=$Keyboard_yn
+                      fi
+                      if [[ $wearleveladj == "d" ]] || [[ $wearleveladj == "r" ]] || [[ $wearleveladj == "" ]]; then
+                         if [[ $Keyboard_yn == "" ]]; then
+                            wearleveladj="d"
+                         else
+                            wearleveladj=$Keyboard_yn
+                         fi
+                      else   
+                         echo "ERROR, Incorrect Value!  Must be 'Enter/Return', 'd', or 'r'"
+                         echo -n "Enter new value :"
+                         read Keyboard_yn
+                         if [[ $Keyboard_yn == "" ]]; then
+                            wearleveladj="d"
+                         else
+                            wearleveladj=$Keyboard_yn
+                         fi                         
+                      fi 
 
                  echo " "
                  echo "The current alarm setpoints are ('d' = system default):"
@@ -4960,6 +5251,7 @@ case $Keyboard_var in
                  echo "Seek Error Rate Warning=("$seekerrorswarn")  Seek Error Rate Critical=("$seekerrorscrit")"
                  echo "Test Age=("$testage")  Ignore Test Age=("$testAgeOvrd")"
                  echo "Helium Minimum Level=("$heliummin")"
+                 echo "Wear Level Adjustment=("$wearleveladj")"
                  echo " "
 
                     echo "Adding "$drive" Serial Number: "$serial" to the custom configuration"
@@ -4968,9 +5260,9 @@ case $Keyboard_var in
                     # Add all the current values for this $serial to the Custom_Drives variable.
          
                     if [[ $Custom_Drives == "" ]]; then
-                       Custom_Drives=$serial":"$tempwarn":"$tempcrit":"$sectorswarn":"$sectorscrit":"$reallocwarn":"$multizonewarn":"$multizonecrit":"$rawreadwarn":"$rawreadcrit":"$seekerrorswarn":"$seekerrorscrit":"$testage":"$testAgeOvrd":"$heliummin
+                       Custom_Drives=$serial":"$tempwarn":"$tempcrit":"$sectorswarn":"$sectorscrit":"$reallocwarn":"$multizonewarn":"$multizonecrit":"$rawreadwarn":"$rawreadcrit":"$seekerrorswarn":"$seekerrorscrit":"$testage":"$testAgeOvrd":"$heliummin":"$wearleveladj
                     else
-                       Custom_Drives=$Custom_Drives","$serial":"$tempwarn":"$tempcrit":"$sectorswarn":"$sectorscrit":"$reallocwarn":"$multizonewarn":"$multizonecrit":"$rawreadwarn":"$rawreadcrit":"$seekerrorswarn":"$seekerrorscrit":"$testage":"$testAgeOvrd":"$heliummin
+                       Custom_Drives=$Custom_Drives","$serial":"$tempwarn":"$tempcrit":"$sectorswarn":"$sectorscrit":"$reallocwarn":"$multizonewarn":"$multizonecrit":"$rawreadwarn":"$rawreadcrit":"$seekerrorswarn":"$seekerrorscrit":"$testage":"$testAgeOvrd":"$heliummin":"$wearleveladj
                     fi
             echo " "
             else
@@ -5428,6 +5720,16 @@ echo 'NVM_Wear_Level="true"'
 echo 'NVM_Wear_Level_Title="Wear Level"'
 echo " "
 echo " "
+echo "###### Mouseover"
+echo "# This will display the original value of an overriden value (one in yellow)"
+echo "# This is a tri-state value as explained below."
+echo '#   "true" will displaying the actual value via a mouseover.'
+echo '#   "false" will not generate any special email and will run as previous versions.'
+echo '#   "alt" will place the actual value within parentheses.  A great option if you email cliet cannot display mouseover.'
+echo " "
+echo 'Mouseover="false"'
+echo " "
+echo " "
 echo "###### Drive Ignore List"
 echo "# What does it do:"
 echo "#  Use this to list any drives to ignore and remove from the report.  This is very useful for ignoring USB Flash Drives"
@@ -5497,6 +5799,7 @@ echo "# How to use it:"
 echo "#   Use same format as CRC_Errors (see above)."
 echo " "
 if [[ $Bad_Sectors == "" ]]; then echo 'Bad_Sectors="none"'; else echo 'Bad_Sectors="'$Bad_Sectors'"'; fi
+if [[ $Bad_Sectors2 == "" ]]; then echo 'Bad_Sectors2="none"'; else echo 'Bad_Sectors2="'$Bad_Sectors2'"'; fi
 echo " "
 echo "######## ATA Error Log Silencing ##################"
 echo "# What does it do:"
@@ -5543,8 +5846,8 @@ echo "###### Global table of colors"
 echo "# The colors selected you can change but you will need to look up the proper HEX code for a color."
 echo " "
 echo 'okColor="#b5fcb9"       # Hex code for color to use in SMART Status column if drives pass (default is darker light green, #b5fcb9).'
-echo 'warnColor="#f765d0"     # Hex code for WARN color (default is purple, #f765d0).'
-echo 'critColor="#f44336"     # Hex code for CRITICAL color (default is red, #ff0000).'
+echo 'warnColor="#F38B16"     # Hex code for WARN color (default is orange, #F38B16).'
+echo 'critColor="#f44336"     # Hex code for CRITICAL color (default is red, #f44336).'
 echo 'altColor="#f4f4f4"      # Table background alternates row colors between white and this color (default is light gray, #f4f4f4).'
 echo 'whtColor="#ffffff"      # Hex for White background.'
 echo 'ovrdColor="#ffffe4"     # Hex code for Override Yellow.'
@@ -5950,43 +6253,68 @@ if [[ "$1" == "HDD" ]]; then
 create_testdata_text_file
 
 testfile="$2"
+testfile2="$3"
 
 if test -f "$testfile"; then
-echo "Test File Exists"
+echo "Test File 1 Exists"
 else
-echo "Test File Does Not Exist"
+echo "Test File 1 Does Not Exist"
+exit 1
+fi
+if test -f "$testfile2"; then
+echo "Test File 2 Exists"
+else
+echo "Test File 2 Does Not Exist"
 exit 1
 fi
 fi
 
 get_smartHDD_listings
 testfile=""
+testfile2=""
 
 if [[ "$1" == "SSD" ]]; then
 testfile="$2"
+testfile2="$3"
+
 if test -f "$testfile"; then
-echo "Test File Exists"
+echo "Test File 1 Exists"
 else
-echo "Test File Does Not Exist"
+echo "Test File 1 Does Not Exist"
+exit 1
+fi
+if test -f "$testfile2"; then
+echo "Test File 2 Exists"
+else
+echo "Test File 2 Does Not Exist"
 exit 1
 fi
 fi
 get_smartSSD_listings
 testfile=""
+testfile2=""
 
 if [[ "$1" == "NVM" ]]; then
 testfile="$2"
+testfile2="$3"
 
 if test -f "$testfile"; then
-echo "Test File Exists"
+echo "Test File 1 Exists"
 else
-echo "Test File Does Not Exist"
+echo "Test File 1 Does Not Exist"
+exit 1
+fi
+if test -f "$testfile2"; then
+echo "Test File 2 Exists"
+else
+echo "Test File 2 Does Not Exist"
 exit 1
 fi
 fi
 
 get_smartNVM_listings
 testfile=""
+testfile2=""
 
 get_smartOther_listings
 
@@ -6015,6 +6343,7 @@ if [[ "$smartdrives" != "" ]]; then
 generate_table "HDD"
 if [[ "$1" == "HDD" ]]; then
   testfile="$2"
+  testfile2="$3"
 fi
 
 for drive in $smartdrives; do
@@ -6026,7 +6355,7 @@ done
 end_table "HDD"
 fi
 testfile=""
-
+testfile2=""
 # Generate SSD Report
 SER1=""
 if [[ $includeSSD == "true" ]]; then
@@ -6035,6 +6364,7 @@ if [[ $includeSSD == "true" ]]; then
      generate_table "SSD"
        if [[ "$1" == "SSD" ]]; then
           testfile="$2"
+          testfile2="$3"
        fi
      for drive in $smartdrivesSSD; do
        clear_variables
@@ -6044,6 +6374,7 @@ if [[ $includeSSD == "true" ]]; then
      done
      end_table "SSD"
      testfile=""
+     testfile2=""
    fi
 fi
 
@@ -6054,6 +6385,7 @@ if [[ $includeNVM == "true" ]]; then
      generate_table "NVM"
        if [[ "$1" == "NVM" ]]; then
           testfile="$2"
+          testfile2="$3"
        fi
        for drive in $smartdrivesNVM; do
          clear_variables
@@ -6063,6 +6395,7 @@ if [[ $includeNVM == "true" ]]; then
        done
        end_table "NVM"
        testfile=""
+       testfile2=""
    fi
 fi
        for drive in $nonsmartdrives; do
@@ -6085,6 +6418,8 @@ if [[ $reportnonSMART == "true" ]]; then
   fi
 fi
 fi
+
+echo "End of data section" >> "$logfile"
 # Update multi_report_config.txt file if required.
    if [[ $write_ata_errors == "1" ]]; then
        ata_errors="$(echo "$temp_ata_errors" | sed 's/.$//')"
@@ -6096,7 +6431,11 @@ if [[ "$1" == "-s" ]]; then
 else
   email_datafile
   remove_junk_report
-  create_email
+#  if [[ $Sample_Test == "true" ]]; then
+     cp "$logfile" output.html
+#  else
+     create_email
+#  fi
 fi
 
 # All reporting files are left in the /tmp/ directory for troubleshooting and cleaned up when the script is initial run.
