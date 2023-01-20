@@ -26,8 +26,8 @@ LANG="en_US.UTF-8"
 #   - Added Mouseover and Alternate '()' to Mouseover for normalized values (Reallocated Sectors, Reallocated Sector Events, UDMA CRC, MultiZone).
 #   - Updated Testing Code to accept both drive_a and drive_x files.
 #   - Added Zpool Fragmentation value by request.
-#   - Added '-dump email' parameter to send joeschmuck2023@hotmail.com and email with the drive data and the multi_report_config.txt file ONLY.
-#   - Added Drive dump data in JSON format.  It looks like a better way to pharse the drive data.  Still retaining the older file format for now.
+#   - Added '-dump email' parameter to send joeschmuck2023@hotmail.com an email with the drive data and the multi_report_config.txt file ONLY.
+#   - Added Drive dump data in JSON format.  It looks like a better way to parse the drive data.  Still retaining the older file format for now.
 #
 #   The multi_report_config file will automatically update previous versions to add new features.
 #
