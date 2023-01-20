@@ -14,29 +14,22 @@ LANG="en_US.UTF-8"
 ### Version v1.4, v1.5, v1.6, v2.0 FreeNAS/TrueNAS (Core & Scale) (joeschmuck)
 
 ### Changelog:
-# v2.0 (14 January 2023)
-#
-#
+# v2.0 (20 January 2023)
 #   - Formatted all -config screens to fit into 80 column x 24 lines.
 #   - Removed custom builds
 #   - Fixed Custom Configuration Delete Function.
 #   - Fixed Zpool Scrub Bytes for FreeNAS 11.x
 #   - Fixed SMART Test to allow for 'Offline' value.
 #   - Modified Wear Level script to account for 'Reverse' Adjustment.
-#   - Added Wear Level Adjustment to the Custom Drive configuration.
+#   - Added Wear Level Adjustment Reversing to the Custom Drive configuration.
 #   - Added Output.html to -dump command.
-#   - Added Alternate to Mouseover for normalized values.  Parens to support non-mouseover email clients.
+#   - Added Mouseover and Alternate '()' to Mouseover for normalized values (Reallocated Sectors, Reallocated Sector Events, UDMA CRC, MultiZone).
+#   - Updated Testing Code to accept both drive_a and drive_x files.
+#   - Added Zpool Fragmentation value by request.
+#   - Added '-dump email' parameter to send joeschmuck2023@hotmail.com and email with the drive data and the multi_report_config.txt file ONLY.
+#   - Added Drive dump data in JSON format.  It looks like a better way to pharse the drive data.  Still retaining the older file format for now.
 #
-#   ** Can I add a Mouse Over to the chart data that was overridden and display the actual value?
-#   ** Need to restructure and save any overridable values for the mouseover.
-#   ** Use <span title="$var">$adjustedvar</span></td>
-#
-#   ** Updated Testing Code to accept both drive_a and drive_x files.
-#   *** Update script to allow only drive_a file as it was before.  This could be a lot more IF statements.
-#
-#   ** Send this out for testing since there were some big changes.  Make sure the math works for everything, especially the new drive_x changes.
-#
-#
+#   The multi_report_config file will automatically update previous versions to add new features.
 #
 # v1.6f (27 December 2022)
 #   - Added recognition for WDC SSD "230 Media_Wearout_Indicator".
@@ -123,7 +116,7 @@ LANG="en_US.UTF-8"
 #   - Reads the drives much less often (3 times each I believe).
 #   - Added test input file to parse txt files of smartctl -a output. This will allow for a single drive entry and ability
 #   -- for myself or any script writer to identify additional parameters for unrecognized drives.
-#   -- Usage: program_name.sh [HDD|SSD|NVM] [inputfile.txt]
+#   -- Usage: program_name.sh [HDD|SSD|NVM] [inputfile_a.txt] [inputfile_b.txt]
 #   - Added better support for SAS drives.
 #   - Fixed NVMe and SAS Power On Hours for statistical data recording, and other things.
 #   - Added Critical and Warning Logs to email output with better descriptive data.
@@ -222,9 +215,15 @@ LANG="en_US.UTF-8"
 ######### INSTRUCTIONS ON USE OF THIS SCRIPT
 #
 # This script will perform three main functions:
-# 1: Generate a report and send an email on your drive(s) status.
-# 2: Create a copy of your Config File and attach to the same email.
-# 3: Create a statistical database and attach to the same email.
+# 1: Generate a Pool/Drive report and send an email.
+# 2: Create a copy of your FreeNAS/TrueNAS Config File and attach to the email.
+# 3: Create a statistical database and optionally attach to the email.
+#
+# This script has been designed to primarily run using an external reusable configuration file which is
+# configured by running the script with the -config parameter.
+# 
+# You may opt to not using the extternal configuration file and manually change the User-definable
+# Parameters within this script.
 #
 # In order to configure the script properly read over the User-definable Parameters before making any changes.
 # Make changes as indicated by the section instructions.
@@ -234,7 +233,7 @@ LANG="en_US.UTF-8"
 #
 # If you create an external configuration file, you never have to edit the script,
 # so how many times do I need to say it is highly recommended?  And I may force the
-# change to require the external configuration file.
+# change to require the external configuration file eventually to make the script a little smaller.
 #
 # You may need to make the script executable using "chmod +x program_name.sh"
 #
@@ -242,23 +241,23 @@ LANG="en_US.UTF-8"
 ###### User-definable Parameters (IF YOU DO NOT WANT TO USE THE EXTERNAL CONFIGURATION FILE) #######
 #
 # Modifying the script below should ONLY be done if you are not using an External Configuration File.
-# The External Configuration File allows the end user not having to update the script every time a change comes out.
-# It is highly recommended to use the external configuration file, eventually the functionality may go away
-# using the script without the external configuration file.
+# The External Configuration File allows the end user to not be required to update the script every time a
+# new change comes out. It is highly recommended to use the external configuration file, eventually
+# I plan to make the external configuration file a requirment.
 #
-# The sections below configure the script to your needs.  Please follow the instructions as it will matter, you cannot
-# just "wing it".  Configurations are exact.  We use basically three different formats, Variables = true/false,
+# The sections below configures the script to your needs.  Please follow the instructions as it will matter, you cannot
+# just "wing it".  Configurations are exact.  We use generally three different formats, Variables = true/false,
 # Variables = NUMBER, and Variables = Comma Separated Variable (CSV) Strings.  Each variable will have a description
 # associated with it, read it carefully.
 #
 # The default configuration will work right out of the box however one item must be changed, your email address.
-# I highly recommend to try out the default setup first and then make changes as desired.  The only two changes
-# I recommend is of course your email address, the second is the location of the statistical_data_file.cvs.
+# I highly recommend you try out the default setup first and then make changes as desired.  The only two changes
+# I recommend is of course your email address, the second is the location of the 'statistical_data_file.cvs'.
 #
 # Pay attention to any changes you make, accidentally deleting a quote will cause the entire script to fail.
 # Do not continue editing the script after the User Definable Section unless you know what you are doing.
 #
-# This script will not harm your drives.  We are mostly only collecting drive data. All file writes are
+# This script will not harm your drives.  We are mostly only collecting drive status data. All file writes are
 # to /tmp space.  One exception: statistical_data_file.cvs is stored in /tmp by default however if you desire
 # to maintain this data it must be stored in a dataset (user selected).
 
@@ -338,6 +337,9 @@ SCT_Write_Timeout=70      # Set to the write threshold. Default = 70 = 7.0 secon
  
 # SMART Testing Alarm
 testAgeWarn=2             # Maximum age (in days) of last SMART test before CRITICAL color/message will be used.
+
+# Zpool Fragmentation Alarm
+zpoolFragWarn=80          # Percent of fragmentation before a Warning message occurs.
  
 ###### Statistical Data File
 statistical_data_file="$SCRIPT_DIR/statisticalsmartdata.csv"    # Default location is where the script is located.
@@ -378,6 +380,7 @@ Zpool_Used_Space_Title="Used Space"
 Zfs_Pool_Size_Title="^Pool Size"
 Zfs_Free_Space_Title="^Free Space"
 Zfs_Used_Space_Title="^Used Space"
+Zpool_Frag_Title="Frag"
 Zpool_Read_Errors_Title="Read Errors"
 Zpool_Write_Errors_Title="Write Errors"
 Zpool_Checksum_Errors_Title="Cksum Errors"
@@ -505,9 +508,9 @@ NVM_Wear_Level_Title="Wear Level"
 ###### Mouseover
 # This will display the original value of an overriden value (one in yellow)
 # This is a tri-state value as explained below.
-#   "true" will displaying the actual value via a mouseover.
-#   "false" will not generate any special email and will run as previous versions.
-#   "alt" will place the actual value within parentheses.  A great option if you email cliet can't display mouseover.
+#   "true" will displaying the actual value via a mouseover html link. Still working to make this a true Mouseover.
+#   "false" will not generate any special chart and will run as previous versions.
+#   "alt" will place the actual value within parentheses.  An option if your email cliet can't display mouseover.
 
 Mouseover="alt"
 
@@ -662,24 +665,25 @@ logfile_warranty_temp="/tmp/smart_report_warranty_flag.tmp"
 logfile_messages_temp="/tmp/smart_report_messages.tmp"
 boundary="gc0p4Jq0M2Yt08jU534c0p"
 
-progverdate="2023-01-14"
+progname="Multi-Report v2.0 dtd:"
+progverdate="2023-01-20"
 
 if [[ $softver != "Linux" ]]; then
   if [[ "$(cat /etc/version | grep "FreeNAS")" ]]; then
-     programver="Multi-Report v2.0-Beta dtd:"$progverdate" (FreeNAS "$(cat /etc/version | cut -d " " -f1 | sed 's/FreeNAS-//')")"
+     programver=progname$progverdate" (FreeNAS "$(cat /etc/version | cut -d " " -f1 | sed 's/FreeNAS-//')")"
      programver2="$(cat /etc/version | cut -d"-" -f1)"
   else
-     programver="Multi-Report v2.0-Beta dtd:"$progverdate" (TrueNAS Core "$(cat /etc/version | cut -d " " -f1 | sed 's/TrueNAS-//')")"
+     programver=$progname$progverdate" (TrueNAS Core "$(cat /etc/version | cut -d " " -f1 | sed 's/TrueNAS-//')")"
      programver2="$(cat /etc/version | cut -d"-" -f1)"
   fi
 else
-  programver="Multi-Report v2.0-Beta dtd:"$progverdate" (TrueNAS Scale "$(cat /etc/version)")"
+  programver=$progname$progverdate" (TrueNAS Scale "$(cat /etc/version)")"
   programver2="$(cat /etc/version | cut -d" " -f1)"
 fi
 
 # If the config file format changes, this is the latest working date, anything older must be updated.
 # Format must be "yyyy-mm-dd"
-valid_config_version_date="2022-01-07"
+valid_config_version_date="2023-01-20"
 
 ##########################
 ##########################
@@ -764,24 +768,6 @@ if [[ $1 == "0" ]]; then Return_Value=0; fi
 #echo "Return_Value="$Return_Value
 }
 
-#################### CHECK OPEN FILE #####################
-# This routine is no longer used and can be deleted.
-# Checks if the file is open before continuing.
-# Passes $1=filename
-# Loop for up to 60 seconds waiting for the file to close.
-
-check_open_file () {
-for (( y=1; y<=60; y++ ))
-do
-   check_file=$1
-   result=`fuser -f $check_file 2>&1`
-   pid=`echo $result | cut -d ':' -f 2`
-   if [ -z "$pid" ]; then return; fi
-   echo "File $1 Open - Delayed"
-   sleep .5
-done
-}
-
 
 #################### Force Slight Delay ####################
 # I think there is a race condition when writing to $logfile, trying to slow this down.
@@ -858,7 +844,7 @@ if [ "$expDataEmail" == "true" ]; then
       echo "Content-Transfer-Encoding: base64"
       echo "Content-Disposition: attachment; filename=Statistical_Data.csv"
       base64 "$statistical_data_file"
-      if [[ "$dump_all" == "1" || "$dump_all" == "2" ]]; then echo "--${boundary}"; else echo "--${boundary}--"; fi
+      if [[ "$dump_all" != "0" ]]; then echo "--${boundary}"; else echo "--${boundary}--"; fi
       ) >> "$logfile"
 force_delay
    fi
@@ -1141,9 +1127,9 @@ zpool_report () {
     echo "<br><br>"
     echo "<table style=\"border: 1px solid black; border-collapse: collapse;\">"
 if [[ $pool_capacity == "zfs" ]]; then
-    echo "<tr><th colspan=\"12\" style=\"text-align:center; font-size:20px; height:40px; font-family:courier;\"><span style='color:gray;'>*</span>ZPool/ZFS Status Report Summary</th></tr>"
+    echo "<tr><th colspan=\"13\" style=\"text-align:center; font-size:20px; height:40px; font-family:courier;\"><span style='color:gray;'>*</span>ZPool/ZFS Status Report Summary</th></tr>"
 else
-    echo "<tr><th colspan=\"12\" style=\"text-align:center; font-size:20px; height:40px; font-family:courier;\"><span style='color:gray;'>*</span>ZPool Status Report Summary</th></tr>"
+    echo "<tr><th colspan=\"13\" style=\"text-align:center; font-size:20px; height:40px; font-family:courier;\"><span style='color:gray;'>*</span>ZPool Status Report Summary</th></tr>"
 fi
     echo "<tr>"
     echo "  <th style=\"text-align:center; width:130px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$Zpool_Pool_Name_Title"</th>"
@@ -1151,6 +1137,7 @@ fi
     echo "  <th style=\"text-align:center; width:80px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$Zpool_Pool_Size_Title"</th>"
     echo "  <th style=\"text-align:center; width:80px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$Zpool_Free_Space_Title"</th>"
     echo "  <th style=\"text-align:center; width:120px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$Zpool_Used_Space_Title"</th>"
+    echo "  <th style=\"text-align:center; width:80px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$Zpool_Frag_Title"</th>"
     echo "  <th style=\"text-align:center; width:80px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$Zpool_Read_Errors_Title"</th>"
     echo "  <th style=\"text-align:center; width:80px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$Zpool_Write_Errors_Title"</th>"
     echo "  <th style=\"text-align:center; width:80px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$Zpool_Checksum_Errors_Title"</th>"
@@ -1242,6 +1229,7 @@ for pool in $pools; do
     pool_free="$(zpool list -H -o free "$pool")"
     pool_used="$(zpool list -H -o allocated "$pool")"
 
+
     # Gather info from most recent scrub; values set to "$non_exist_value" initially and overwritten when (and if) it gathers scrub info
     scrubRepBytes="$non_exist_value"
     scrubErrors="$non_exist_value"
@@ -1249,6 +1237,10 @@ for pool in $pools; do
     scrubTime="$non_exist_value"
     statusOutput="$(zpool status "$pool")"
 
+### Fragmentation Data
+    frag="$(zpool list -H -o frag "$pool")"
+    frag="$(echo $frag | tr -d '%' )"
+    
 
 ### Fix for SCRUB lasting longer than 24 hours.
 scrubDays="$(echo "$statusOutput" | grep "scan" | awk '{print $7}')"
@@ -1338,7 +1330,7 @@ fi
     if [ $((poolNum % 2)) == 1 ]; then bgColor="#ffffff"; else bgColor="$altColor"; fi
     poolNum=$((poolNum + 1))
     # Set up conditions for warning or critical colors to be used in place of standard background colors
-    if [ "$status" != "ONLINE" ]; then statusColor="$warnColor"; echo "$pool - Scrub Offline Error<br>" >> "$logfile_critical"; else statusColor="$bgColor"; fi
+    if [ "$status" != "ONLINE" ]; then statusColor="$warnColor"; echo "$pool - Scrub Online Error<br>" >> "$logfile_critical"; else statusColor="$bgColor"; fi
     if [ "$readErrors" != "0" ]; then readErrorsColor="$warnColor"; echo "$pool - Scrub Read Errors<br>" >> "$logfile_warning"; else readErrorsColor="$bgColor"; fi
     if [ "$writeErrors" != "0" ]; then writeErrorsColor="$warnColor"; echo "$pool - Scrub Write Errors<br>" >> "$logfile_warning"; else writeErrorsColor="$bgColor"; fi
     if [ "$cksumErrors" != "0" ]; then cksumErrorsColor="$warnColor"; echo "$pool - Scrub Cksum Errors<br>" >> "$logfile_warning"; else cksumErrorsColor="$bgColor"; fi
@@ -1347,6 +1339,8 @@ fi
     if [ "$scrubErrors" != "$non_exist_value" ] && [ "$scrubErrors" != "0" ]; then scrubErrorsColor="$warnColor"; echo "$pool - Scrub Errors<br>" >> "$logfile_critical"; else scrubErrorsColor="$bgColor"; fi
     if [ "$(echo "$scrubAge" | awk '{print int($1)}')" -gt "$scrubAgeWarn" ]; then scrubAgeColor="$warnColor"; echo "$pool - Scrub Age" >> "$logfile_warning"; else scrubAgeColor="$bgColor"; fi
     if [ "$scrubAge" == "In Progress" ]; then scrubAgeColor="$blueColor"; fi
+    if [[ $frag > $zpoolFragWarn ]]; then fragColor="$warnColor"; echo "$pool - Fragmentation above Threshold - $frag%<br>" >> "$logfile_warning"; else fragColor="$bgColor"; fi
+    frag=" "$frag"%"
 
 if [[ $pool_capacity == "zfs" ]]; then
 pool_size=$zfs_pool_size
@@ -1369,8 +1363,9 @@ fi
             <td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>
             <td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>
             <td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>
+            <td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>
             <td style=\"text-align:center; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>
-        </tr>\\n" "$bgColor" "$pool" "$statusColor" "$status" "$pool_size" "$pool_free" "$usedColor" "$used" "$readErrorsColor" "$readErrors" "$writeErrorsColor" "$writeErrors" "$cksumErrorsColor" \
+        </tr>\\n" "$bgColor" "$pool" "$statusColor" "$status" "$pool_size" "$pool_free" "$usedColor" "$used" "$fragColor" "$frag" "$readErrorsColor" "$readErrors" "$writeErrorsColor" "$writeErrors" "$cksumErrorsColor" \
         "$cksumErrors" "$scrubRepBytesColor" "$scrubRepBytes" "$scrubErrorsColor" "$scrubErrors" "$scrubAgeColor" "$scrubAge" "$scrubTime"
     ) >> "$logfile"
 force_delay
@@ -1388,18 +1383,62 @@ force_delay
 fi
 }
 
+######################### GET JSON DATA ##############################
+get_json_data () {
+
+# Lets collect all the JSON data we would ever need here and use this
+# to add to the -dump data.  It will also be used to supplement the
+# smartdata/smartdata2 data in the future.
+
+# Use $drive parameter.
+
+if [[ "$drive" != "cd0" ]]; then
+
+     if [[ "$dump_all" != "0" ]]; then
+
+       # Pull a fresh JSON listing
+        tempjson="$(smartctl -x --json /dev/${drive})"
+
+       #Backup Files for testing if tempjson does not fill all needs.
+        tempjson1="$(smartctl -AHijl xselftest,selftest --log="devstat" /dev/${drive})"
+        tempjson2="$(smartctl -AHil error -l xselftest,selftest --log="devstat" /dev/${drive})"
+
+        brand1="$(echo "${tempjson}" | jq -Mre '.model_name | values' | cut -d " " -f 1)"
+        serial1="$(echo "${tempjson}" | jq -Mre '.serial_number | values')"
+        rpm="$(echo "${tempjson}" | jq -Mre '.rotation_rate | values')"
+        if [[ "$rpm" == "0" ]]; then drivetype="SSD"; else drivetype="HDD"; fi
+        if [[ "$(echo $tempjson | grep -i "nvm")" ]]; then drivetype="NVM"; fi
+
+        echo "$tempjson" > "/tmp/${drive}_${drivetype}_${serial1}_json.txt"
+       #echo "$tempjson1" > "/tmp/${drive}_${drivetype}_${serial1}_1.json"
+       #echo "$tempjson2" > "/tmp/${drive}_${drivetype}_${serial1}_2.json"
+     fi
+
+fi
+
+}
+
+
 ######################### GET DRIVE DATA #############################
 get_drive_data () {
 
 if [[ "$drive" == "nvme50" || "$drive" == "ada50" ]]; then
    smartdata="$(cat "$testfile")"
-   smartdata2="$(cat "$testfile2")"
+   if [[ "$testfile2" != "" ]]; then
+      smartdata2="$(cat "$testfile2")"
+   else
+      smartdata2="$(cat "$testfile")"
+   fi
    echo "Modified smartdata="
    cat "$testfile"
 else
+
+# Call get_json_data to collect this data
+get_json_data
+
    smartdata="$(smartctl -a /dev/"$drive")"
    smartdata2="$(smartctl -x /dev/"$drive")"
-     if [[ "$dump_all" == "1" || "$dump_all" == "2" ]]; then
+     if [[ "$dump_all" != "0" ]]; then
         "$(echo "$smartdata" > /tmp/drive_${drive}_a.txt)" 2> /dev/null
         "$(smartctl -x /dev/"$drive" > /tmp/drive_${drive}_x.txt)" 2> /dev/null
         if [[ ! -f "/tmp/drive_${drive}_a.txt" ]]; then echo "sleeping"; sleep 5; fi
@@ -1439,22 +1478,22 @@ else
    if [[ "$(echo "$smartdata" | grep "remaining" | awk '{print $1}')" ]]; then
       smarttesting="$(echo "$smartdata" | grep "remaining" | awk '{print $1}' | tr -d '[%]')"; fi
 
-   if [[ "$(echo "$smartdata2" | grep "# 1" | awk '{print $5}')" ]]; then
-      chkreadfailure="$(echo "$smartdata2" | grep "# 1" | awk '{print $5}')"; fi
+   if [[ "$(echo "$smartdata" | grep "# 1" | awk '{print $5}')" ]]; then
+      chkreadfailure="$(echo "$smartdata" | grep "# 1" | awk '{print $5}')"; fi
 
    if [[ "$sas" == 0 ]]; then
-      if [[ "$(echo "$smartdata2" | grep "# 1" | awk '{print $9}')" =~ [%]+$ ]]; then
-         lastTestHours="$(echo "$smartdata2" | grep "# 1" | awk '{print $10}' )"; fi
+      if [[ "$(echo "$smartdata" | grep "# 1" | awk '{print $9}')" =~ [%]+$ ]]; then
+         lastTestHours="$(echo "$smartdata" | grep "# 1" | awk '{print $10}' )"; fi
       
-      if [[ "$(echo "$smartdata2" | grep "# 1" | awk '{print $8}')" =~ [%]+$ ]]; then
-         lastTestHours="$(echo "$smartdata2" | grep "# 1" | awk '{print $9}' )"; fi
+      if [[ "$(echo "$smartdata" | grep "# 1" | awk '{print $8}')" =~ [%]+$ ]]; then
+         lastTestHours="$(echo "$smartdata" | grep "# 1" | awk '{print $9}' )"; fi
       
-      if [[ "$(echo "$smartdata2" | grep "# 1" | awk '{print $7}')" =~ [%]+$ ]]; then
-         lastTestHours="$(echo "$smartdata2" | grep "# 1" | awk '{print $8}' )"; fi
+      if [[ "$(echo "$smartdata" | grep "# 1" | awk '{print $7}')" =~ [%]+$ ]]; then
+         lastTestHours="$(echo "$smartdata" | grep "# 1" | awk '{print $8}' )"; fi
    fi
 
-if [[ "$(echo "$smartdata2" | grep "# 1" | awk '{print $3}')" ]]; then
-   lastTestType="$(echo "$smartdata2" | grep "# 1" | awk '{print $3}')"; fi
+if [[ "$(echo "$smartdata" | grep "# 1" | awk '{print $3}')" ]]; then
+   lastTestType="$(echo "$smartdata" | grep "# 1" | awk '{print $3}')"; fi
 
 if [[ "$(echo "$smartdata" | grep "SMART overall-health" | awk '{print $6}')" ]]; then
    smartStatus="$(echo "$smartdata" | grep "SMART overall-health" | awk '{print $6}')"; fi
@@ -1661,19 +1700,23 @@ if [[ "$(echo "$smartdata" | grep "23 Unknown_Attribute" | awk '{print $4}')" ]]
 if [[ "$(echo "$smartdata" | grep "Background" | awk '{print $10}')" ]]; then
    lastTestHours="$(echo "$smartdata" | grep "Background" | awk '{print $10}')"; fi
 
-if [[ "$(echo "$smartdata2" | grep "# 1" | awk '{print $7}')" ]]; then
+if [[ "$(echo "$smartdata" | grep "# 1" | awk '{print $7}')" ]]; then
    altlastTestHours="$(echo "$smartdata" | grep "# 1" | awk '{print $7}')"; fi
 
 if [[ "$sas" == 1 ]]; then
-   lastTestHours="$(echo "$smartdata2" | grep "# 1" | awk '{print $7}')"; fi
+   lastTestHours="$(echo "$smartdata" | grep "# 1" | awk '{print $7}')"; fi
 
 if [[ "$(echo "$smartdata" | grep "# 1" | awk '{print $4}')" ]]; then
-   altlastTestType="$(echo "$smartdata2" | grep "# 1" | awk '{print $4}')"; fi
+   altlastTestType="$(echo "$smartdata" | grep "# 1" | awk '{print $4}')"; fi
 
 if [[ "$sas" == 1 ]]; then
    if [[ "$(echo "$smartdata" | grep "# 1" | awk '{print $4}')" ]]; then
-   lastTestType="$(echo "$smartdata2" | grep "# 1" | awk '{print $4}')"; fi
+   lastTestType="$(echo "$smartdata" | grep "# 1" | awk '{print $4}')"; fi
 fi
+
+if [[ $altlastTestHours == "error" ]]; then altlastTestHours="$(echo "$smartdata2" | grep "# 1" | awk '{print $9}')"; fi
+
+if [[ $altlastTestHours > $lastTestHours ]]; then lastTestHours=$altlastTestHours; fi
 
 if [[ ! "$(echo "$smartdata" | grep "SSD")" && ! "$(echo "$smartdata" | grep "NVM")" ]]; then
    Custom_DrivesDrive="HDD"
@@ -1687,6 +1730,9 @@ if [[ "$(echo "$smartdata" | grep "NVM")" ]]; then
    Custom_DrivesDrive="NVM"
 fi
 
+#echo "SAS="$sas
+#echo "lastTestHours="$lastTestHours", altlastTestHours="$altlastTestHours
+
 if [[ $Sample_Test == "true" ]]; then
 echo "In Testing Mode"
 # Change any value below to override the actual drive values.
@@ -1695,20 +1741,20 @@ echo "In Testing Mode"
 #temp_max=50
 #temp=35
 #spinRetry=0
-#reAlloc=1
-#reAllocEvent=2
-#pending=0
+reAlloc=1
+reAllocEvent=2
+#pending=6
 #offlineUnc=0
 #crcErrors=2
-#multiZone=2
+multiZone=2
 #Helium=100
 #wearLevel=20
 # Below here are non-critical (No alarm generated)
-seekErrorHealth=1
-seekErrorRate=10
-rawReadErrorRate=3
-startStop=490
-loadCycle=500
+#seekErrorHealth=1
+#seekErrorRate=10
+#rawReadErrorRate=3
+#startStop=490
+#loadCycle=500
 #onHours=50026
 #lastTestHours=50000
 fi
@@ -2055,7 +2101,7 @@ else
       if [[ "$1" == "HDD" ]] && [[ "$HDD_MultiZone_Errors" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s(%s)</td>\n" "$multiZoneColor" "$multiZone" "$multiZoneOrig"; fi
    fi
    if [[ $Mouseover == "true" ]]; then
-      if [[ "$1" == "HDD" ]] && [[ "$HDD_MultiZone_Errors" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\"><span title=%s>%s</span></td>\n" "$multiZoneColor" "$multiZoneOrig" "$multiZone"; fi
+      if [[ "$1" == "HDD" ]] && [[ "$HDD_MultiZone_Errors" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\"><a href=%s>%s</a></td>\n" "$multiZoneColor" "$multiZoneOrig" "$multiZone"; fi
    fi
 fi
 
@@ -2105,7 +2151,12 @@ else
    echo "<b>No External Configuration File Exists</b><br>" >> "$logfile"
 force_delay
 fi
- 
+
+if [[ "$dump_all" == "3" ]]; then
+   echo "<b><span style='color:darkred;'>YOU have requested '-dump email' and thus an email was sent to Joe Schmuck for analysis.<br>He will try to contact you on the sending email address.  If this is an invalid<br>email address then please send a followup email to joeschmuck2023@hotmail.com<br>Your personal information will not be shared.</span></b><br>" >> "$logfile"
+   force_delay
+fi 
+
 if [[ $expDataEnable == "true" ]]; then
    if [[ "$(echo $statistical_data_file | grep "/tmp/")" ]]; then
    echo "<b><span style='color:darkred;'>The Statistical Data File is located in the /tmp directory and is not permanent.<br>Recommend changing to a proper dataset.</span></b><br>" >> "$logfile"
@@ -2336,7 +2387,9 @@ for drive in $drives; do
   if [ ! "$(echo "$drive" | grep "cd")" ]; then
 
   # Gather model number and serial number of each drive
-    
+ 
+    modelnumber=""
+    serial=""   
     smartdata="$(smartctl -a /dev/"$drive")"
 
     serial="$(echo "$smartdata" | grep "Serial Number" | awk '{print $3}')"
@@ -2393,7 +2446,7 @@ sed -i -e '/SMART Error Log Version/d' "$logfile"
 force_delay
 
 # Attach dump files
-if [[ "$dump_all" == "1" || "$dump_all" == "2" ]]; then
+if [[ "$dump_all" != "0" ]]; then
    for drive in $smartdrives; do
      dump_drive_data
    done
@@ -2440,9 +2493,18 @@ fi
       base64 $Config_File_Name
       ) >> "$logfile"
       force_delay
-      if [[ $output_x == 0 ]]; then
+
+# Check if I need "x" in this script anymore.
+#      if [[ $output_x == 0 ]]; then
+# Cut Attachments from front of output.html
          cp $logfile /tmp/output.html
+         outputline="$(cat /tmp/output.html | grep -n ': text' | cut -d ":" -f 1)"
+         outputline="$(echo $outputline | cut -d " " -f 1)"
+#         echo "outputline="$outputline
+         sed -i -e '1,'$outputline'd' /tmp/output.html
+# Cut Attachments from backside of output.html
          sed -i -e '/End of data section/q' /tmp/output.html
+
          force_delay   
          output_x=1
          (
@@ -2453,7 +2515,8 @@ fi
          echo "Content-Disposition: attachment; filename=output.html"
          base64 /tmp/output.html
          ) >> "$logfile"
-      fi
+#      fi
+      force_delay
    fi
  
 ### End details section, close MIME section
@@ -2970,9 +3033,9 @@ IFS=',' read -ra ADDR <<< "$CRC_Errors"
    fi
    done
  if [[ $s != "0" ]]; then
-crcErrorsColor=$ovrdColor
-crcErrorsOrig=$crcErrors
-crcErrors=$(($crcErrors-$crc_errst2))
+    crcErrorsColor=$ovrdColor
+    crcErrorsOrig=$crcErrors
+    crcErrors=$(($crcErrors-$crc_errst2))
  fi
 
 s="0"
@@ -2988,9 +3051,9 @@ IFS=',' read -ra ADDR <<< "$Multi_Zone"
    fi
    done
  if [[ $s != "0" ]]; then
-multiZoneColor=$ovrdColor
-multiZoneOrig=$multiZone
-multiZone=$(($multiZone-$badsectdt2))
+    multiZoneColor=$ovrdColor
+    multiZoneOrig=$multiZone
+    multiZone=$(($multiZone-$badsectdt2))
  fi
 
 if [[ $Fun == "1" ]]; then deviceStatusColor=$critColor; printf "Drive "$serial" Data Bit Breakdown Occurring - Bits are flying off the media.<br>"  >> "$logfile_warning"; fi
@@ -3144,6 +3207,9 @@ echo "SCT_Write_Timeout=$SCT_Write_Timeout      # Set to the write threshold. De
 echo " "
 echo "# SMART Testing Alarm"
 echo "testAgeWarn=$testAgeWarn             # Maximum age (in days) of last SMART test before CRITICAL color/message will be used."
+echo " "
+echo "# Zpool Fragmentation Alarm"
+echo "zpoolFragWarn=$zpoolFragWarn          # Percent of fragmentation before a Warning message occurs."
 echo " "
 echo "###### Statistical Data File"
 echo 'statistical_data_file="'$statistical_data_file'"    # Default location is where the script is located.'
@@ -3312,9 +3378,9 @@ echo " "
 echo "###### Mouseover"
 echo "# This will display the original value of an overriden value (one in yellow)"
 echo "# This is a tri-state value as explained below."
-echo '#   "true" will displaying the actual value via a mouseover.'
-echo '#   "false" will not generate any special email and will run as previous versions.'
-echo '#   "alt" will place the actual value within parentheses.  A great option if you email cliet cannot display mouseover.'
+echo '#   "true" will displaying the actual value via a mouseover html link. Still working to make this a true Mouseover.'
+echo '#   "false" will not generate any special chart and will run as previous versions.'
+echo "#   "alt" will place the actual value within parentheses.  An option if your email cliet can't display mouseover."
 echo " "
 echo 'Mouseover="'$Mouseover'"'
 echo " "
@@ -3411,7 +3477,7 @@ echo "# Use -config to set these values."
 echo " "
 
 # Need to adjust for Wear Level field if required.
-# Check to see if the value exists and if it does, append 'd' to the end of each entry.
+#  -- Check to see if the value exists and if it does, append 'd' to the end of each entry.
 
 
 echo 'Custom_Drives="'$Custom_Drives'"'
@@ -3535,6 +3601,8 @@ crcErrorsOrig=""
 reAllocOrig=""
 reAllocEventOrig=""
 multiZoneOrig=""
+brand1=""
+serial1=""
 
 # And Reset bgColors
 if [[ "$bgColor" == "$altColor" ]]; then bgColor="#ffffff"; else bgColor="$altColor"; fi
@@ -3658,7 +3726,7 @@ case $Keyboard_var in
         echo "      using the Custom Drive Configuration option."
         echo " "
         echo "   A) Temperature Settings (Various Temperature Settings)" 
-        echo "   B) Zpool Settings (Scrub Age and Pool Avail Alarms)"
+        echo "   B) Zpool Settings (Scrub Age, Pool % Avail, and Frag % Alarms)"
         echo "   C) Media Alarm Settings (Sectors and CRC Type Alarms)"
         echo "   D) Activate Input/Output Settings (Enable SSD/NVMe/Non-SMART)" 
         echo "   E) Ignore Alarms (Ignore CRC/MultiZone/Seek Type Errors)"
@@ -3741,6 +3809,11 @@ case $Keyboard_var in
                if [[ ! $Keyboard_yn == "" ]]; then usedWarn=$Keyboard_yn; fi
                echo "Set Value: ("$usedWarn")"
                echo " "
+               echo "Pool Fragmentation percentage for WARNING color to be used."
+               echo -n "Pool Frag Alert ("$zpoolFragWarn") "
+               read Keyboard_yn
+               if [[ ! $Keyboard_yn == "" ]]; then zpoolFragWarn=$Keyboard_yn; fi
+               echo "Set Value: ("$zpoolFragWarn")"
                echo "returning..."
                sleep 2
                ;;
@@ -4932,6 +5005,11 @@ case $Keyboard_var in
         echo 'One additional setpoint is to disable "Last Test Age". This is useful for'
         echo "some older drives which may generate an alarm."
         echo " "
+        echo "One additional setpoint is to Reverse the Wear Level value.  Unfortunately"
+        echo "sometimes the value is 0 and increasing to indicate wearing has occurred"
+        echo "as opposed to a normal value of 100 and decending as the wearing occurrs."
+        echo "To fix this you can chose to reverse the value for a specific drive."
+        echo " "
         echo " "
         echo "Follow the prompts."
         echo " "
@@ -5556,6 +5634,9 @@ echo " "
 echo "# SMART Testing Alarm"
 echo "testAgeWarn=2             # Maximum age (in days) of last SMART test before CRITICAL color/message will be used."
 echo " "
+echo "# Zpool Fragmentation Alarm"
+echo "zpoolFragWarn=80          # Percent of fragmentation before a Warning message occurs."
+echo " "
 echo "###### Statistical Data File"
 echo 'statistical_data_file="'$Keyboard_statistics'"'
 echo 'expDataEnable="true"      # Set to "true" will save all drive data into a CSV file defined by "statistical_data_file" below.'
@@ -5723,11 +5804,11 @@ echo " "
 echo "###### Mouseover"
 echo "# This will display the original value of an overriden value (one in yellow)"
 echo "# This is a tri-state value as explained below."
-echo '#   "true" will displaying the actual value via a mouseover.'
-echo '#   "false" will not generate any special email and will run as previous versions.'
-echo '#   "alt" will place the actual value within parentheses.  A great option if you email cliet cannot display mouseover.'
+echo '#   "true" will displaying the actual value via a mouseover html link. Still working to make this a true Mouseover.'
+echo '#   "false" will not generate any special chart and will run as previous versions.'
+echo "#   "alt" will place the actual value within parentheses.  An option if your email cliet can't display mouseover."
 echo " "
-echo 'Mouseover="false"'
+echo 'Mouseover="alt"'
 echo " "
 echo " "
 echo "###### Drive Ignore List"
@@ -5911,6 +5992,7 @@ shopt -u nocasematch
 ################# HELP INSTRUCTIONS #################
 
 display_help () {
+clear
 echo "NAME"
 echo "      Multi Report - System status reporting for TrueNAS Core and Scale"
 echo " "
@@ -5939,14 +6021,21 @@ echo "      -config       Generate or edit a configuration file in the directory
 echo "                    script is run from."
 echo "      -delete       Deletes the statistical data file if the file exists."
 echo "      -dump [all]   Generates an email with attachments of all drive data and"
-echo "                    the multi_report_config.txt additionally it also suppress"
+echo "            [email] the multi_report_config.txt additionally it also suppress"
 echo "                    the config_backup file and statistics file from being"
 echo "                    attached to the email unless you use the [all] option, then"
 echo "                    the config_backup and statistics files will be appended."
+echo "                    The [email] option runs the normal -dump command but also"
+echo "                    will send the email to joeschmuck2023@hotmail.com for"
+echo "                    further analysis or just to provide drive data infomration"
+echo "                    to Joe to help make the product better.  If you use the"
+echo "                    [-dump email] option, you will be asked to confirm"
+echo "                    sending of the email. So you cannot run this parameter"
+echo "                    from a script, it must be CLI."
 echo " "
 echo "      The options listed below are intended for developer use only."
 echo " "
-echo "      HDD | SSD | NVM input_file = (TEST) Use the selected drive data report"
+echo "      HDD | SSD | NVM input_file(s)  Use the selected drive data report(s)"
 echo "        created from the -dump option.  This assists in developer recognition"
 echo "        of drives not properly reporting data."
 echo " "
@@ -5967,9 +6056,10 @@ echo "      changed the email address within the script."
 echo " "
 echo "      In order to generate an external configuration file you must use the"
 echo "      [-config] parameter when running the script which is the preferred"
-echo "      method to configure your script.  Four options will be available:"
+echo "      method to configure your script.  Five options will be available:"
 echo " "
 echo "          N)ew configuration file"
+echo "          U)pdate configuration file"
 echo "          A)dvanced configuration"
 echo "          H)ow to use this configuration tool"
 echo "          X) Exit"
@@ -6010,8 +6100,8 @@ echo "      - The version of the script and the version of TrueNAS you are runni
 echo "      - The date and time the script was run."
 echo "      - Zpool Status Report Summary: (Pool Name/Status/Size/Errors/Scrub Info)"
 echo "      - HDD Summary Report Chart: (Drive ID/Serial Number/other data)"
-echo "      - SSD Summary Report Chart: (Basically the same as the HDD report)"
-echo "      - NVMe Summary Report Chart: (Basically the same as the SSD report)"
+echo "      - SSD Summary Report Chart: (Same as the HDD report)"
+echo "      - NVMe Summary Report Chart: (Same as the SSD report)"
 echo "      - Text Section:  The Text section contains the text version of most of"
 echo "        the previously displayed data.  It will tell you"
 echo "      -- if using an external configuration file"
@@ -6057,7 +6147,8 @@ echo "      Alarm Setpoints: Practically everything has an alarm setpoint, from 
 echo "          capacity to Scrub Age, to temperature Warnings and Critical Warnings,"
 echo "          and a plethora of options."
 echo "      Custom Drive Configuration: Allows unique customizing of alarms where"
-echo "          the general settings would not work properly for a drive."
+echo "          the general settings would not work properly for a drive,"
+echo "          including inverting the Wear Level value for SSD/NVM drives."
 echo "      TLER: You can monitor and even have TLER automatically set if required,"
 echo "          for drives which support it. The default is to not automatically set"
 echo "          TLER on, I believe the user should make that decision."
@@ -6102,6 +6193,7 @@ echo " "
 }
 
 display_help_commands () {
+clear
 echo "NAME"
 echo "      Multi Report - System status reporting for TrueNAS Core and Scale"
 echo " "
@@ -6119,15 +6211,25 @@ echo "      -s            Record drive statistics only, do not generate a"
 echo "                    corresponding email."
 echo "      -config       Generate or edit a configuration file in the directory the"
 echo "                    script is run from."
-echo "      -dump [all]   Generates an email with attachments of all drive data and the"
-echo "                    multi_report_config.txt additionally it also suppress the"
-echo "                    config_backup file and statistics file from being attached"
-echo "                    to the email unless you use the [all] option, then the"
-echo "                    config_backup and statistics files will be appended."
+echo "      -dump [all]   Generates an email with attachments of all drive data and"
+echo "            [email] the multi_report_config.txt additionally it also suppress"
+echo "                    the config_backup file and statistics file from being"
+echo "                    attached to the email unless you use the [all] option, then"
+echo "                    the config_backup and statistics files will be appended."
+echo "                    The [email] option runs the normal -dump command but also"
+echo "                    will send the email to joeschmuck2023@hotmail.com for"
+echo "                    further analysis or just to provide drive data infomration"
+echo "                    to Joe to help make the product better.  If you use the"
+echo "                    [-dump email] option, you will be asked to confirm"
+echo "                    sending of the email. So you cannot run this parameter"
+echo "                    from a script, it must be CLI."
 echo " "
 echo "Advice:  When troubleshooting a problem you may be asked to provide dump data"
-echo "to assist in troubleshooting. Use the [-dump all] to include all possible data."
-echo "Use [-dump] if you only need to provide the drive data and configuration file."
+echo "to assist troubleshooting. Use the [-dump email] to include all relevant data"
+echo "(drive data and configuration file) which will send an email to"
+echo "joeschmuck2023@hotmail.com and your email address will not be shared!."
+echo "If you prefer you can use [-dump] and the open up dialog wiht Joe Schmuck"
+echo "and attach the files in a message on the TrueNAS forums."
 echo " "
 }
 
@@ -6138,21 +6240,36 @@ echo " "
 #
 dump_drive_data () {
 
- (
-  # Write MIME section header for file attachment (encoded with base64)
-  echo "--${boundary}"
-  echo "Content-Type: text/html"
-  echo "Content-Transfer-Encoding: base64"
-  echo "Content-Disposition: attachment; filename=drive_${drive}_a.txt"
-  base64 "/tmp/drive_${drive}_a.txt"
+if [[ "$drive" != "cd0" ]]; then
+   tempjson="$(smartctl -x --json /dev/${drive})"
+   brand1="$(echo "${tempjson}" | jq -Mre '.model_name | values' | cut -d " " -f 1)"
+   serial1="$(echo "${tempjson}" | jq -Mre '.serial_number | values')"
+   rpm="$(echo "${tempjson}" | jq -Mre '.rotation_rate | values')"
+   if [[ "$rpm" == "0" ]]; then drivetype="SSD"; else drivetype="HDD"; fi
+   if [[ "$(echo $tempjson | grep -i "nvm")" ]]; then drivetype="NVM"; fi
+   (
+   # Write MIME section header for file attachment (encoded with base64)
+   echo "--${boundary}"
+   echo "Content-Type: text/html"
+   echo "Content-Transfer-Encoding: base64"
+   echo "Content-Disposition: attachment; filename=drive_${drive}_a.txt"
+   base64 "/tmp/drive_${drive}_a.txt"
 
-  echo "--${boundary}"
-  echo "Content-Type: text/html"
-  echo "Content-Transfer-Encoding: base64"
-  echo "Content-Disposition: attachment; filename=drive_${drive}_x.txt"
-  base64 "/tmp/drive_${drive}_x.txt"
- ) >> "$logfile"
-force_delay
+   echo "--${boundary}"
+   echo "Content-Type: text/html"
+   echo "Content-Transfer-Encoding: base64"
+   echo "Content-Disposition: attachment; filename=drive_${drive}_x.txt"
+   base64 "/tmp/drive_${drive}_x.txt"
+
+   echo "--${boundary}"
+   echo "Content-Type: text/html"
+   echo "Content-Transfer-Encoding: base64"
+   echo "Content-Disposition: attachment; filename=${drive}_${drivetype}_${serial1}_json.txt"
+   base64 "/tmp/${drive}_${drivetype}_${serial1}_json.txt"
+
+   ) >> "$logfile"
+   force_delay
+fi
 }
 
 ### DEFINE FUNCTIONS END ###
@@ -6167,7 +6284,7 @@ force_delay
 
 # The order in which these processed occur is unfortunately dependent.
 # The -s switch will just collect statistical data.
-# The HDD|SSD|NVM switch will allow a raw text file for smartctl -a, followed by the input filename.
+# The HDD|SSD|NVM switch will allow a raw text file for smartctl -a and -x, followed by the input filename(s).
 
 echo $programver
 smartdata=""
@@ -6197,10 +6314,28 @@ fi
 # if -dump then interactive user selected dumping, if "all" then automatic dumping of everything.
 # Use dump_all=1 during the running routine to gather all the drive data and dump to drive ID files.
 # if -dump all is used, then include config and statistical attachments (dump_all=2).
+# if -dump email is used, send "-dump" data to Joe Schmuck for analysis (dump_all=3).
 # Dump the files into /tmp/ and then email them.
 
 if [[ "$1" == "-dump" ]]; then
-   if [[ "$2" == "all" ]]; then dump_all="2"; echo "Attaching Drive Data, Multi-Report Configuration, Statistics, and TrueNAS Configuration files."; else dump_all="1"; echo "Attaching Drive Data and Multi-Report Configuration files."; fi
+   if [[ "$2" == "all" ]]; then dump_all="2"; echo "Attaching Drive Data, Multi-Report Configuration, Statistics, and TrueNAS Configuration files."; fi
+   if [[ "$2" == "" ]]; then dump_all="1"; echo "Attaching Drive Data and Multi-Report Configuration files."; fi
+   if [[ "$2" == "email" ]]; then echo "Emailing to Joe Schmuck & Attaching Drive Data and Multi-Report Configuration."
+      echo -n "Are you sure you want to send this data to Joe? "
+      read -s -n 1 Keyboard_yn
+      if [[ $Keyboard_yn == "y" ]]; then
+         dump_all="3"
+         echo " "
+         echo "Processing..."
+         echo "Collecting the data and sending to Joe Schmuck for analysis."
+      else
+         dump_all="2"
+         echo " "
+         echo "You got it Boss, you know what's best. Your wish is my command!"
+         echo "Okay, Okay, Okay, I'm Only sending data to you.  Holy Cow!"
+      fi
+      echo " "
+   fi
 else
    dump_all="0"
 fi
@@ -6230,6 +6365,7 @@ cleanup_files
 
 if [[ "$dump_all" == "1" ]]; then configBackup="false"; expDataEmail="false"; fi
 if [[ "$dump_all" == "2" ]]; then configBackup="true"; expDataEmail="true"; configSendDay="All"; expDataEmailSend="All"; fi
+if [[ "$dump_all" == "3" ]]; then email=$email",joeschmuck2023@hotmail.com"; configBackup="false"; expDataEmail="false"; configSendDay="All"; expDataEmailSend="All"; fi
 
 # Not certain I need this here, comment out on final production tests.
 testfile=""
@@ -6287,7 +6423,7 @@ if test -f "$testfile2"; then
 echo "Test File 2 Exists"
 else
 echo "Test File 2 Does Not Exist"
-exit 1
+#exit 1
 fi
 fi
 get_smartSSD_listings
@@ -6429,10 +6565,11 @@ echo "End of data section" >> "$logfile"
 if [[ "$1" == "-s" ]]; then
   echo "Statistical Data Collection Complete"
 else
+#  config_backup
   email_datafile
   remove_junk_report
 #  if [[ $Sample_Test == "true" ]]; then
-     cp "$logfile" output.html
+     cp "$logfile" /tmp/output.html
 #  else
      create_email
 #  fi
