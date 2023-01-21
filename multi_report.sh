@@ -665,7 +665,7 @@ logfile_warranty_temp="/tmp/smart_report_warranty_flag.tmp"
 logfile_messages_temp="/tmp/smart_report_messages.tmp"
 boundary="gc0p4Jq0M2Yt08jU534c0p"
 
-progname="Multi-Report v2.0 dtd:"
+progname="Multi-Report v2.0.1 dtd:"
 progverdate="2023-01-21"
 
 if [[ $softver != "Linux" ]]; then
@@ -1240,6 +1240,8 @@ for pool in $pools; do
 ### Fragmentation Data
     frag="$(zpool list -H -o frag "$pool")"
     frag="$(echo $frag | tr -d '%' )"
+    convert_to_decimal $frag; frag=$Return_Value
+    
     
 
 ### Fix for SCRUB lasting longer than 24 hours.
@@ -1339,7 +1341,7 @@ fi
     if [ "$scrubErrors" != "$non_exist_value" ] && [ "$scrubErrors" != "0" ]; then scrubErrorsColor="$warnColor"; echo "$pool - Scrub Errors<br>" >> "$logfile_critical"; else scrubErrorsColor="$bgColor"; fi
     if [ "$(echo "$scrubAge" | awk '{print int($1)}')" -gt "$scrubAgeWarn" ]; then scrubAgeColor="$warnColor"; echo "$pool - Scrub Age" >> "$logfile_warning"; else scrubAgeColor="$bgColor"; fi
     if [ "$scrubAge" == "In Progress" ]; then scrubAgeColor="$blueColor"; fi
-    if [[ $frag > $zpoolFragWarn ]]; then fragColor="$warnColor"; echo "$pool - Fragmentation above Threshold - $frag%<br>" >> "$logfile_warning"; else fragColor="$bgColor"; fi
+    if [ "$frag" -gt "$zpoolFragWarn" ]; then fragColor="$warnColor"; echo "$pool - Fragmentation above Threshold - $frag%<br>" >> "$logfile_warning"; else fragColor="$bgColor"; fi
     frag=" "$frag"%"
 
 if [[ $pool_capacity == "zfs" ]]; then
