@@ -14,7 +14,7 @@ LANG="en_US.UTF-8"
 ### Version v1.4, v1.5, v1.6, v2.0 FreeNAS/TrueNAS (Core & Scale) (joeschmuck)
 
 ### Changelog:
-# v2.0 (20 January 2023)
+# v2.0 (21 January 2023)
 #   - Formatted all -config screens to fit into 80 column x 24 lines.
 #   - Removed custom builds
 #   - Fixed Custom Configuration Delete Function.
@@ -666,7 +666,7 @@ logfile_messages_temp="/tmp/smart_report_messages.tmp"
 boundary="gc0p4Jq0M2Yt08jU534c0p"
 
 progname="Multi-Report v2.0 dtd:"
-progverdate="2023-01-20"
+progverdate="2023-01-21"
 
 if [[ $softver != "Linux" ]]; then
   if [[ "$(cat /etc/version | grep "FreeNAS")" ]]; then
@@ -6321,9 +6321,9 @@ if [[ "$1" == "-dump" ]]; then
    if [[ "$2" == "all" ]]; then dump_all="2"; echo "Attaching Drive Data, Multi-Report Configuration, Statistics, and TrueNAS Configuration files."; fi
    if [[ "$2" == "" ]]; then dump_all="1"; echo "Attaching Drive Data and Multi-Report Configuration files."; fi
    if [[ "$2" == "email" ]]; then echo "Emailing to Joe Schmuck & Attaching Drive Data and Multi-Report Configuration."
-      echo -n "Are you sure you want to send this data to Joe? "
+      echo -n "Are you sure you want to send this data to Joe? (y/n)"
       read -s -n 1 Keyboard_yn
-      if [[ $Keyboard_yn == "y" ]]; then
+      if [[ $Keyboard_yn == "y" || $Keyboard_yn == "Y" ]]; then
          dump_all="3"
          echo " "
          echo "Processing..."
@@ -6333,8 +6333,10 @@ if [[ "$1" == "-dump" ]]; then
          echo " "
          echo "You got it Boss, you know what's best. Your wish is my command!"
          echo "Okay, Okay, Okay, I'm Only sending data to you.  Holy Cow!"
+         echo " "
+         echo "NOT SENDING TO joeschmuck2023@hotmail.com"
+         echo " "
       fi
-      echo " "
    fi
 else
    dump_all="0"
