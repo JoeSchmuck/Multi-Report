@@ -14,6 +14,12 @@ LANG="en_US.UTF-8"
 ### Version v1.4, v1.5, v1.6, v2.0 FreeNAS/TrueNAS (Core & Scale) (joeschmuck)
 
 ### Changelog:
+# V2.0.2 (22 January 2023)
+#   - Fix Wear Level that may fail on some drives.
+#
+# v2.0.1 (21 January 2023)
+#   - Fixed Zpool Fragmentation Warning for 9% and greater (Hex Math issue again).
+#
 # v2.0 (21 January 2023)
 #   - Formatted all -config screens to fit into 80 column x 24 lines.
 #   - Removed custom builds
@@ -665,8 +671,8 @@ logfile_warranty_temp="/tmp/smart_report_warranty_flag.tmp"
 logfile_messages_temp="/tmp/smart_report_messages.tmp"
 boundary="gc0p4Jq0M2Yt08jU534c0p"
 
-progname="Multi-Report v2.0.1 dtd:"
-progverdate="2023-01-21"
+progname="Multi-Report v2.0.2 dtd:"
+progverdate="2023-01-22"
 
 if [[ $softver != "Linux" ]]; then
   if [[ "$(cat /etc/version | grep "FreeNAS")" ]]; then
@@ -1402,18 +1408,17 @@ if [[ "$drive" != "cd0" ]]; then
         tempjson="$(smartctl -x --json /dev/${drive})"
 
        #Backup Files for testing if tempjson does not fill all needs.
-        tempjson1="$(smartctl -AHijl xselftest,selftest --log="devstat" /dev/${drive})"
-        tempjson2="$(smartctl -AHil error -l xselftest,selftest --log="devstat" /dev/${drive})"
+        #tempjson1="$(smartctl -AHijl xselftest,selftest --log="devstat" /dev/${drive})"
+        #tempjson2="$(smartctl -AHil error -l xselftest,selftest --log="devstat" /dev/${drive})"
 
-        brand1="$(echo "${tempjson}" | jq -Mre '.model_name | values' | cut -d " " -f 1)"
         serial1="$(echo "${tempjson}" | jq -Mre '.serial_number | values')"
         rpm="$(echo "${tempjson}" | jq -Mre '.rotation_rate | values')"
         if [[ "$rpm" == "0" ]]; then drivetype="SSD"; else drivetype="HDD"; fi
         if [[ "$(echo $tempjson | grep -i "nvm")" ]]; then drivetype="NVM"; fi
 
         echo "$tempjson" > "/tmp/${drive}_${drivetype}_${serial1}_json.txt"
-       #echo "$tempjson1" > "/tmp/${drive}_${drivetype}_${serial1}_1.json"
-       #echo "$tempjson2" > "/tmp/${drive}_${drivetype}_${serial1}_2.json"
+       #echo "$tempjson1" > "/tmp/${drive}_${drivetype}_${serial1}_json1.txt"
+       #echo "$tempjson2" > "/tmp/${drive}_${drivetype}_${serial1}_json2.txt"
      fi
 
 fi
@@ -1574,11 +1579,10 @@ IFS=',' read -ra ADDR <<< "$Custom_Drives"
  for i in "${ADDR[@]}"; do
    cdrivesn1="$(echo $i | cut -d':' -f 1)"
    if [[ $cdrivesn1 == $serial ]]; then
-      if [[ "$(echo $i | cut -d':' -f 16)" != "d" ]]; then
+      if [[ "$(echo $i | cut -d':' -f 16)" == "d" || "$(echo $i | cut -d':' -f 16)" == "r" ]] ; then
       wearLevelAdj="$(echo $i | cut -d':' -f 16)"; fi
    fi
  done
-
 
 ### Add search for Seagate and mark seagate=1
 if [[ "$(echo "$smartdata" | grep -i "Seagate" )" ]]; then seagate=1; else seagate=""; fi
@@ -1630,14 +1634,14 @@ fi
 
 # This adjustment is for WDC drives with "230 Media_Wearout_Indicator" that reports 000 = 100
 if [[ "$(echo "$smartdata" | grep "Media_Wearout_Indicator" | awk '{print $1 + 0}')" == 230 ]]; then
-   if [[ $wearLevelAdj == "d" ]]; then
+   if [[ $wearLevelAdj != "r" ]]; then
       wearLevel=$(( 100 - $wearLevel ))
    fi
 fi
 
 if [[ "$(echo "$smartdata" | grep "Percentage Used:" | awk '{print $3}')" ]]; then
    wearLevel="$(echo "$smartdata" | grep "Percentage Used:" | awk '{print $3 + 0}')"
-   if [[ $wearLevelAdj == "d" ]]; then
+   if [[ $wearLevelAdj != "r" ]]; then
       wearLevel=$(( 100 - $wearLevel ))
    fi
 fi
@@ -1645,7 +1649,7 @@ fi
 if [[ "$(echo "$smartdata" | grep "Percentage used endurance indicator:" | awk '{print $5}')" ]]; then
    wearLevel="$(echo "$smartdata" | grep "Percentage used endurance indicator:" | awk '{print $5}' | cut -d '%' -f1)"
    # Adjusting Wear Level for amount used vice amount remaining #
-   if [[ $wearLevelAdj == "d" ]]; then
+   if [[ $wearLevelAdj != "r" ]]; then
      wearLevel=$(( 100 - $wearLevel ))
    fi
 fi
@@ -3550,6 +3554,8 @@ if test -e "$logfile_warranty"; then rm "$logfile_warranty"; fi
 if test -e "$logfile_messages"; then rm "$logfile_messages"; fi
 f=(/tmp/drive_*.txt)
 if [[ -f "${f[0]}" ]]; then rm /tmp/drive_*.txt; fi
+f=(/tmp/*json.txt)
+if [[ -f "${f[0]}" ]]; then rm /tmp/*json.txt; fi
 }
 
 ################################# CLEAR VARIABLES ###############################################
@@ -3603,7 +3609,6 @@ crcErrorsOrig=""
 reAllocOrig=""
 reAllocEventOrig=""
 multiZoneOrig=""
-brand1=""
 serial1=""
 
 # And Reset bgColors
@@ -6244,7 +6249,6 @@ dump_drive_data () {
 
 if [[ "$drive" != "cd0" ]]; then
    tempjson="$(smartctl -x --json /dev/${drive})"
-   brand1="$(echo "${tempjson}" | jq -Mre '.model_name | values' | cut -d " " -f 1)"
    serial1="$(echo "${tempjson}" | jq -Mre '.serial_number | values')"
    rpm="$(echo "${tempjson}" | jq -Mre '.rotation_rate | values')"
    if [[ "$rpm" == "0" ]]; then drivetype="SSD"; else drivetype="HDD"; fi
