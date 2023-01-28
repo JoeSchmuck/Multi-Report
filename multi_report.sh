@@ -14,7 +14,16 @@ LANG="en_US.UTF-8"
 ### Version v1.4, v1.5, v1.6, v2.0 FreeNAS/TrueNAS (Core & Scale) (joeschmuck)
 
 ### Changelog:
-# V2.0.2 (22 January 2023)
+# V2.0.4a Custom (27 January 2023)
+#   - Adjusted Zpool Status to allow 'resilvering' status message. (Line 1340)
+#
+# V2.0.4 (26 January 2023)
+#   - Fixed if Zpool does not provide a number for fragmentation, will now display non_exist_value string.
+#
+# V2.0.3 (24 January 2023)
+#   - Hacked HDD SMART Testing in progress with "NOW" in the '# 1' line.  Will fix better later.
+#
+# V2.0.2 (24 January 2023)
 #   - Fix Wear Level that may fail on some drives.
 #
 # v2.0.1 (21 January 2023)
@@ -671,8 +680,8 @@ logfile_warranty_temp="/tmp/smart_report_warranty_flag.tmp"
 logfile_messages_temp="/tmp/smart_report_messages.tmp"
 boundary="gc0p4Jq0M2Yt08jU534c0p"
 
-progname="Multi-Report v2.0.2 dtd:"
-progverdate="2023-01-22"
+progname="Multi-Report v2.0.4a dtd:"
+progverdate="2023-01-27"
 
 if [[ $softver != "Linux" ]]; then
   if [[ "$(cat /etc/version | grep "FreeNAS")" ]]; then
@@ -1246,8 +1255,8 @@ for pool in $pools; do
 ### Fragmentation Data
     frag="$(zpool list -H -o frag "$pool")"
     frag="$(echo $frag | tr -d '%' )"
-    convert_to_decimal $frag; frag=$Return_Value
-    
+    re='^[0-9]+$'
+    if ! [[ $frag =~ $re ]]; then frag=$non_exist_value; else convert_to_decimal $frag; frag=$Return_Value; fi    
     
 
 ### Fix for SCRUB lasting longer than 24 hours.
@@ -1327,6 +1336,12 @@ elif [ "$(echo "$statusOutput" | grep "scan" | awk '{print $2}')" = "scrub" ] &&
         currentTS="$(date "+%s")"
         scrubAge=$((((currentTS - scrubTS) + 43200) / 86400))
         scrubTime="$(echo "$statusOutput" | grep "scan" | awk '{print $6}')"
+
+ ###### ADDED FOR RESILVERING  VERSION 2.0.4a ############
+       elif [ "$(echo "$statusOutput" | grep "scan" | awk '{print $2}')" = "resilvered" ]; then
+         scrubAge="Resilvered"
+########################################################
+
        else
         #No scrub previously performed
         scrubAge="Never Scrubbed"
@@ -1347,8 +1362,10 @@ fi
     if [ "$scrubErrors" != "$non_exist_value" ] && [ "$scrubErrors" != "0" ]; then scrubErrorsColor="$warnColor"; echo "$pool - Scrub Errors<br>" >> "$logfile_critical"; else scrubErrorsColor="$bgColor"; fi
     if [ "$(echo "$scrubAge" | awk '{print int($1)}')" -gt "$scrubAgeWarn" ]; then scrubAgeColor="$warnColor"; echo "$pool - Scrub Age" >> "$logfile_warning"; else scrubAgeColor="$bgColor"; fi
     if [ "$scrubAge" == "In Progress" ]; then scrubAgeColor="$blueColor"; fi
+if [ "$frag" != "$non_exist_value" ]; then
     if [ "$frag" -gt "$zpoolFragWarn" ]; then fragColor="$warnColor"; echo "$pool - Fragmentation above Threshold - $frag%<br>" >> "$logfile_warning"; else fragColor="$bgColor"; fi
     frag=" "$frag"%"
+fi
 
 if [[ $pool_capacity == "zfs" ]]; then
 pool_size=$zfs_pool_size
@@ -1482,8 +1499,17 @@ get_json_data
    sas=0
    if [[ "$(echo "$smartdata" | grep "SAS")" ]]; then sas=1; fi
 
-   if [[ "$(echo "$smartdata" | grep "remaining" | awk '{print $1}')" ]]; then
-      smarttesting="$(echo "$smartdata" | grep "remaining" | awk '{print $1}' | tr -d '[%]')"; fi
+  # if [[ "$(echo "$smartdata" | grep "remaining" | awk '{print $1}')" ]]; then
+  #    smarttesting="$(echo "$smartdata" | grep "remaining" | awk '{print $1}' | tr -d '[%]')"; fi
+
+if [[ "$(echo "$smartdata" | grep "remaining")" ]]; then
+for h in {1..10}; do
+   if [[ "$(echo "$smartdata" | grep "remaining" | awk '{print $'$h'}')" =~ [%]+$ ]]; then
+#echo "in loop"
+   smarttesting="$(echo "$smartdata" | grep "remaining" | awk '{print $'$h'}' | tr -d '[%]')"; fi
+#echo "smart="$smarttesting
+done
+fi
 
    if [[ "$(echo "$smartdata" | grep "# 1" | awk '{print $5}')" ]]; then
       chkreadfailure="$(echo "$smartdata" | grep "# 1" | awk '{print $5}')"; fi
@@ -1491,13 +1517,15 @@ get_json_data
    if [[ "$sas" == 0 ]]; then
       if [[ "$(echo "$smartdata" | grep "# 1" | awk '{print $9}')" =~ [%]+$ ]]; then
          lastTestHours="$(echo "$smartdata" | grep "# 1" | awk '{print $10}' )"; fi
-      
+   
       if [[ "$(echo "$smartdata" | grep "# 1" | awk '{print $8}')" =~ [%]+$ ]]; then
          lastTestHours="$(echo "$smartdata" | grep "# 1" | awk '{print $9}' )"; fi
       
       if [[ "$(echo "$smartdata" | grep "# 1" | awk '{print $7}')" =~ [%]+$ ]]; then
          lastTestHours="$(echo "$smartdata" | grep "# 1" | awk '{print $8}' )"; fi
+
    fi
+
 
 if [[ "$(echo "$smartdata" | grep "# 1" | awk '{print $3}')" ]]; then
    lastTestType="$(echo "$smartdata" | grep "# 1" | awk '{print $3}')"; fi
@@ -1723,6 +1751,16 @@ fi
 if [[ $altlastTestHours == "error" ]]; then altlastTestHours="$(echo "$smartdata2" | grep "# 1" | awk '{print $9}')"; fi
 
 if [[ $altlastTestHours > $lastTestHours ]]; then lastTestHours=$altlastTestHours; fi
+
+#################################  MAKE THIS NEXT LINE WORK ################################################
+     if [[ "$(echo "$smartdata" | grep "NOW")" ]]; then
+        for h in {1..15}; do
+           if [[ "$(echo "$smartdata" | grep "# 1" | awk '{print $'$h'}' )" == "NOW" ]]; then
+              lastTestHours="$(echo "$smartdata" | grep "# 2" | awk '{print $7}' )"; fi
+        done
+ #       echo "lastTestHours0="$lastTestHours
+     fi
+
 
 if [[ ! "$(echo "$smartdata" | grep "SSD")" && ! "$(echo "$smartdata" | grep "NVM")" ]]; then
    Custom_DrivesDrive="HDD"
@@ -6394,7 +6432,7 @@ if [[ "$1" == "HDD" ]]; then
 ### Add a test routine if $2 is null, exit stating missing parameter and then spit out the HELP command
 
 # Read the data in the testdata_path location and create the testdata.txt file
-create_testdata_text_file
+##### create_testdata_text_file
 
 testfile="$2"
 testfile2="$3"
