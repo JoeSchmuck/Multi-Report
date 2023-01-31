@@ -14,8 +14,12 @@ LANG="en_US.UTF-8"
 ### Version v1.4, v1.5, v1.6, v2.0 FreeNAS/TrueNAS (Core & Scale) (joeschmuck)
 
 ### Changelog:
-# V2.0.4a Custom (27 January 2023)
+# V2.0.5a (29 January 2023)
+#   - Fixed Toshiba MG09 drive Helium recognition.
+#
+# V2.0.5 (27 January 2023)
 #   - Adjusted Zpool Status to allow 'resilvering' status message. (Line 1340)
+#   - Updated '-dump email' command to allow user to enter comments to the author.
 #
 # V2.0.4 (26 January 2023)
 #   - Fixed if Zpool does not provide a number for fragmentation, will now display non_exist_value string.
@@ -680,8 +684,8 @@ logfile_warranty_temp="/tmp/smart_report_warranty_flag.tmp"
 logfile_messages_temp="/tmp/smart_report_messages.tmp"
 boundary="gc0p4Jq0M2Yt08jU534c0p"
 
-progname="Multi-Report v2.0.4a dtd:"
-progverdate="2023-01-27"
+progname="Multi-Report v2.0.5a dtd:"
+progverdate="2023-01-29"
 
 if [[ $softver != "Linux" ]]; then
   if [[ "$(cat /etc/version | grep "FreeNAS")" ]]; then
@@ -710,11 +714,12 @@ valid_config_version_date="2023-01-20"
 ##########################
 ##########################
 
-#Unique programming hacks to properly emulate other hardware that is not actually on the system.
+# Unique programming hacks to properly emulate other hardware that is not actually on the system.
 
-VMWareNVME="on"            # Set to "off" normally, "on" to assist in incorrect VMWare reporting.
-Joes_System="false"        # Custom settings for my system and to remove these from your system.
-Sample_Test="false"        # Setup static test values for testing.
+VMWareNVME="on"			# Set to "off" normally, "on" to assist in incorrect VMWare reporting.
+Joes_System="false"		# Custom settings for my system and to remove these from your system.
+Sample_Test="false"		# Setup static test values for testing.
+extra_data="true"			# Collect extra 'json' data.  This is a temporary thing.
 
 ##########################
 ##########################
@@ -1140,6 +1145,10 @@ zpool_report () {
   # Write HTML table headers to log file; HTML in an email requires 100% in-line styling (no CSS or <style> section), hence the massive tags
     echo $programver"<br>Report Run "$(date +%d-%b-%Y)" @ "$timestamp
     echo "<br><br>"
+if [[ $Keyboard_Message != "" ]]; then
+	echo $Keyboard_Message
+	echo "<br><br>"
+fi
     echo "<table style=\"border: 1px solid black; border-collapse: collapse;\">"
 if [[ $pool_capacity == "zfs" ]]; then
     echo "<tr><th colspan=\"13\" style=\"text-align:center; font-size:20px; height:40px; font-family:courier;\"><span style='color:gray;'>*</span>ZPool/ZFS Status Report Summary</th></tr>"
@@ -1422,7 +1431,23 @@ if [[ "$drive" != "cd0" ]]; then
      if [[ "$dump_all" != "0" ]]; then
 
        # Pull a fresh JSON listing
+	# Normal Listing
         tempjson="$(smartctl -x --json /dev/${drive})"
+
+# This stuff can go away after we select the proper data to collect.
+if [[ "$extra_data" == "true" ]]; then
+	# GREP Listing
+        tempjson2="$(smartctl -x --json=g /dev/${drive})"
+	# Original Output
+        tempjson3="$(smartctl -x --json=o /dev/${drive})"
+	# Verbose Listing
+        tempjson4="$(smartctl -x --json=v /dev/${drive})"
+	# YAML Listing
+        tempjson5="$(smartctl -x --json=y /dev/${drive})"
+	# Unimplemented Lines
+        tempjson6="$(smartctl -x --json=u /dev/${drive})"
+fi
+
 
        #Backup Files for testing if tempjson does not fill all needs.
         #tempjson1="$(smartctl -AHijl xselftest,selftest --log="devstat" /dev/${drive})"
@@ -1433,9 +1458,15 @@ if [[ "$drive" != "cd0" ]]; then
         if [[ "$rpm" == "0" ]]; then drivetype="SSD"; else drivetype="HDD"; fi
         if [[ "$(echo $tempjson | grep -i "nvm")" ]]; then drivetype="NVM"; fi
 
-        echo "$tempjson" > "/tmp/${drive}_${drivetype}_${serial1}_json.txt"
-       #echo "$tempjson1" > "/tmp/${drive}_${drivetype}_${serial1}_json1.txt"
-       #echo "$tempjson2" > "/tmp/${drive}_${drivetype}_${serial1}_json2.txt"
+      echo "$tempjson" > "/tmp/${drivetype}_${serial1}_json.txt"
+
+if [[ "$extra_data" == "true" ]]; then
+      echo "$tempjson2" > "/tmp/${drivetype}_${serial1}_2json.txt"
+      echo "$tempjson3" > "/tmp/${drivetype}_${serial1}_3json.txt"
+	echo "$tempjson4" > "/tmp/${drivetype}_${serial1}_4json.txt"
+      echo "$tempjson5" > "/tmp/${drivetype}_${serial1}_5json.txt"
+      echo "$tempjson6" > "/tmp/${drivetype}_${serial1}_6json.txt"
+fi
      fi
 
 fi
@@ -1730,6 +1761,10 @@ if [[ "$(echo "$smartdata" | grep "22 Unknown_Attribute" | awk '{print $10}')" ]
 # Added Helium check for Toshiba MG07+ drives
 if [[ "$(echo "$smartdata" | grep "23 Unknown_Attribute" | awk '{print $4}')" ]]; then
    if [[ "$Helium" == "" ]]; then Helium="$(echo "$smartdata" | grep "23 Unknown_Attribute" | awk '{print $4}')"; fi; fi
+
+# Added Helium check for Toshiba MG09 drives
+if [[ "$(echo "$smartdata" | grep "23 Helium" | awk '{print $4}')" ]]; then
+   if [[ "$Helium" == "" ]]; then Helium="$(echo "$smartdata" | grep "23 Helium" | awk '{print $4}')"; fi; fi
 
 if [[ "$(echo "$smartdata" | grep "Background" | awk '{print $10}')" ]]; then
    lastTestHours="$(echo "$smartdata" | grep "Background" | awk '{print $10}')"; fi
@@ -3648,6 +3683,7 @@ reAllocOrig=""
 reAllocEventOrig=""
 multiZoneOrig=""
 serial1=""
+Keyboard_Message=""
 
 # And Reset bgColors
 if [[ "$bgColor" == "$altColor" ]]; then bgColor="#ffffff"; else bgColor="$altColor"; fi
@@ -6076,7 +6112,8 @@ echo "                    further analysis or just to provide drive data infomra
 echo "                    to Joe to help make the product better.  If you use the"
 echo "                    [-dump email] option, you will be asked to confirm"
 echo "                    sending of the email. So you cannot run this parameter"
-echo "                    from a script, it must be CLI."
+echo "                    from a script, it must be CLI.  You will also be asked"
+echo "                    to enter a comment to aid Joe in your problem."
 echo " "
 echo "      The options listed below are intended for developer use only."
 echo " "
@@ -6267,13 +6304,14 @@ echo "                    further analysis or just to provide drive data infomra
 echo "                    to Joe to help make the product better.  If you use the"
 echo "                    [-dump email] option, you will be asked to confirm"
 echo "                    sending of the email. So you cannot run this parameter"
-echo "                    from a script, it must be CLI."
+echo "                    from a script, it must be CLI.  You will also be asked"
+echo "                    to enter a comment to aid Joe in your problem."
 echo " "
 echo "Advice:  When troubleshooting a problem you may be asked to provide dump data"
 echo "to assist troubleshooting. Use the [-dump email] to include all relevant data"
 echo "(drive data and configuration file) which will send an email to"
 echo "joeschmuck2023@hotmail.com and your email address will not be shared!."
-echo "If you prefer you can use [-dump] and the open up dialog wiht Joe Schmuck"
+echo "If you prefer you can use [-dump] and the open up dialog whit Joe Schmuck"
 echo "and attach the files in a message on the TrueNAS forums."
 echo " "
 }
@@ -6308,8 +6346,41 @@ if [[ "$drive" != "cd0" ]]; then
    echo "--${boundary}"
    echo "Content-Type: text/html"
    echo "Content-Transfer-Encoding: base64"
-   echo "Content-Disposition: attachment; filename=${drive}_${drivetype}_${serial1}_json.txt"
-   base64 "/tmp/${drive}_${drivetype}_${serial1}_json.txt"
+   echo "Content-Disposition: attachment; filename=${drivetype}_${serial1}_json.txt"
+   base64 "/tmp/${drivetype}_${serial1}_json.txt"
+
+# This can go away once we can reduce the data collection effort.
+if [[ "$extra_data" == "true" ]]; then
+   echo "--${boundary}"
+   echo "Content-Type: text/html"
+   echo "Content-Transfer-Encoding: base64"
+   echo "Content-Disposition: attachment; filename=${drivetype}_${serial1}_6json.txt"
+   base64 "/tmp/${drivetype}_${serial1}_6json.txt"
+
+   echo "--${boundary}"
+   echo "Content-Type: text/html"
+   echo "Content-Transfer-Encoding: base64"
+   echo "Content-Disposition: attachment; filename=${drivetype}_${serial1}_2json.txt"
+   base64 "/tmp/${drivetype}_${serial1}_2json.txt"
+
+   echo "--${boundary}"
+   echo "Content-Type: text/html"
+   echo "Content-Transfer-Encoding: base64"
+   echo "Content-Disposition: attachment; filename=${drivetype}_${serial1}_3json.txt"
+   base64 "/tmp/${drivetype}_${serial1}_3json.txt"
+
+   echo "--${boundary}"
+   echo "Content-Type: text/html"
+   echo "Content-Transfer-Encoding: base64"
+   echo "Content-Disposition: attachment; filename=${drivetype}_${serial1}_4json.txt"
+   base64 "/tmp/${drivetype}_${serial1}_4json.txt"
+
+   echo "--${boundary}"
+   echo "Content-Type: text/html"
+   echo "Content-Transfer-Encoding: base64"
+   echo "Content-Disposition: attachment; filename=${drivetype}_${serial1}_5json.txt"
+   base64 "/tmp/${drivetype}_${serial1}_5json.txt"
+fi
 
    ) >> "$logfile"
    force_delay
@@ -6367,11 +6438,23 @@ if [[ "$1" == "-dump" ]]; then
    if [[ "$2" == "email" ]]; then echo "Emailing to Joe Schmuck & Attaching Drive Data and Multi-Report Configuration."
       echo -n "Are you sure you want to send this data to Joe? (y/n)"
       read -s -n 1 Keyboard_yn
+	Keyboard_Message=""
       if [[ $Keyboard_yn == "y" || $Keyboard_yn == "Y" ]]; then
          dump_all="3"
          echo " "
          echo "Processing..."
          echo "Collecting the data and sending to Joe Schmuck for analysis."
+		echo " "
+		echo " "
+		echo "You may enter a comment now for Joe.  I'd recommend you enter"
+		echo "a small line to indicate what the issue is.  Example below..."
+		echo '"Hey Joe, ada2 last test age should be zero value. Thanks, Jimmy"'
+		echo " "
+		echo -n "Enter your message: "
+            read Keyboard_Message
+		if [[ $Keyboard_Message == "" ]]; then echo "No Message Included"; Keyboard_Message="No Message Included"; fi
+		echo " "
+		echo "Working..."
       else
          dump_all="2"
          echo " "
