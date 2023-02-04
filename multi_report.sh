@@ -14,8 +14,8 @@ LANG="en_US.UTF-8"
 ### Version v1.4, v1.5, v1.6, v2.0 FreeNAS/TrueNAS (Core & Scale) (joeschmuck)
 
 ### Changelog:
-# V2.0.5a (29 January 2023)
-#   - Fixed Toshiba MG09 drive Helium recognition.
+# V2.0.6 (1 February 2023)
+#   - Reduced drive data collection.  Added 'zpool' data collection.
 #
 # V2.0.5 (27 January 2023)
 #   - Adjusted Zpool Status to allow 'resilvering' status message. (Line 1340)
@@ -684,8 +684,8 @@ logfile_warranty_temp="/tmp/smart_report_warranty_flag.tmp"
 logfile_messages_temp="/tmp/smart_report_messages.tmp"
 boundary="gc0p4Jq0M2Yt08jU534c0p"
 
-progname="Multi-Report v2.0.5a dtd:"
-progverdate="2023-01-29"
+progname="Multi-Report v2.0.6 dtd:"
+progverdate="2023-02-01"
 
 if [[ $softver != "Linux" ]]; then
   if [[ "$(cat /etc/version | grep "FreeNAS")" ]]; then
@@ -719,7 +719,7 @@ valid_config_version_date="2023-01-20"
 VMWareNVME="on"			# Set to "off" normally, "on" to assist in incorrect VMWare reporting.
 Joes_System="false"		# Custom settings for my system and to remove these from your system.
 Sample_Test="false"		# Setup static test values for testing.
-extra_data="true"			# Collect extra 'json' data.  This is a temporary thing.
+extra_data="false"			# Collect extra 'json' data.  This is a temporary thing.
 
 ##########################
 ##########################
@@ -1432,7 +1432,7 @@ if [[ "$drive" != "cd0" ]]; then
 
        # Pull a fresh JSON listing
 	# Normal Listing
-        tempjson="$(smartctl -x --json /dev/${drive})"
+        tempjson="$(smartctl -x --json=u /dev/${drive})"
 
 # This stuff can go away after we select the proper data to collect.
 if [[ "$extra_data" == "true" ]]; then
@@ -1761,10 +1761,6 @@ if [[ "$(echo "$smartdata" | grep "22 Unknown_Attribute" | awk '{print $10}')" ]
 # Added Helium check for Toshiba MG07+ drives
 if [[ "$(echo "$smartdata" | grep "23 Unknown_Attribute" | awk '{print $4}')" ]]; then
    if [[ "$Helium" == "" ]]; then Helium="$(echo "$smartdata" | grep "23 Unknown_Attribute" | awk '{print $4}')"; fi; fi
-
-# Added Helium check for Toshiba MG09 drives
-if [[ "$(echo "$smartdata" | grep "23 Helium" | awk '{print $4}')" ]]; then
-   if [[ "$Helium" == "" ]]; then Helium="$(echo "$smartdata" | grep "23 Helium" | awk '{print $4}')"; fi; fi
 
 if [[ "$(echo "$smartdata" | grep "Background" | awk '{print $10}')" ]]; then
    lastTestHours="$(echo "$smartdata" | grep "Background" | awk '{print $10}')"; fi
@@ -2593,6 +2589,20 @@ fi
          echo "Content-Transfer-Encoding: base64"
          echo "Content-Disposition: attachment; filename=output.html"
          base64 /tmp/output.html
+
+
+   echo "--${boundary}"
+   echo "Content-Type: text/html"
+   echo "Content-Transfer-Encoding: base64"
+   echo "Content-Disposition: attachment; filename=zpoollist.txt"
+   base64 "/tmp/zpoollist.txt"
+
+   echo "--${boundary}"
+   echo "Content-Type: text/html"
+   echo "Content-Transfer-Encoding: base64"
+   echo "Content-Disposition: attachment; filename=zpoolstatus.txt"
+   base64 "/tmp/zpoolstatus.txt"
+
          ) >> "$logfile"
 #      fi
       force_delay
@@ -6382,6 +6392,7 @@ if [[ "$extra_data" == "true" ]]; then
    base64 "/tmp/${drivetype}_${serial1}_5json.txt"
 fi
 
+
    ) >> "$logfile"
    force_delay
 fi
@@ -6433,13 +6444,17 @@ fi
 # Dump the files into /tmp/ and then email them.
 
 if [[ "$1" == "-dump" ]]; then
+# Sneeking in one data collection point here for zpool
+zpool list > "/tmp/zpoollist.txt"
+zpool status > "/tmp/zpoolstatus.txt"
+
    if [[ "$2" == "all" ]]; then dump_all="2"; echo "Attaching Drive Data, Multi-Report Configuration, Statistics, and TrueNAS Configuration files."; fi
    if [[ "$2" == "" ]]; then dump_all="1"; echo "Attaching Drive Data and Multi-Report Configuration files."; fi
    if [[ "$2" == "email" ]]; then echo "Emailing to Joe Schmuck & Attaching Drive Data and Multi-Report Configuration."
-      echo -n "Are you sure you want to send this data to Joe? (y/n)"
-      read -s -n 1 Keyboard_yn
-	Keyboard_Message=""
-      if [[ $Keyboard_yn == "y" || $Keyboard_yn == "Y" ]]; then
+      #echo -n "Are you sure you want to send this data to Joe? (y/n)"
+      #read -s -n 1 Keyboard_yn
+	#Keyboard_Message=""
+      #if [[ $Keyboard_yn == "y" || $Keyboard_yn == "Y" ]]; then
          dump_all="3"
          echo " "
          echo "Processing..."
@@ -6455,15 +6470,15 @@ if [[ "$1" == "-dump" ]]; then
 		if [[ $Keyboard_Message == "" ]]; then echo "No Message Included"; Keyboard_Message="No Message Included"; fi
 		echo " "
 		echo "Working..."
-      else
-         dump_all="2"
-         echo " "
-         echo "You got it Boss, you know what's best. Your wish is my command!"
-         echo "Okay, Okay, Okay, I'm Only sending data to you.  Holy Cow!"
-         echo " "
-         echo "NOT SENDING TO joeschmuck2023@hotmail.com"
-         echo " "
-      fi
+      #else
+      #   dump_all="2"
+      #   echo " "
+      #   echo "You got it Boss, you know what's best. Your wish is my command!"
+      #   echo "Okay, Okay, Okay, I'm Only sending data to you.  Holy Cow!"
+      #   echo " "
+      #   echo "NOT SENDING TO joeschmuck2023@hotmail.com"
+      #   echo " "
+      #fi
    fi
 else
    dump_all="0"
