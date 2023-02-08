@@ -6,6 +6,10 @@
 ### Version v1.4, v1.5, v1.6, v2.0 FreeNAS/TrueNAS (Core & Scale) (joeschmuck)
 
 ### Changelog:
+# V2.0.7 (7 February 2023)
+#   - Bug Fix: Nuisance error message, did not impact operation but it doesn't look good.
+#   -- "Cannot open input file /tmp/zpoollist.txt" and "/tmp/zpoolstatus.txt".  Only occurs in Core
+#   -- during TrueNAS configuration file attachment operation (default is Monday).
 # V2.0.6 (1 February 2023)
 #   - Reduced drive data collection.  Added 'zpool' data collection.
 #
