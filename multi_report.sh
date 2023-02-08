@@ -14,6 +14,11 @@ LANG="en_US.UTF-8"
 ### Version v1.4, v1.5, v1.6, v2.0 FreeNAS/TrueNAS (Core & Scale) (joeschmuck)
 
 ### Changelog:
+# V2.0.7 (7 February 2023)
+#   - Bug Fix: Nuisance error message, did not impact operation but it doesn't look good.
+#   -- "Cannot open input file /tmp/zpoollist.txt" and "/tmp/zpoolstatus.txt".  Only occurs in Core
+#   -- during TrueNAS configuration file attachment operation (default is Monday).
+#
 # V2.0.6 (1 February 2023)
 #   - Reduced drive data collection.  Added 'zpool' data collection.
 #
@@ -684,8 +689,8 @@ logfile_warranty_temp="/tmp/smart_report_warranty_flag.tmp"
 logfile_messages_temp="/tmp/smart_report_messages.tmp"
 boundary="gc0p4Jq0M2Yt08jU534c0p"
 
-progname="Multi-Report v2.0.6 dtd:"
-progverdate="2023-02-01"
+progname="Multi-Report v2.0.7 dtd:"
+progverdate="2023-02-07"
 
 if [[ $softver != "Linux" ]]; then
   if [[ "$(cat /etc/version | grep "FreeNAS")" ]]; then
@@ -864,6 +869,46 @@ if [ "$expDataEmail" == "true" ]; then
       echo "Content-Transfer-Encoding: base64"
       echo "Content-Disposition: attachment; filename=Statistical_Data.csv"
       base64 "$statistical_data_file"
+   ) >> "$logfile"
+force_delay
+doit=""
+   fi
+fi
+
+# This file does not get attached to a -dump file. Joe does not need nor want this file.
+if [[ "$Config_Email_Enable" == "true" ]]; then
+
+   if [[ "$Attach_Config" == "1" ]]; then doit="true"; fi
+
+   Now=$(date +"%a")
+     case $Config_Backup_Day in
+       All)
+         doit="true"
+       ;;
+       Mon|Tue|Wed|Thu|Fri|Sat|Sun)
+         if [[ "$Config_Backup_Day" == "$Now" ]]; then doit="true"; fi
+       ;;
+       Month)
+         if [[ $(date +"%d") == "01" ]]; then doit="true"; fi
+       ;;
+       Never)
+       ;;
+       *)
+       ;;
+     esac
+
+  if [[ "$doit" == "true" ]] || [[ "$dump_all" != "0" ]]; then
+#echo "Attching Multi_Report Config"
+   (
+   # Write MIME section header for file attachment (encoded with base64)
+   echo "--${boundary}"
+   echo "Content-Type: text/html"
+   echo "Content-Transfer-Encoding: base64"
+   echo "Content-Disposition: attachment; filename=multi_report_config.txt"
+   base64 $Config_File_Name
+
+#      if [[ "$dump_all" != "0" ]]; then echo "--${boundary}"; fi
+# If we are not dumping data, end the boundry to attach files.
       if [[ "$dump_all" != "0" ]]; then echo "--${boundary}"; else echo "--${boundary}--"; fi
       ) >> "$logfile"
 force_delay
@@ -2505,7 +2550,8 @@ fi
 ############################## REMOVE UN-NEEDED JUNK AND FINALIZE EMAIL MESSAGE END #####################
 
 remove_junk_report () {
-output_x=0 
+output_x=0
+doit2=""
 ### Remove some un-needed junk from the output
 sed -i -e '/smartctl/d' "$logfile"
 force_delay
@@ -2535,78 +2581,46 @@ if [[ "$dump_all" != "0" ]]; then
      dump_drive_data
    done
    doit="true"
+   doit2="true"
 fi
+	if [[ "$doit2" == "true" ]]; then
+		# Check if I need "x" in this script anymore.
+		#if [[ $output_x == 0 ]]; then
+		# Cut Attachments from front of output.html
+		cp $logfile /tmp/output.html
+		outputline="$(cat /tmp/output.html | grep -n ': text' | cut -d ":" -f 1)"
+		outputline="$(echo $outputline | cut -d " " -f 1)"
+		#echo "outputline="$outputline
+		sed -i -e '1,'$outputline'd' /tmp/output.html
+		# Cut Attachments from backside of output.html
+		sed -i -e '/End of data section/q' /tmp/output.html
 
-if [[ "$Config_Email_Enable" == "true" ]]; then
+		force_delay   
+		output_x=1
+		(
+		# Write MIME section header for file attachment (encoded with base64)
+		echo "--${boundary}"
+		echo "Content-Type: text/html"
+		echo "Content-Transfer-Encoding: base64"
+		echo "Content-Disposition: attachment; filename=output.html"
+		base64 /tmp/output.html
 
-   if [[ "$Attach_Config" == "1" ]]; then doit="true"; fi
+		echo "--${boundary}"
+		echo "Content-Type: text/html"
+		echo "Content-Transfer-Encoding: base64"
+		echo "Content-Disposition: attachment; filename=zpoollist.txt"
+		base64 "/tmp/zpoollist.txt"
 
-   Now=$(date +"%a")
-     case $Config_Backup_Day in
-       All)
-         doit="true"
-       ;;
-       Mon|Tue|Wed|Thu|Fri|Sat|Sun)
-         if [[ "$Config_Backup_Day" == "$Now" ]]; then doit="true"; fi
-       ;;
-       Month)
-         if [[ $(date +"%d") == "01" ]]; then doit="true"; fi
-       ;;
-       Never)
-       ;;
-       *)
-       ;;
-     esac
-fi
-   if [[ "$doit" == "true" ]]; then
-      (
-      # Write MIME section header for file attachment (encoded with base64)
-      echo "--${boundary}"
-      echo "Content-Type: text/html"
-      echo "Content-Transfer-Encoding: base64"
-      echo "Content-Disposition: attachment; filename=multi_report_config.txt"
-      base64 $Config_File_Name
-      ) >> "$logfile"
-      force_delay
+		echo "--${boundary}"
+		echo "Content-Type: text/html"
+		echo "Content-Transfer-Encoding: base64"
+		echo "Content-Disposition: attachment; filename=zpoolstatus.txt"
+		base64 "/tmp/zpoolstatus.txt"
 
-# Check if I need "x" in this script anymore.
-#      if [[ $output_x == 0 ]]; then
-# Cut Attachments from front of output.html
-         cp $logfile /tmp/output.html
-         outputline="$(cat /tmp/output.html | grep -n ': text' | cut -d ":" -f 1)"
-         outputline="$(echo $outputline | cut -d " " -f 1)"
-#         echo "outputline="$outputline
-         sed -i -e '1,'$outputline'd' /tmp/output.html
-# Cut Attachments from backside of output.html
-         sed -i -e '/End of data section/q' /tmp/output.html
-
-         force_delay   
-         output_x=1
-         (
-         # Write MIME section header for file attachment (encoded with base64)
-         echo "--${boundary}"
-         echo "Content-Type: text/html"
-         echo "Content-Transfer-Encoding: base64"
-         echo "Content-Disposition: attachment; filename=output.html"
-         base64 /tmp/output.html
-
-
-   echo "--${boundary}"
-   echo "Content-Type: text/html"
-   echo "Content-Transfer-Encoding: base64"
-   echo "Content-Disposition: attachment; filename=zpoollist.txt"
-   base64 "/tmp/zpoollist.txt"
-
-   echo "--${boundary}"
-   echo "Content-Type: text/html"
-   echo "Content-Transfer-Encoding: base64"
-   echo "Content-Disposition: attachment; filename=zpoolstatus.txt"
-   base64 "/tmp/zpoolstatus.txt"
-
-         ) >> "$logfile"
-#      fi
-      force_delay
-   fi
+		) >> "$logfile"
+	fi
+	force_delay
+#fi
  
 ### End details section, close MIME section
 (
