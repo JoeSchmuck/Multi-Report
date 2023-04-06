@@ -885,13 +885,13 @@ update_script () {
 # Let's try a Symlink instead
 # First copy the new file
 				cp /tmp/multi_report_update.txt $GitVersion
-				cp "multi_report_config.txt" "multi_report_config_"$VersionFilename".txt"
+				cp "multi_report_config.txt" "old_v"$VersionFilename"_multi_report_config.txt"
 # Check if old symlink and delete
 				if test -e "multi_report.sh"; then
 					rm multi_report.sh	# Remove Symlink
 				fi		
 # Symlink the file
-				ln -s "/tmp/multi_report_update.txt" "multi_report.sh"
+				ln -s $GitVersion "multi_report.sh"
 				chmod +x multi_report.sh
 # Copy the User Guide
 				cp "/tmp/Multi-Report/Multi_Report_User_Guide.pdf" .
@@ -1266,7 +1266,7 @@ create_Email () {
 				else
 					echo "Execution Time: $(($duration / 60)) Minutes : $(($duration % 60)) Seconds"
 				fi
-				if [[ $UpdateAvailable == "true" ]]; then echo "<br>UPDATE AVAILABLE --> "$GitVersion"<br>"; fi
+				if [[ $UpdateAvailable == "true" ]]; then echo "<br>UPDATE AVAILABLE --> "v$GitVersion"<br>"; fi
 				if [[ $Messages != "" ]]; then echo "<br>Message from the Creator: "$Messages"<br>"; fi
 			if [[ "$(echo $programver | grep -i "beta")" ]] || [[ $UpdateAvailable == "true" ]]; then echo "</span></b>"; fi
 			echo "<br><br>"
