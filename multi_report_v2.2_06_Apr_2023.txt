@@ -749,7 +749,7 @@ logfile="/tmp/${tempfilepath}smart_report_body.tmp"
 logfile_header="/tmp/${tempfilepath}smart_report_header.tmp"
 boundary="gc0p4Jq0M2Yt08jU534c0p"
 
-progname="Multi-Report v2.2.1 dtd:"
+progname="Multi-Report v2.2 dtd:"
 progverdate="2023-04-06"
 
 CurrentFilename="multi_report_v2.2_2023_04_06.txt"
@@ -880,17 +880,19 @@ update_script () {
 				sed '5s/.*/TrueNASConfigEmailEncryption="'$TrueNASConfigEmailEncryption'"	 # Set this to "" for no encryption or enter some text as your passphrase./' /tmp/Multi-Report/$GitVersion > /tmp/multi_report_update.txt
 
 				# Copy the file
+				VersionFilename="$(echo $CurrentFilename | cut -d 'v' -f 2 | cut -d '_' -f 1)"
 		#		cp "/tmp/multi_report_update.txt" "$mefull"
 # Let's try a Symlink instead
 # First copy the new file
-				cp "/tmp/multi_report_update.txt" .
+				cp /tmp/multi_report_update.txt $GitVersion
 				cp "multi_report_config.txt" "multi_report_config_"$VersionFilename".txt"
 # Check if old symlink and delete
 				if test -e "multi_report.sh"; then
-					rm "multi_report.sh"	# Remove Symlink
+					rm multi_report.sh	# Remove Symlink
 				fi		
 # Symlink the file
 				ln -s "/tmp/multi_report_update.txt" "multi_report.sh"
+				chmod +x multi_report.sh
 # Copy the User Guide
 				cp "/tmp/Multi-Report/Multi_Report_User_Guide.pdf" .
 				echo " "
