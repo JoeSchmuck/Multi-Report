@@ -742,7 +742,7 @@ truenas_ver=$(cat /etc/version)
 testdata_path="data"
 Dump_Loop="0"
 re='^[0-9]+$'
-runfilename="run_me.txt"
+runfilename="multi_report.sh"
 
 ### temp files have been converted to variable stored, not stored in /tmp/ as a file. ###
 tempfilepath=$(( 10 + $RANDOM % 1000 ))
@@ -910,6 +910,14 @@ update_script () {
 	exit 0
 	}
 
+########## Check for Symlink ##########
+check_symlink () {
+# Check if old symlink and create if needed
+	if [ ! -f $runfilename ]; then
+		ln -s $CurrentFilename $runfilename
+		chmod +x ${runfilename}
+	fi
+	}
 
 ########## CHECK FOR NEWER SCRIPT ##########
 # This will check GitHub to find out if the script is newer.
@@ -6501,6 +6509,8 @@ if ! [[ "$1" == -x || "$1" == "-config" || "$1" == "-help" || "$1" == "-delete" 
 	echo " "
 	exit 1
 fi
+
+check_symlink
 
 # Set the default
 Write_Statistics="true"
