@@ -749,10 +749,10 @@ logfile="/tmp/${tempfilepath}smart_report_body.tmp"
 logfile_header="/tmp/${tempfilepath}smart_report_header.tmp"
 boundary="gc0p4Jq0M2Yt08jU534c0p"
 
-progname="Multi-Report v2.2 dtd:"
-progverdate="2023-04-05"
+progname="Multi-Report v2.2.1 dtd:"
+progverdate="2023-04-06"
 
-CurrentFilename="multi_report_v2.2_2023_04_05.txt"
+CurrentFilename="multi_report_v2.2_2023_04_06.txt"
 
 if [[ $softver != "Linux" ]]; then
   if [[ "$(cat /etc/version | grep "FreeNAS")" ]]; then
