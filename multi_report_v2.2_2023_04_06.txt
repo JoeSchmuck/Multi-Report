@@ -1266,8 +1266,8 @@ create_Email () {
 				else
 					echo "Execution Time: $(($duration / 60)) Minutes : $(($duration % 60)) Seconds"
 				fi
-				if [[ $UpdateAvailable == "true" ]]; then echo "<br>UPDATE AVAILABLE --> "v$GitVersion"<br>"; fi
-				if [[ $Messages != "" ]]; then echo "<br>Message from the Creator: "$Messages"<br>"; fi
+				if [[ $UpdateAvailable == "true" ]]; then echo "<br>UPDATE AVAILABLE --> "v$GitVersion -- Use '-update' switch to update the script."<br>"; fi
+				if [[ $Messages != "" ]]; then echo "Message from the Creator: "$Messages"<br>"; fi
 			if [[ "$(echo $programver | grep -i "beta")" ]] || [[ $UpdateAvailable == "true" ]]; then echo "</span></b>"; fi
 			echo "<br><br>"
 			# Keyboard_Message comes from the '-dump email' command.
