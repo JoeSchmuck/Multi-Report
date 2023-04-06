@@ -1,0 +1,5 @@
+Versioning is formatted "vX.Y.Z" where X in the Major Number, Y in the Minor Number, and Z is for Bug Fixes.
+
+Examples are:  multi_report_v2.0.10  or  multi_report_v2.1
+
+The versioning controls if an update is available.
