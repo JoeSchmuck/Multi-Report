@@ -890,11 +890,11 @@ update_script () {
 				cp "multi_report_config.txt" "old_v"$VersionFilename"_multi_report_config.txt"
 # Check if old symlink and delete
 				if test -e $runfilename; then
-					rm $runfilename	# Remove Symlink
+					rm ${runfilename}	# Remove Symlink
 				fi		
 # Symlink the file
 				ln -s $GitVersion $runfilename
-				chmod +x $runfilename
+				chmod +x ${runfilename}
 # Copy the User Guide
 				cp "/tmp/Multi-Report/Multi_Report_User_Guide.pdf" .
 				echo " "
