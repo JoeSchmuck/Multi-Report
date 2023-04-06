@@ -25,6 +25,7 @@ TrueNASConfigEmailEncryption=""	 # Set this to "" for no encryption or enter som
 #   - Bugfix for Scale, no TrueNAS Config Backup without 7-zip.
 #   - Added Automatic Update Notification for newer version.
 #   - Added Message from the Creator.
+#   - Added Symlink - "multi_report.sh" is the file name to run from this point forward.
 #
 # NEED TO ADD copy new file on the drive, remove the old symlink and crewate a new symlink, copy the config file and rename it with the old version number.
 # NEED TO FIX If Message from the Creator IS disabled then the Updates are Disabled.
@@ -741,6 +742,7 @@ truenas_ver=$(cat /etc/version)
 testdata_path="data"
 Dump_Loop="0"
 re='^[0-9]+$'
+runfilename="multi_report.sh"
 
 ### temp files have been converted to variable stored, not stored in /tmp/ as a file. ###
 tempfilepath=$(( 10 + $RANDOM % 1000 ))
@@ -887,12 +889,12 @@ update_script () {
 				cp /tmp/multi_report_update.txt $GitVersion
 				cp "multi_report_config.txt" "old_v"$VersionFilename"_multi_report_config.txt"
 # Check if old symlink and delete
-				if test -e "multi_report.sh"; then
-					rm multi_report.sh	# Remove Symlink
+				if test -e $runfilename; then
+					rm $runfilename	# Remove Symlink
 				fi		
 # Symlink the file
-				ln -s $GitVersion "multi_report.sh"
-				chmod +x multi_report.sh
+				ln -s $GitVersion $runfilename
+				chmod +x $runfilename
 # Copy the User Guide
 				cp "/tmp/Multi-Report/Multi_Report_User_Guide.pdf" .
 				echo " "
