@@ -1,4 +1,12 @@
 ### Changelog:
+# V2.2 (06 April 2023)
+#
+#   - Bugfix for Test Age always being = "2".
+#   - Bugfix for Scale, no TrueNAS Config Backup without 7-zip.
+#   - Added Automatic Update Notification for newer version.
+#   - Added Message from the Creator.
+#   - Added Symlink - "multi_report.sh" is the file name to run from this point forward.  Read the User Guide for more details.
+#
 # V2.1 (29 March 2023)
 #
 #   - Updated TrueNAS password backup to include encrypted password file, and enable encrypted Config File in email.
