@@ -27,6 +27,7 @@ TrueNASConfigEmailEncryption="puppy"	 # Set this to "" for no encryption or ente
 #   - Changed TrueNASConfig Backup to zip file type attachment.
 #   - Adjusted for drive that passes SMART Test but reports the test hour as '0'.
 #
+# See Changelog file on github.com
 
 ######### INSTRUCTIONS ON USE OF THIS SCRIPT
 #
