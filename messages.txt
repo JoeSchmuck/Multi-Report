@@ -1,1 +1,1 @@
-
+There is an update, run the script using -update for the new changes.
