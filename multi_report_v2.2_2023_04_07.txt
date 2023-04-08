@@ -241,7 +241,7 @@ update_script () {
 
 				sed -i '/TrueNASConfigEmailEncryption="" /c\TrueNASConfigEmailEncryption="'$TrueNASConfigEmailEncryption'" 	 # Set this to "" for no encryption or enter some text as your passphrase./' /tmp/Multi-Report/$GitVersion
 
-cp /tmp/Multi-Report/$GitVersion > /tmp/multi_report_update.txt
+cp /tmp/Multi-Report/$GitVersion /tmp/multi_report_update.txt
 
 
 				# Copy the file
