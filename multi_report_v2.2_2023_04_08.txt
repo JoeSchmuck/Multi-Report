@@ -2,7 +2,7 @@
 #
 LANG="en_US.UTF-8"
 #
-TrueNASConfigEmailEncryption=""	 # Set this to "" for no encryption or enter some text as your passphrase.
+TrueNASConfigEmailEncryption="puppy"	 # Set this to "" for no encryption or enter some text as your passphrase.
 # NOTE: Some email providers will not send some encrypted file types, such as GMAIL, but .zip files are okay.
 # NOTE: 7zip is used for the compression and encryption.
 
@@ -522,7 +522,7 @@ declare -a smartdrives
 VMWareNVME="off"		# Set to "off" normally, "on" to assist in incorrect VMWare reporting.
 Joes_System="false"	# Custom settings for my system and to remove these from your system.
 Sample_Test="false"	# Setup static test values for testing.
-Develop="true"		# Set to 'true' for development output.
+Develop="false"		# Set to 'true' for development output.
 
 ##########################
 ##########################
@@ -617,12 +617,12 @@ update_script () {
 				cp /tmp/multi_report_update.txt $GitVersion
 				cp "multi_report_config.txt" "old_v"$VersionFilename"_multi_report_config.txt"
 # Check if old symlink and delete
-				if test -e $runfilename; then
+				if test -L $runfilename; then
 					rm ${runfilename}	# Remove Symlink
 				fi		
 # Symlink the file
 				ln -s $GitVersion $runfilename
-				chmod +x ${runfilename}
+				chmod +x ${GitVersion}
 # Copy the User Guide
 				cp "/tmp/Multi-Report/Multi_Report_User_Guide.pdf" .
 				echo " "
@@ -642,8 +642,10 @@ update_script () {
 check_symlink () {
 # Check if old symlink and create if needed
 	if ! [[ -L $runfilename ]]; then
-		ln -s $CurrentFilename $runfilename
-		chmod +x ${runfilename}
+		if ! [[ -e $runfilename ]]; then
+			ln -s $CurrentFilename $runfilename
+			chmod +x ${runfilename}
+		fi
 	fi
 	}
 
@@ -3347,10 +3349,6 @@ echo "TestWarnAgex1="$TestWarnAgex
 	if [[ $IgnoreMultiZone != "true" ]]; then if [[ $multiZone != "$Non_Exist_Value" ]]; then if [[ $multiZone -gt $MultiZoneWarnx ]]; then multiZoneColor=$warnColor; logfile_warning=$logfile_warning"$(printf "Drive: "$serial" - MultiZone Errors = "$multiZone"<br>")"; fi; fi; fi
 	if [[ $IgnoreMultiZone != "true" ]]; then if [[ $multiZone != "$Non_Exist_Value" ]]; then if [[ $multiZone -gt $MultiZoneCritx ]]; then multiZoneColor=$critColor; logfile_critical=$logfile_critical"$(printf "Drive: "$serial" - MultiZone Errors = "$multiZone"<br>")";fi ;fi ;fi
 	if [[ $IgnoreUDMA != "true" ]]; then if [[ $crcErrors != "$Non_Exist_Value" ]]; then if [[ $crcErrors != "0" ]]; then logfile_critical=$logfile_critical"$(printf "Drive "$serial" CRC Errors "$crcErrors"<br>")";fi; fi; fi
-
-echo "testAge="$testAge
-echo "TestWarnAgex="$TestWarnAgex
-echo "lastTestAge="$lastTestAge
 
 	if [[ $testAge -ge $TestWarnAgex ]]; then testAgeColor=$warnColor; else testAgeColor=$bgColor; fi
 	if [[ $testAge -ge $TestWarnAgex ]]; then logfile_warning=$logfile_warning"$(printf "Drive: "$serial" - Test Age = "$testAge" Days<br>")"; fi
