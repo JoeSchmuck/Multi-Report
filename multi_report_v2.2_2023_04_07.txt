@@ -239,7 +239,7 @@ update_script () {
 				sleep .1
 		#		sed '5s/.*/TrueNASConfigEmailEncryption="'$TrueNASConfigEmailEncryption'"	 # Set this to "" for no encryption or enter some text as your passphrase./' /tmp/Multi-Report/$GitVersion > /tmp/multi_report_update.txt
 
-				gsed -i "/TrueNASConfigEmailEncryption="" /c\TrueNASConfigEmailEncryption="'$TrueNASConfigEmailEncryption'" 	 # Set this to "" for no encryption or enter some text as your passphrase./" /tmp/Multi-Report/$GitVersion
+				sed -i "" -e 's|TrueNASConfigEmailEncryption="" |TrueNASConfigEmailEncryption="'$TrueNASConfigEmailEncryption'" |g' /tmp/Multi-Report/$GitVersion
 
 cp /tmp/Multi-Report/$GitVersion /tmp/multi_report_update.txt
 
