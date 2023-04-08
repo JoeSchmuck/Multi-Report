@@ -2,7 +2,7 @@
 #
 LANG="en_US.UTF-8"
 #
-TrueNASConfigEmailEncryption=""	# Set this to "" for no encryption, MUST REMAIN ON LINE 5.
+TrueNASConfigEmailEncryption=""	 # Set this to "" for no encryption or enter some text as your passphrase.
 # NOTE: Some email providers will not send some encrypted file types, such as GMAIL, but .zip files are okay.
 # NOTE: 7zip is used for the compression and encryption.
 
@@ -25,7 +25,7 @@ TrueNASConfigEmailEncryption=""	# Set this to "" for no encryption, MUST REMAIN 
 #   - Added Message from the Creator.
 #   - Added Symlink - "multi_report.sh" is the file name to run from this point forward.  Read the User Guide for more details.
 #   - Changed TrueNASConfig Backup to zip file type attachment.
-#
+#   - Adjusted for drive that passes SMART Test but reports the test hour as '0'.
 #
 
 ######### INSTRUCTIONS ON USE OF THIS SCRIPT
@@ -522,7 +522,7 @@ declare -a smartdrives
 VMWareNVME="off"		# Set to "off" normally, "on" to assist in incorrect VMWare reporting.
 Joes_System="false"	# Custom settings for my system and to remove these from your system.
 Sample_Test="false"	# Setup static test values for testing.
-Develop="false"		# Set to 'true' for development output.
+Develop="true"		# Set to 'true' for development output.
 
 ##########################
 ##########################
@@ -641,7 +641,7 @@ update_script () {
 ########## Check for Symlink ##########
 check_symlink () {
 # Check if old symlink and create if needed
-	if [ ! -f $runfilename ]; then
+	if ! [[ -L $runfilename ]]; then
 		ln -s $CurrentFilename $runfilename
 		chmod +x ${runfilename}
 	fi
@@ -1985,6 +1985,11 @@ get_drive_data () {
 		lastTestType="$(echo "${smartdata5}" | grep "# 1" | awk '{print $4" "$5}' )"
 	fi
 
+# Adjust for a drive that does report a passed SMART Test but not the hour.
+	if [[ $lastTestHours == "0" ]] && [[ $lastTestStatusPass == "true" ]]; then
+		lastTestHours=$onHours
+	fi
+
 	if [[ "$(echo "${smartdata}" | grep "# 1" | awk '{print $5}')" ]]; then
 		chkreadfailure="$(echo "${smartdata}" | grep "# 1" | awk '{print $5}')"
 	fi
@@ -2036,7 +2041,7 @@ get_drive_data () {
 # $lastTestType = The last/current test (background short/long, Short/Long offline, Conveyance)
 # $lastTestStatus = "Completed without error", "Completed", "Self test in progress", etc...
 # $testStatus = Percent completed of a test in progress "35%" with "%" trimmed.
-# $lastTestStatusPass = json passed = "true" or "false" (not used yet).
+# $lastTestStatusPass = json passed = "true" or "false".
 
 	if [[ $Sample_Test == "true" ]]; then
 		echo "In Testing Mode"
@@ -3342,6 +3347,10 @@ echo "TestWarnAgex1="$TestWarnAgex
 	if [[ $IgnoreMultiZone != "true" ]]; then if [[ $multiZone != "$Non_Exist_Value" ]]; then if [[ $multiZone -gt $MultiZoneWarnx ]]; then multiZoneColor=$warnColor; logfile_warning=$logfile_warning"$(printf "Drive: "$serial" - MultiZone Errors = "$multiZone"<br>")"; fi; fi; fi
 	if [[ $IgnoreMultiZone != "true" ]]; then if [[ $multiZone != "$Non_Exist_Value" ]]; then if [[ $multiZone -gt $MultiZoneCritx ]]; then multiZoneColor=$critColor; logfile_critical=$logfile_critical"$(printf "Drive: "$serial" - MultiZone Errors = "$multiZone"<br>")";fi ;fi ;fi
 	if [[ $IgnoreUDMA != "true" ]]; then if [[ $crcErrors != "$Non_Exist_Value" ]]; then if [[ $crcErrors != "0" ]]; then logfile_critical=$logfile_critical"$(printf "Drive "$serial" CRC Errors "$crcErrors"<br>")";fi; fi; fi
+
+echo "testAge="$testAge
+echo "TestWarnAgex="$TestWarnAgex
+echo "lastTestAge="$lastTestAge
 
 	if [[ $testAge -ge $TestWarnAgex ]]; then testAgeColor=$warnColor; else testAgeColor=$bgColor; fi
 	if [[ $testAge -ge $TestWarnAgex ]]; then logfile_warning=$logfile_warning"$(printf "Drive: "$serial" - Test Age = "$testAge" Days<br>")"; fi
