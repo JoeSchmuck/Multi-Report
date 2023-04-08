@@ -2,7 +2,7 @@
 #
 LANG="en_US.UTF-8"
 #
-TrueNASConfigEmailEncryption="puppy"	 # Set this to "" for no encryption, MUST REMAIN ON LINE 5.
+TrueNASConfigEmailEncryption=""	 # Set this to "" for no encryption, MUST REMAIN ON LINE 5.
 # NOTE: Some email providers will not send some encrypted file types, such as GMAIL, but .zip files are okay.
 # NOTE: 7zip is used for the compression and encryption.
 
