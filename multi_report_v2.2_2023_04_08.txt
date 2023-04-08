@@ -2,7 +2,7 @@
 #
 LANG="en_US.UTF-8"
 #
-TrueNASConfigEmailEncryption=""	 # Set this to "" for no encryption or enter some text as your passphrase.
+TrueNASConfigEmailEncryption="puppy"	 # Set this to "" for no encryption, MUST REMAIN ON LINE 5.
 # NOTE: Some email providers will not send some encrypted file types, such as GMAIL, but .zip files are okay.
 # NOTE: 7zip is used for the compression and encryption.
 
@@ -620,7 +620,11 @@ update_script () {
 # Check if old symlink and delete
 				if test -L $runfilename; then
 					rm ${runfilename}	# Remove Symlink
-				fi		
+				fi
+# Check if old multi_report.sh file exists and delete
+				if test -e $runfilename; then
+					rm ${runfilename} # Remove actual script
+				fi
 # Symlink the file
 				ln -s $GitVersion $runfilename
 				chmod +x ${GitVersion}
