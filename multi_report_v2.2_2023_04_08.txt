@@ -2,7 +2,7 @@
 #
 LANG="en_US.UTF-8"
 #
-TrueNASConfigEmailEncryption=""	 # Set this to "" for no encryption, MUST REMAIN ON LINE 5.
+TrueNASConfigEmailEncryption=""	 # Set this to "" for no encryption or enter some text as your passphrase.
 # NOTE: Some email providers will not send some encrypted file types, such as GMAIL, but .zip files are okay.
 # NOTE: 7zip is used for the compression and encryption.
 
@@ -1007,8 +1007,8 @@ create_Email () {
 				else
 					echo "Execution Time: $(($duration / 60)) Minutes : $(($duration % 60)) Seconds"
 				fi
-				if [[ $UpdateAvailable == "true" ]]; then echo "<br>UPDATE AVAILABLE --> "v$GitVersion -- Use '-update' switch to update the script."<br>"; fi
-				if [[ $Messages != "" ]]; then echo "Message from the Creator: "$Messages"<br>"; fi
+				if [[ $UpdateAvailable == "true" ]]; then echo "<br>UPDATE AVAILABLE --> v"$GitVersion" -- Use '-update' switch to update the script."; fi
+				if [[ $Messages != "" ]]; then echo "<br>Message from the Creator: "$Messages"<br>"; fi
 			if [[ "$(echo $programver | grep -i "beta")" ]] || [[ $UpdateAvailable == "true" ]]; then echo "</span></b>"; fi
 			echo "<br><br>"
 			# Keyboard_Message comes from the '-dump email' command.
@@ -4454,6 +4454,7 @@ generate_config_file () {
 								cp "/tmp/multi_report_update.txt" "$mefull"
 								rm "/tmp/multi_report_update.txt"
 							fi
+							echo "You still need to write any other changes made such as an email address."
 							echo "returning..."
 							sleep 2
 						;;
