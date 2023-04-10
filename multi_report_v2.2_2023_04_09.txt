@@ -28,17 +28,19 @@ TrueNASConfigEmailEncryption=""	 # Set this to "" for no encryption, MUST REMAIN
 #   - Changed TrueNASConfig Backup to zip file type attachment.
 #   - Adjusted for drive that passes SMART Test but reports the test hour as '0'.
 #
-# See Changelog file on github.com
+# See Changelog file on github.com/JoeSchmuck
 
 ######### INSTRUCTIONS ON USE OF THIS SCRIPT
 #
 # This script has been designed to run using an external reusable configuration file which is
 # configured by running the script with the -config parameter.
 # 
-# To run the program from the command line, use ./multi_report.sh [-h] for additional help instructions,
-# and [-config] to run the configuration.
+# To run the program from the command line, ensure you are in the directory in which the script resides,
+# then use ./multi_report.sh [-h] for additional help instructions, and [-config] to run the configuration.
 #
-# You may need to make the script executable using "chmod +x multi_report.sh"
+# You may need to make the script executable using "chmod +x multi_report.sh" or chmod 777.
+# I prefer to have my directory permission setup to 777, but mine is a small home system.
+# Your security may demand more strick control.
 #
 
 ###### User-definable Parameters (IF YOU DO NOT WANT TO USE THE EXTERNAL CONFIGURATION FILE) #######
