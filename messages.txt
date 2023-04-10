@@ -1,1 +1,1 @@
-There is a bugfix for wearlevel, dated: 2023-04-09, run the script using -update for the new changes.
+Final version?  Maybe. Run the script using -update for the new changes.
