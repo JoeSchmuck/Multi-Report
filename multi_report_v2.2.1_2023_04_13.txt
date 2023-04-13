@@ -625,11 +625,11 @@ update_script () {
 
 # Edit this to generate the full file name minus the .txt
 
-				VersionFilename="$(echo $CurrentFilename | cut -d 'v' -f 2 | cut -d '_' -f 1)"
+				VersionFilename="$(echo $CurrentFilename | rev | cut -d '.' -f 2,3,4 | rev)"
 
 # Backup the original multi_report.sh file and config file to save
-				if test -e "multi_report.sh"; then cp "multi_report.sh" $CurrentFilename; fi
-				cp "multi_report_config.txt" $CurrentFilename"_multi_report_config.txt"
+				if test -e $runfilename; then cp $runfilename $CurrentFilename; fi
+				cp "multi_report_config.txt" $VersionFilename"_multi_report_config.txt"
 
 # Next copy the new file to new file name
 #				cp /tmp/multi_report_update.txt $GitVersion
