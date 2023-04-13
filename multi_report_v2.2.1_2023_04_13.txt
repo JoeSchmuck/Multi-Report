@@ -18,10 +18,10 @@ TrueNASConfigEmailEncryption=""	 # Set this to "" for no encryption, MUST REMAIN
 
 ### Changelog:
 # V2.2.1 (13 April 2023)
-#   -Bugfix for Custom Drive Configuration - Wear Level -- NOT DONE
-#   -Simplified User Installation -- NOT DONE
+#   -Bugfix for Custom Drive Configuration - Wear Level
+#   -Simplified User Installation
 #
-#
+#  TEST EACH CUSTOM DRIVE VARIABLE TO ENSURE IT'S RESPONDING. USE DEBUG ROUTINE TO SET THE VALUES.
 #
 # V2.2 (10 April 2023)
 #
@@ -532,7 +532,7 @@ declare -a smartdrives
 VMWareNVME="off"		# Set to "off" normally, "on" to assist in incorrect VMWare reporting.
 Joes_System="false"	# Custom settings for my system and to remove these from your system.
 Sample_Test="false"	# Setup static test values for testing.
-Develop="false"		# Set to 'true' for development output.
+Develop="true"		# Set to 'true' for development output.
 
 ##########################
 ##########################
@@ -625,11 +625,11 @@ update_script () {
 
 # Edit this to generate the full file name minus the .txt
 
-				VersionFilename="$(echo $CurrentFilename | rev | cut -d '.' -f 2,3,4 | rev)"
+				VersionFilename="$(echo $CurrentFilename | cut -d 'v' -f 2 | cut -d '_' -f 1)"
 
 # Backup the original multi_report.sh file and config file to save
-				if test -e $runfilename; then cp $runfilename $CurrentFilename; fi
-				cp "multi_report_config.txt" $VersionFilename"_multi_report_config.txt"
+				if test -e "multi_report.sh"; then cp "multi_report.sh" $CurrentFilename; fi
+				cp "multi_report_config.txt" $CurrentFilename"_multi_report_config.txt"
 
 # Next copy the new file to new file name
 #				cp /tmp/multi_report_update.txt $GitVersion
@@ -653,6 +653,7 @@ update_script () {
 				cp "/tmp/Multi-Report/Multi_Report_User_Guide.pdf" .
 				echo " "
 				echo "Your script has been updated, and a new copy of the User Guide is in your directory."
+				echo "If you recieved a 'chmod' error, please manually run 'chmod +x "$runfilename"' to allow the script to run."
 				echo "Exiting..."
 				sleep 1
 			else
@@ -2046,6 +2047,9 @@ get_drive_data () {
 
 	if [[ "$rotation" == "0" ]]; then
 		Custom_Drives_ListDrive="SSD"
+		if [[ $wearLevelAdj == "r" ]]; then
+			wearLevel=$(( 100 - $wearLevel ))
+		fi
 	fi
 
 	if [[ "$(echo "$smartdata5" | grep "NVM")" ]]; then
@@ -2967,10 +2971,11 @@ crunch_numbers () {
 			if [[ "$(echo $i | cut -d':' -f 11)" != "d" ]]; then SeekErrorsWarnx="$(echo $i | cut -d':' -f 11)"; fi
 			if [[ "$(echo $i | cut -d':' -f 12)" != "d" ]]; then SeekErrorsCritx="$(echo $i | cut -d':' -f 12)"; fi
 			if [[ "$(echo $i | cut -d':' -f 13)" != "d" ]]; then TestWarnAgex="$(echo $i | cut -d':' -f 13)"; fi
-#echo "TestWarnAgex1="$TestWarnAgex
+
 			testAgeOvrd="$(echo $i | cut -d':' -f 14)"
 			if [[ "$(echo $i | cut -d':' -f 15)" != "d" ]]; then HeliumMinx="$(echo $i | cut -d':' -f 15)"; fi
 			if [[ "$(echo $i | cut -d':' -f 16)" != "d" ]]; then wearLevelAdj="$(echo $i | cut -d':' -f 16)"; fi
+echo "wearLevelAdj="$wearLevelAdj
 
 			### Remove this check in future version
 			if [[ "$(echo $i | cut -d':' -f 16)" == "" ]] || [[ "$(echo $i | cut -d':' -f 16)" == "," ]]; then
@@ -5463,11 +5468,11 @@ generate_config_file () {
 											SeekErrorsWarnx="$(echo $i | cut -d':' -f 11)"
 											SeekErrorsCritx="$(echo $i | cut -d':' -f 12)"
 											TestWarnAgex="$(echo $i | cut -d':' -f 13)"
-echo "TestWarnAgex4="$TestWarnAgex
 											testAgeOvrd="$(echo $i | cut -d':' -f 14)"
 											HeliumMinx="$(echo $i | cut -d':' -f 15)"
 											wearLevelAdj="$(echo $i | cut -d":" -f 16)"
 										fi
+#echo "wearLevelAdj2="$wearLevelAdj
 									done
 									echo " "
 									echo "The current alarm setpoints are ('d' = system default):"
