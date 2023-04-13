@@ -627,12 +627,13 @@ update_script () {
 
 				VersionFilename="$(echo $CurrentFilename | cut -d 'v' -f 2 | cut -d '_' -f 1)"
 
-# Copy the original multi_report.sh file to saved script
-				cp "multi_report.sh" "v"$VersionFilename"_multi_report.sh"
+# Backup the original multi_report.sh file and config file to save
+				cp "multi_report.sh" $CurrentFilename
+				cp "multi_report_config.txt" $CurrentFilename"_multi_report_config.txt"
 
-# First copy the new file
-				cp /tmp/multi_report_update.txt $GitVersion
-				cp "multi_report_config.txt" "old_v"$VersionFilename"_multi_report_config.txt"
+# Next copy the new file to new file name
+#				cp /tmp/multi_report_update.txt $GitVersion
+#				cp "multi_report_config.txt" "old_v"$VersionFilename"_multi_report_config.txt"
 
 # Check if old symlink and delete 
 #				if test -L $runfilename; then
@@ -643,7 +644,7 @@ update_script () {
 					rm ${runfilename} # Remove actual script
 				fi
 # Copy the new multi_report.sh file
-				cp cp /tmp/multi_report_update.txt $runfilename
+				cp /tmp/multi_report_update.txt $runfilename
 
 # Symlink the file
 #				ln -s $GitVersion $runfilename
