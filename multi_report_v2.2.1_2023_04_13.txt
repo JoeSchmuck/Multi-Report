@@ -645,7 +645,7 @@ update_script () {
 				fi
 # Copy the new multi_report.sh file
 				cp /tmp/multi_report_update.txt $runfilename
-
+				chmod +x $runfilename
 # Symlink the file
 #				ln -s $GitVersion $runfilename
 #				chmod +x ${GitVersion}
