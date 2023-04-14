@@ -624,38 +624,23 @@ update_script () {
 				# Copy the file
 
 # Edit this to generate the full file name minus the .txt
-
 				VersionFilename="$(echo $CurrentFilename | cut -d 'v' -f 2 | cut -d '_' -f 1)"
 
 # Backup the original multi_report.sh file and config file to save
-				if ! test -e $CurrentFilename; then
-					if test -e "multi_report.sh"; then cp "multi_report.sh" $CurrentFilename; fi
-				fi
+				if test -e "multi_report.sh"; then cp "multi_report.sh" $CurrentFilename; fi
 				cp "multi_report_config.txt" $CurrentFilename"_multi_report_config.txt"
 
-# Next copy the new file to new file name
-#				cp /tmp/multi_report_update.txt $GitVersion
-#				cp "multi_report_config.txt" "old_v"$VersionFilename"_multi_report_config.txt"
-
-# Check if old symlink and delete 
-#				if test -L $runfilename; then
-#					rm ${runfilename}	# Remove Symlink
-#				fi
 # Check if old multi_report.sh file exists and delete
 				if test -e $runfilename; then
 					rm ${runfilename} # Remove actual script
 				fi
 # Copy the new multi_report.sh file
 				cp /tmp/multi_report_update.txt $runfilename
-#				chmod +x $runfilename
-# Symlink the file
-#				ln -s $GitVersion $runfilename
-#				chmod +x ${GitVersion}
+
 # Copy the User Guide
 				cp "/tmp/Multi-Report/Multi_Report_User_Guide.pdf" .
 				echo " "
 				echo "Your script has been updated, and a new copy of the User Guide is in your directory."
-#				echo "If you recieved a 'chmod' error, please manually run 'chmod +x "$runfilename"' to allow the script to run."
 				echo "Exiting..."
 				sleep 1
 			else
