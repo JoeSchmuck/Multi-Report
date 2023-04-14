@@ -645,7 +645,7 @@ update_script () {
 				fi
 # Copy the new multi_report.sh file
 				cp /tmp/multi_report_update.txt $runfilename
-				chmod +x $runfilename
+#				chmod +x $runfilename
 # Symlink the file
 #				ln -s $GitVersion $runfilename
 #				chmod +x ${GitVersion}
@@ -653,7 +653,7 @@ update_script () {
 				cp "/tmp/Multi-Report/Multi_Report_User_Guide.pdf" .
 				echo " "
 				echo "Your script has been updated, and a new copy of the User Guide is in your directory."
-				echo "If you recieved a 'chmod' error, please manually run 'chmod +x "$runfilename"' to allow the script to run."
+#				echo "If you recieved a 'chmod' error, please manually run 'chmod +x "$runfilename"' to allow the script to run."
 				echo "Exiting..."
 				sleep 1
 			else
