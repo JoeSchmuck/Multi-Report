@@ -2,7 +2,7 @@
 #
 LANG="en_US.UTF-8"
 #
-TrueNASConfigEmailEncryption=""	 # Set this to "" for no encryption, MUST REMAIN ON LINE 5.
+TrueNASConfigEmailEncryption="ffff"	 # Set this to "" for no encryption or enter some text as your passphrase.
 # NOTE: Some email providers will not send some encrypted file types, such as GMAIL, but .zip files are okay.
 # NOTE: 7zip is used for the compression and encryption.
 
@@ -624,11 +624,12 @@ update_script () {
 				# Copy the file
 
 # Edit this to generate the full file name minus the .txt
-				VersionFilename="$(echo $CurrentFilename | cut -d 'v' -f 2 | cut -d '_' -f 1)"
+				#VersionFilename="$(echo $CurrentFilename | cut -d 'v' -f 2 | cut -d '_' -f 1)"
+				VersionFilename="$(echo $CurrentFilename | rev | cut -d '.' -f 2,3,4,5 | rev)"
 
 # Backup the original multi_report.sh file and config file to save
 				if test -e "multi_report.sh"; then cp "multi_report.sh" $CurrentFilename; fi
-				cp "multi_report_config.txt" $CurrentFilename"_multi_report_config.txt"
+				cp "multi_report_config.txt" $VersionFilename"_multi_report_config.txt"
 
 # Check if old multi_report.sh file exists and delete
 				if test -e $runfilename; then
