@@ -8,6 +8,11 @@ See Changelog file on github.com/JoeSchmuck
 ### Version v1.4, v1.5, v1.6 -> v2.3 FreeNAS/TrueNAS (Core & Scale) (joeschmuck)
 
 ### Changelog:
+# V2.4 (21 April 2023)
+#   - Added NVMe Columns for Media Errors and Total Data Written.
+#   - Added Total Data Written for all drives.
+#   - Updated User Guide.
+#
 # V2.3 (14 April 2023)
 #   - Simplified User Installation
 #   - Bugfix for Custom Drive Configuration - Wear Level, Helium Level.
