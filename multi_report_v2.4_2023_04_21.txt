@@ -613,8 +613,8 @@ update_script () {
 		( cd /tmp
 		git clone -q https://github.com/JoeSchmuck/Multi-Report.git
 		)
-		GitVersion="$(cat "/tmp/Multi-Report/current_script1")"
-#		GitVersion="$(cat "/tmp/Multi-Report/current_script")"
+#		GitVersion="$(cat "/tmp/Multi-Report/current_script1")"
+		GitVersion="$(cat "/tmp/Multi-Report/current_script")"
 		echo " "
 		echo "Your current version is: "$CurrentFilename
 		echo "     The new version is: "$GitVersion 
@@ -691,11 +691,11 @@ checkforupdate () {
 		)
 
 		# Examine the file name in 'current_script' for version and date.
-#		if test -e "/tmp/Multi-Report/current_script"; then
-		if test -e "/tmp/Multi-Report/current_script1"; then
+		if test -e "/tmp/Multi-Report/current_script"; then
+#		if test -e "/tmp/Multi-Report/current_script1"; then
 
-#		GitVersion="$(cat "/tmp/Multi-Report/current_script" | cut -d 'v' -f 2 | cut -d '_' -f 1)"
-		GitVersion="$(cat "/tmp/Multi-Report/current_script1" | cut -d 'v' -f 2 | cut -d '_' -f 1)"
+		GitVersion="$(cat "/tmp/Multi-Report/current_script" | cut -d 'v' -f 2 | cut -d '_' -f 1)"
+#		GitVersion="$(cat "/tmp/Multi-Report/current_script1" | cut -d 'v' -f 2 | cut -d '_' -f 1)"
 
 
 		VersionFilename="$(echo $CurrentFilename | cut -d 'v' -f 2 | cut -d '_' -f 1)"
