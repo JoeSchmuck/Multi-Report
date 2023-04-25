@@ -501,7 +501,7 @@ truenas_ver=$(cat /etc/version)
 testdata_path="data"
 Dump_Loop="0"
 re='^[0-9]+$'
-runfilename="multi_report_test.sh"
+runfilename="multi_report.sh"
 
 ### temp files have been converted to variable stored, not stored in /tmp/ as a file. ###
 tempfilepath=$(( 10 + $RANDOM % 1000 ))
