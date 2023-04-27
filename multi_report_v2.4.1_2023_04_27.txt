@@ -508,7 +508,7 @@ logfile="/tmp/${tempfilepath}smart_report_body.tmp"
 logfile_header="/tmp/${tempfilepath}smart_report_header.tmp"
 boundary="gc0p4Jq0M2Yt08jU534c0p"
 
-CurrentFilename="multi_report_v2.4.1_2023_04_27.txt"
+CurrentFilename="multi_report_v2.4_2023_04_21.txt"
 valid_config_version_date="2023-04-21"	# Configuration file valid date
 progverdate="$(echo $CurrentFilename | cut -d '_' -f4,5,6 | cut -d '.' -f1 | sed -r 's/[_]+/-/g')"
 progname="Multi-Report "$(echo $CurrentFilename | cut -d '_' -f3)" dtd:"
@@ -640,6 +640,7 @@ update_script () {
 			echo "Downloaded file is corrupt, does not match CRC."
 			if [[ $AutomaticUpdate == "true" ]]; then
 				AutomaticUpdate="false"
+				return
 			fi
 		fi
 
@@ -6655,16 +6656,21 @@ fi
 if [[ $UpdateAvailable == "true" ]] && [[ $AutomaticUpdate == "true" ]]; then
 	# We are updating automatically
 	update_script
-	echo "The script has been updated."
-	echo "Running script normally."
-# How do we run the script when the script is the same name?  Temporarily copy the new script to a new name and run that name.
-	cp $runfilename temprunfile.sh ; chmod 755 temprunfile.sh
-#	echo "Run the temp copy of the new script"
-	./temprunfile.sh
-#	echo "After the run, pause 3 seconds and exit..."
-	sleep 3
-	rm temprunfile.sh
-	exit 0
+	if [[ $AutomaticUpdate == "true" ]]; then
+		echo "The script has been updated."
+		echo "Running script normally."
+	# How do we run the script when the script is the same name?  Temporarily copy the new script to a new name and run that name.
+		cp $runfilename temprunfile.sh ; chmod 755 temprunfile.sh
+	#	echo "Run the temp copy of the new script"
+		./temprunfile.sh
+	#	echo "After the run, pause 3 seconds and exit..."
+		sleep 3
+		rm temprunfile.sh
+		exit 0
+	else
+		echo "Script Not Updated"
+		echo "Running script normally..."
+	fi
 fi
 
 
