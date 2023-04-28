@@ -6651,7 +6651,6 @@ if [[ $UpdateAvailable == "true" ]] && [[ $AutomaticUpdate == "true" ]]; then
 	# We are updating automatically
 	update_script
 	if [[ $AutomaticUpdate == "true" ]]; then
-		echo "The script has been updated."
 		echo "Running script normally."
 	# How do we run the script when the script is the same name?  Temporarily copy the new script to a new name and run that name.
 (
