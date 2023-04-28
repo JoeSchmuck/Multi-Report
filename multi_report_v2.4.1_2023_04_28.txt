@@ -739,7 +739,7 @@ checkforupdate () {
 
 
 		VersionFilename="$(echo $CurrentFilename | cut -d 'v' -f 2 | cut -d '_' -f 1)"
-echo "Current Version "$VersionFilename" -- New Version "$GitVersion
+echo "Current Version "$VersionFilename" -- GitHub Version "$GitVersion
 #GitVersion="2.4.1"
 #VersionFilename="2.4"
 		if [[ $GitVersion > $VersionFilename ]] && [[ $VersionFilename != "" ]]; then
