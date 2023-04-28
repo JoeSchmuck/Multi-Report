@@ -6656,9 +6656,9 @@ if [[ $UpdateAvailable == "true" ]] && [[ $AutomaticUpdate == "true" ]]; then
 (
 cd $SCRIPT_DIR"/"
 		cp $SCRIPT_DIR"/"$runfilename $SCRIPT_DIR"/"temprunfile.sh ; chmod 755 $SCRIPT_DIR"/"temprunfile.sh
-		./temprunfile.sh
+		./temprunfile.sh $1
 		sleep 3
-		rm $SCRIPT_DIR"/"temprunfile.sh $1
+		rm $SCRIPT_DIR"/"temprunfile.sh
 )
 		exit 0
 	else
