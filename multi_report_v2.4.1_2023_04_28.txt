@@ -6658,7 +6658,7 @@ cd $SCRIPT_DIR"/"
 		cp $SCRIPT_DIR"/"$runfilename $SCRIPT_DIR"/"temprunfile.sh ; chmod 755 $SCRIPT_DIR"/"temprunfile.sh
 		./temprunfile.sh
 		sleep 3
-		rm $SCRIPT_DIR"/"temprunfile.sh
+		rm $SCRIPT_DIR"/"temprunfile.sh $1
 )
 		exit 0
 	else
