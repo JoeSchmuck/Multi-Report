@@ -9,11 +9,12 @@ See Changelog file on github.com/JoeSchmuck
 
 ### Changelog:
 # V2.4.1 (28 April 2023)
-#   - Added Automatic Update Feature.
-#   - Added Update Script File Checksum Check.
+#   - Bugfix to allow script to be run outside the script directory.
 #   - Updated chmod 755 to the new script file.
 #   - Updated cleanup routine for upgrade files left behind.
-#   - Bugfix to allow script to be run outside the script directory.
+#   - Updated TrueNAS Config Backup name to reference the NAS name.
+#   - Added Automatic Update Feature.
+#   - Added Update Script File Checksum Check.
 #
 # V2.4 (21 April 2023)
 #
