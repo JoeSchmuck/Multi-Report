@@ -5,10 +5,18 @@ See Changelog file on github.com/JoeSchmuck
 
 ### Version: v1.3 TrueNAS Scale (Jeff Alperin 12-6-21)
 
-### Version v1.4, v1.5, v1.6 -> v2.3 FreeNAS/TrueNAS (Core & Scale) (joeschmuck)
+### Version v1.4, v1.5, v1.6 -> v2.5 FreeNAS/TrueNAS (Core & Scale) (joeschmuck)
 
 ### Changelog:
+# V2.4.1 (28 April 2023)
+#   - Added Automatic Update Feature.
+#   - Added Update Script File Checksum Check.
+#   - Updated chmod 755 to the new script file.
+#   - Updated cleanup routine for upgrade files left behind.
+#   - Bugfix to allow script to be run outside the script directory.
+#
 # V2.4 (21 April 2023)
+#
 #   - Added NVMe Columns for Media Errors and Total Data Written.
 #   - Added Total Data Written for all drives.
 #   - Updated User Guide.
