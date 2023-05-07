@@ -672,11 +672,13 @@ update_script () {
 				cp $SCRIPT_DIR"/multi_report_config.txt" $SCRIPT_DIR"/"$VersionFilename"_config.txt"
 
 # Check if old multi_report.sh file exists and delete
-				if test -e $SCRIPT_DIR"/"$runfilename; then
-					rm $SCRIPT_DIR"/"${runfilename} # Remove actual script
-				fi
+#				if test -e $SCRIPT_DIR"/"$runfilename; then
+#					rm $SCRIPT_DIR"/"${runfilename} # Remove actual script
+#				fi
+
 # Copy the new multi_report.sh file and set permissions
-				cp /tmp/multi_report_update.txt $SCRIPT_DIR"/"$runfilename; chmod 755 $SCRIPT_DIR"/"$runfilename
+				cp /tmp/multi_report_update.txt $SCRIPT_DIR"/"$runfilename
+				chmod 755 $SCRIPT_DIR"/"$runfilename	# This may fail due to ACL's.  root is not all powerful anymore.
 
 # Copy the User Guide
 				echo "1"
@@ -685,6 +687,7 @@ update_script () {
 				cp "/tmp/Multi-Report/changelog.txt" $SCRIPT_DIR"/."
 				echo " "
 				echo "Your script has been updated and a new copy of the User Guide and changelog is in your directory."
+				echo "You may have a chmod error due to ACL's and you might need to ensure your script is executable."
 				sleep 1
 # Cleanup Leftover Files
 				if test -e "/tmp/Multi-Report"; then rm -R "/tmp/Multi-Report"; fi
