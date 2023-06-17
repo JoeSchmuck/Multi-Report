@@ -8,6 +8,10 @@ See Changelog file on github.com/JoeSchmuck
 ### Version v1.4, v1.5, v1.6 -> v2.5 FreeNAS/TrueNAS (Core & Scale) (joeschmuck)
 
 ### Changelog:
+# V2.4.3 (16 June 2023)
+#   - Minor Update to recognize more SCSI drive Offline Uncorrectable Errors and Total Data Written.
+#   - Minor Update to recognize UDMA CRC Errors for some older Intel SSD's.
+#
 # V2.4.2 (19 May 2023)
 #   - Bug Fix to properly recognize Samsung HD103UJ HDD.
 #   - Bug fix to properly recognize/display more than 26 drives in Scale.
