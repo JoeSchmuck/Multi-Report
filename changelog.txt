@@ -8,6 +8,16 @@ See Changelog file on github.com/JoeSchmuck
 ### Version v1.4, v1.5, v1.6 -> v2.5 FreeNAS/TrueNAS (Core & Scale) (joeschmuck)
 
 ### Changelog:
+# V2.4.4 (19 August 2023)
+#   - Incorporated Spencer.py script by calling the external script.
+#   - Changed TrueNAS Backup Configuration file name to include the TrueNAS version number.
+#   - Fixed ability to edit/add Warranty Drive Data so it does not erase previously entered data.
+#   - Fixed SSD/NVMe Capacity Title in chart.
+#   - Fixed NVMe Media Errors column display, it now appears centered and has lines around it.
+#   - Added more Wear Level & TBW compatibility.
+#   - Updated -h and -help commands.
+#   - Updated text section 'Drives for this pool' to list non-GPTID entries.
+#
 # V2.4.3 (16 June 2023)
 #   - Minor Update to recognize more SCSI drive Offline Uncorrectable Errors and Total Data Written.
 #   - Minor Update to recognize UDMA CRC Errors for some older Intel SSD's.
