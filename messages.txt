@@ -1,1 +1,1 @@
-Version 2.5 with a few minor fixes and more NVMe support.
+Coming Soon: Version 2.5 with a few minor fixes and more NVMe support.
