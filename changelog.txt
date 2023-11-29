@@ -8,6 +8,26 @@ See Changelog file on github.com/JoeSchmuck
 ### Version v1.4, v1.5, v1.6 -> v2.5 FreeNAS/TrueNAS (Core & Scale) (joeschmuck)
 
 ### Changelog:
+
+# V2.5 (25 November 2023)
+#   - Added Custom Drive option to use 'Normalized' Wear Level.
+#   - Added customization for Normal, Warning, and Critical Subject Lines.
+#   - Added quick fix for odd reporting LITEON SSDs.
+#   - Added nvme power level reporting.
+#   - Added setting nvme lowest power level option.
+#   - Updated to use smartmontools 7.4 or greater.
+#   - Updated to use 'nvme' command in absence of smartmontools 7.4 or greater (Last Test Age is not available in CORE).
+#   - Added Last Test Type and Last Test Age columns for NVMe (when smartmontools 7.4 is incorporated into TrueNAS).
+#   - Remove multipath drive data (duplicate drive serial numbers) from the report.
+#   - Reduced normal drive data collection by 2/3's for troubleshooting/sending to Joe.
+#   - Added '-dump emailextra' to send all (2/3's more) drive data files if required.
+#   - Renamed drive dump files to be more user friendly.
+#   - Added simulation enhancement (Developer tool)
+#   - Added additional troubleshooting help for Script Running Error.
+#   - Updated Multiple Instance Check to work properly. Slower processes would generate a false positive.
+#   - Added '-ignore_lock' parameter to ignore Multiple Instance Check (should never be needed but it's included as an option).
+#   - Updated reading temperature if value is zero or less to read ID 194.
+#
 # V2.4.4 (19 August 2023)
 #   - Incorporated Spencer.py script by calling the external script.
 #   - Changed TrueNAS Backup Configuration file name to include the TrueNAS version number.
