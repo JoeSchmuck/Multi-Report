@@ -1,14 +1,46 @@
 See Changelog file on github.com/JoeSchmuck
 
 ###### ZPool & SMART status report with FreeNAS/TrueNAS config backup
-### Original script by joeschmuck, modified by Bidelu0hm, then by melp (me)
-
-### Version: v1.3 TrueNAS Scale (Jeff Alperin 12-6-21)
-
-### Version v1.4, v1.5, v1.6 -> v2.5 FreeNAS/TrueNAS (Core & Scale) (joeschmuck)
+### Original script by joeschmuck
+### Modified by Bidule0hm, melp, toomuchdata
+### Currently maintained by joeschmuck (joeschmuck2023@hotmail.com)
 
 ### Changelog:
+# V3.0 (30 March 2024)
 
+# Notable issues:
+# NVMe - Last SMART Short and Long tests not displaying in text area. It will be solved when Smartmontools 7.4 is installed.
+#      -- This is not an issue in SCALE 23.10.2 as it has Smartmontools 7.4.
+#
+#   - Fixed checking NVMe drives for if they support Self-tests.
+#   - Added NVME Short and Long Self-test for smartctl 7.3 and below.  Monday through Saturday a Short Test, Sunday a Long Test. 
+#   --- a Long Test, you may disable either or both options.  Once TrueNAS can run NVMe SMART Tests expect this option to go away.
+#   - Updated to list Drive Idents for NVMe in the Text section.
+#   - Added NVME Ignore "Invalid Field in Command", disabled by default.
+#   - Added Wait for SMART Short/Long Self-test to complete before sending the report.
+#   - Added SMART Self-test Failure Recognition for NVMe.
+#   - Updated CORE ability to capture NVMe Last Test Age.
+#   - Updated NVMe routines to ignore real data gathering while in test mode.
+#   - Enhanced SCSI/SAS drive recognition and Power_On_Hours collection.
+#   - Fixed Zpool Reporting of 'Resilvering xx days' incorrectly reporting in SCALE.
+#   - Updated 7zip to only being installed if email is encrypted (See line 5 of this script).
+#   - Updated script for SCALE Dragonfish for installing 7zip if required.
+#   - Updated Configuration Questions to make configuration a little easier.
+#   - Removed 'Mouseover' option and hardcoded it.
+#   - Corrected 'Pool_Capacity_Type' variable missing in config file.
+#   - Added checking for all software commands to respond (thanks dak180 for the idea).
+#   - Added custom wear level alarm value 'i' to the group 'n' 'r' 'd'. 'i' = Ignore.  This makes wearLevel="", non-exist.
+#   - Added Email Report ONLY on Alert (any Error Message).
+#   - Updated to send attachments when Email_On_Alarm_Only="true" and Email_On_Alarm_Only_And_Attachments="true".
+#   - Changed Non-Recognized drive power_on_hours from Warning to Caution.
+#   - Adjusted script for multiple LBA reporting on Yucun SSDs.
+#   - Updated script to work in a directory with a 'space character' in the path.
+#   - Removed variables (IncluedSSD and IncludeNVM).
+#
+# V2.5.1 (3 December 2023)
+#   - Changed exported configuration file to use .tar/.zip appropriately.
+#   - Moved NVMe power state setting to end of script. 
+#
 # V2.5 (25 November 2023)
 #   - Added Custom Drive option to use 'Normalized' Wear Level.
 #   - Added customization for Normal, Warning, and Critical Subject Lines.
