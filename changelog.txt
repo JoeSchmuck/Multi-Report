@@ -6,8 +6,19 @@ See Changelog file on github.com/JoeSchmuck
 ### Currently maintained by joeschmuck (joeschmuck2023@hotmail.com)
 
 ### Changelog:
+# V3.0.1 (13 April 2024)
+#
+#   -Fixed NVMe Advanced Configuration question for NVMe Long Self-test.
+#   -Fixed Temperature reporting for 'HPE' SSD.
+#   -Added SCSI drive reporting when using SCSI to ATA Translation.
+#   -Added SCSI new method to obtain Power On Hours for SCSI drives that do not expose this data. - Disabled by default, use '-scsismart' switch or new variable.
+#   -Added LastTestType (hours) for drives that do not report correct Power On Hours but do report correct Self-test hours.
+#   -Fixed Execution Timer (dropped off whole minutes).
+#   -Added granularity to Text Output Section, can individually disable Warning/Caution, Zpool, or SMART Data output.
+#   -Updated User Guide to support new features.
+#
 # V3.0 (30 March 2024)
-
+#
 # Notable issues:
 # NVMe - Last SMART Short and Long tests not displaying in text area. It will be solved when Smartmontools 7.4 is installed.
 #      -- This is not an issue in SCALE 23.10.2 as it has Smartmontools 7.4.
