@@ -3,9 +3,58 @@ See Changelog file on github.com/JoeSchmuck
 ###### ZPool & SMART status report with FreeNAS/TrueNAS config backup
 ### Original script by joeschmuck
 ### Modified by Bidule0hm, melp, toomuchdata
+### Thanks goes out to Basil Hendroff who created the SMR Drive Check script.
 ### Currently maintained by joeschmuck (joeschmuck2023@hotmail.com)
 
+#############################################################
+#############################################################
+##                                                         ##
+##   NN     NN      OOOO      TTTTTTTTTTTT  EEEEEEEEEEEE   ##
+##   NNN    NN    OO    OO    TTTTTTTTTTTT  EEEEEEEEEEEE   ##
+##   NNNN   NN   OO      OO        TT       EEE            ##
+##   NN NN  NN  OO        OO       TT       EEE            ##
+##   NN  NN NN  OO        OO       TT       EEEEEEEE       ##
+##   NN  NN NN  OO        OO       TT       EEE            ##
+##   NN   NNNN   OO      OO        TT       EEE            ##
+##   NN    NNN    OO    OO         TT       EEEEEEEEEEEE   ##
+##   NN     NN      OOOO           TT       EEEEEEEEEEEE   ##
+##                                                         ##
+#############################################################
+#############################################################
+
+#
+##
+###
+####  With the induction of TrueNAS 24.04.0 Dragonfish, Spencer (now with pineapple) does not run from the Cron Job.
+##### The script runs fine from the CLI.  A solution will be found however I'm leaving this up to NickF.
+####  If a script change needs to happen, it will be a quick change however it looks to be a Cron permissions issue.
+###
+##
+#
+
 ### Changelog:
+# V3.0.2 (11 May 2024)
+#
+#   -Fix for nvmecontrol for TrueNAS 13.3
+#   -Added sgdisk and gdisk to validate partitions. (Note: For CORE, will copy the files from GitHub)
+#   -Fixed NVMe simulation
+#   -Fixed Automatic Update so it runs the script immediately after the update.
+#   -Added Total Data Read/Total Data Written to Zpool Stats (supports up to 9.2 YB values)
+#   -Added "Total Data" per drive for "Last 30 Days" or "Current Month Actuals" (Past 30 days is default).
+#   -Added SMR Drive Detection, which can be disabled.
+#   -Fixed MultiZone reporting Critical Error vice Warning Error.
+#   -Fixed to Ignore MultiZone errors for SSDs.
+#
+# V3.0.1 (08 April 2024)
+#
+#   -Fixed NVMe Advanced Configuration question for NVMe Long Self-test.
+#   -Fixed Temperature reporting for 'HPE' SSD.
+#   -Added SCSI drive reporting when using SCSI to ATA Translation.
+#   -Added SCSI "Accurate" Power On Hours for all SCSI drives (I hope) - Disabled by default, and new '-scsismart' switch.
+#   -Added SCSI "Use Last Test Hours" for Power On Hours - Option if the previous option is not agreeable.
+#   -Added LastTestType (hours) for drives which stop reporting Self-tests at 65535 hours.
+#   -Updated User Guide to support new features.
+#
 # V3.0.1 (13 April 2024)
 #
 #   -Fixed NVMe Advanced Configuration question for NVMe Long Self-test.
