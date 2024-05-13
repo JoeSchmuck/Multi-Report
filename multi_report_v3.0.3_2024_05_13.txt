@@ -598,7 +598,7 @@ VMWareNVME="off"	# Set to "off" normally, "on" to assist in incorrect VMWare rep
 Joes_System="false"	# Custom settings for my system and to remove these from your system.
 Sample_Test="false"	# Setup static test values for testing.
 Develop="false"		# Set to 'true' for development output.
-GitHubSimulate="false"	# Use test section of GitHub.
+GitHubSimulate="true"	# Use test section of GitHub.
 
 ##########################
 ##########################
@@ -780,8 +780,8 @@ fi
 
 update_smr () {
 	echo "Downloading SMR-CHECK Script for GitHub"
-	echo "Removing Old Script if it exists"
-	if test -e "/tmp/truenas-smr-check"; then rm -R "/tmp/truenas-smr-check"; fi
+	#echo "Removing Old Script if it exists"
+	if test -e "/tmp/truenas-smr-check"; then echo "Loop detected, exiting."; exit 1; fi  # Failed, possible loop
 	if test -e "/tmp/smr-check.sh"; then rm "/tmp/smr-check.sh"; fi
 	echo "Downloading new script files"
 	if [[ "$(curl -is https://github.com | head -n 1)" ]]; then
