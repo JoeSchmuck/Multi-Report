@@ -133,7 +133,7 @@ Ignore_Lock="disable"		# Ignore_Lock when set to "enable" will disable checking 
 CheckForUpdates="true"		# Will check GitHub for updates and include message in next email.
 AutomaticUpdate="false"		# WARNING !!!  This option will automatically update the script if a newer version exists on GitHub with no user interaction.
 SMR_Enable="true"		# Will enable SMR operations if set to "true".
-SMR_Update="true"		# Will automatically download Basil Hendroff's smr-check.sh file from Github.
+SMR_Update="true"		# Will automatically download Basil Hendroff's smr-check.sh file from Github if the file does not exist.
 
 ###### Spencer Integration
 ### Warning Levels are: None, Warning, Critical -- This only affects the Email Subject Line, if any errors are present, an attachment will occur.
@@ -598,7 +598,7 @@ VMWareNVME="off"	# Set to "off" normally, "on" to assist in incorrect VMWare rep
 Joes_System="false"	# Custom settings for my system and to remove these from your system.
 Sample_Test="false"	# Setup static test values for testing.
 Develop="false"		# Set to 'true' for development output.
-GitHubSimulate="true"	# Use test section of GitHub.
+GitHubSimulate="false"	# Use test section of GitHub.
 
 ##########################
 ##########################
@@ -2084,10 +2084,10 @@ smartdata5=""
                      			drives_in_gptid=$(lsblk -o +PARTUUID,NAME,LABEL | grep -w "$pool" | awk -F" " '{print $7}')
 
 					zpool_list=$(zpool status -v "$pool")
-echo $zpool_list | awk '{print $1 $2}' >> /tmp/pool_to_drive.txt
+					echo $zpool_list | awk '{print $1 $2}' >> /tmp/pool_to_drive.txt
 					for longgptid in $drives_in_gptid; do
 						drive_name=$(lsblk -o +PARTUUID,NAME,LABEL | grep -w "$longgptid" | awk -F" " '{print $8}' | cut -d'p' -f1)
-echo $drive_name >> /tmp/pool_to_drive.txt
+						echo $drive_name >> /tmp/pool_to_drive.txt
 						virtual_drive_test="$(echo ${smartdata5} | grep -i "virtual")"
 						if [[ $Partition_Check == "true" ]]; then
 							sgdisk -v /dev/${drive_name}
