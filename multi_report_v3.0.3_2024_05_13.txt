@@ -780,9 +780,9 @@ fi
 
 update_smr () {
 	echo "Downloading SMR-CHECK Script for GitHub"
-	#echo "Removing Old Script if it exists"
-	if test -e "/tmp/truenas-smr-check"; then echo "Loop detected, exiting."; exit 1; fi  # Failed, possible loop
-	if test -e "/tmp/smr-check.sh"; then rm "/tmp/smr-check.sh"; fi
+	echo "Removing Old Script if it exists"
+	if test -e "/tmp/truenas-smr-check"; then rm -R "/tmp/truenas-smr-check"; echo "Dirictory Removed";fi  # Failed, possible loop
+	if test -e "smr-check.sh"; then rm "smr-check.sh"; echo "File Removed"; fi
 	echo "Downloading new script files"
 	if [[ "$(curl -is https://github.com | head -n 1)" ]]; then
 		# Go git the file
