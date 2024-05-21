@@ -6,33 +6,23 @@ See Changelog file on github.com/JoeSchmuck
 ### Thanks goes out to Basil Hendroff who created the SMR Drive Check script.
 ### Currently maintained by joeschmuck (joeschmuck2023@hotmail.com)
 
-#############################################################
-#############################################################
-##                                                         ##
-##   NN     NN      OOOO      TTTTTTTTTTTT  EEEEEEEEEEEE   ##
-##   NNN    NN    OO    OO    TTTTTTTTTTTT  EEEEEEEEEEEE   ##
-##   NNNN   NN   OO      OO        TT       EEE            ##
-##   NN NN  NN  OO        OO       TT       EEE            ##
-##   NN  NN NN  OO        OO       TT       EEEEEEEE       ##
-##   NN  NN NN  OO        OO       TT       EEE            ##
-##   NN   NNNN   OO      OO        TT       EEE            ##
-##   NN    NNN    OO    OO         TT       EEEEEEEEEEEE   ##
-##   NN     NN      OOOO           TT       EEEEEEEEEEEE   ##
-##                                                         ##
-#############################################################
-#############################################################
-
-#
-##
-###
-####  With the induction of TrueNAS 24.04.0 Dragonfish, Spencer (now with pineapple) does not run from the Cron Job.
-##### The script runs fine from the CLI.  A solution will be found however I'm leaving this up to NickF.
-####  If a script change needs to happen, it will be a quick change however it looks to be a Cron permissions issue.
-###
-##
-#
 
 ### Changelog:
+
+# V3.0.4 (20 May 2024)
+#
+#   -Fix for abnormally high HE levels, if RAW Value is over 100, utilize Normalized Values.
+#   -Fix for 'cache' not being displayed in Text Section.
+#   -Fix for Spencer integration for Dragonfish (24.04.0).
+#   -Added '-disable_smr' and '-enable_smr' switches to modify the config file.
+#   -Added '-check_smr' switch for a One-Time Run to check SMR drives if normal SMR Checking has been disabled.
+#   -Fix for Pool Names which contain space characters.
+#
+
+# V3.0.3 (13 May 2024)
+#
+#   -Fix for downloading SMR script.
+
 # V3.0.2 (11 May 2024)
 #
 #   -Fix for nvmecontrol for TrueNAS 13.3
