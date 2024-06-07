@@ -1,0 +1,16 @@
+Here is a list of questions for anyone who reads this message.
+
+Please send any suggestions to joeschmuck2023@hotmail.com
+
+1. What are the default drive temperatures you prefer, both the warning temp and then the critical temp.  Default is 45C and 50C for HDD. Please include HDD/SSD/NVMe.
+2. What feature(s) could you do without?  Example: Drive Warranty Expiration
+3. If I were to make the column titles static, would you be fine with the default or are there a few changes you would like?  Please tell me the current and the preferred.  Example: RPM > Rotation
+4. What other items would you like to change the default values for?
+5. What feature(s) must remain?  Example: NVMe Self-Test, even if TrueNAS eventually support scheduled self-tests.
+6. How much do you dislike the '-config' section?  I promise that the next version will have consistent questions.  If you are a Python programmer, reach out to me as I have a simple project I need help with. What is it?  A graphical form to fill out which will then generate the multi_report_config.txt file.  I have a bit of the form created already but oh my it takes me a lot of time.  This will augment, not replace the configuration setup. I know this will make setup much easier.  But it must run on TrueNAS natively.
+
+Feel free to provide me feedback.  I am actually writing the script all over, making it much more modular which will make it significantly easier to modify.  If there are items I do not need ot include, then I can leave them out and make my life a bit easier.
+
+Compiling this data will greatly help me create a better product.
+
+THINK OUTSIDE THE BOX!
