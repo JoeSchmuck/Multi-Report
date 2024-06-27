@@ -25,7 +25,7 @@ Config_File_Name="$SCRIPT_DIR/multi_report_config.txt"
 #  NEED TO CHECK IF THERE ARE ANY NVME DRIVES BEFORE RUNNING THE NVME SELFTEST ROUTINE, DURrrr.
 
 #
-# V3.0.8 Beta-For a while until fully tested. (22 June 2024)
+# V3.0.8 Beta-For a while until fully tested. (27 June 2024)
 #
 #   - Fix for some NVMe drives may report self-test results with leading white space.
 #   - Added more data collection for NVMe drives (NVMe Self-Test Log and NVMe Error-Log).
@@ -605,7 +605,7 @@ logfile_header="/tmp/${tempfilepath}smart_report_header.tmp"
 logfile_temp="/tmp/${tempfilepath}smart_report_temp.tmp"
 boundary="gc0p4Jq0M2Yt08jU534c0p"
 
-CurrentFilename="multi_report_v3.0.8Beta_2024_06_22.txt"
+CurrentFilename="multi_report_v3.0.8Beta_2024_06_27.txt"
 valid_config_version_date="2024-06-18"	# Configuration file valid date
 progverdate="$(echo $CurrentFilename | cut -d '_' -f4,5,6 | cut -d '.' -f1 | sed -r 's/[_]+/-/g')"
 progname="Multi-Report "$(echo $CurrentFilename | cut -d '_' -f3)" dtd:"
