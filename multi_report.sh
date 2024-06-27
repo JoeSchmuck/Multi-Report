@@ -21,6 +21,25 @@ Config_File_Name="$SCRIPT_DIR/multi_report_config.txt"
 
 ### Changelog:
 #
+
+#  NEED TO CHECK IF THERE ARE ANY NVME DRIVES BEFORE RUNNING THE NVME SELFTEST ROUTINE, DURrrr.
+
+#
+# V3.0.8 Beta-For a while until fully tested. (22 June 2024)
+#
+#   - Fix for some NVMe drives may report self-test results with leading white space.
+#   - Added more data collection for NVMe drives (NVMe Self-Test Log and NVMe Error-Log).
+#   - Added HDD/SSD Short SMART Self-test to beginning of the script.
+#   - Added HDD/SSD Long SMART Self-test to the end of the script.
+#   - Partition Backups now generated and attached when TrueNAS Configuration is attached, generally weekly.
+#   - Updated Text Section.
+#   - Added dumping of API drive data to aid in development efforts using the API.
+#
+# ----> SPELL CHECK THIS SCRIPT
+#
+# ----> Make a single smartctl read operation, no more.  Then dump it all to the /tmp/ folder and use the data from there for the rest of the script.
+#
+
 # V3.0.7 (08 June 2024)
 #
 #   - Fixed for some NVMe drives may report self-test results with leading white space.
@@ -33,14 +52,14 @@ Config_File_Name="$SCRIPT_DIR/multi_report_config.txt"
 #   - (The push for this change) Fix for Zpool gptid listing in text section (listing cache, log, meta, spare, and dedup).
 #
 #   - Added polling NVMe drives for self-test completion when 'waiting' for test complete.  The default is now to wait for the test(s) to complete.
-#     ---- The smart self-test will start on ALL NVMe drive at the same timewill be asked if the test completed or failed once a second.
+#     ---- The smart self-test will start on ALL NVMe drive at the same time will be asked if the test completed or failed once a second.
 #     ---- When the results are present the script will continue on to each successive NVMe drive, which if they were all identical, the tests
 #     ---- should be completing within a second of the first drive polled.  This happens for both Short and Long tests.
 #     ---- A new pair of variables in the multi_report_config.txt file can be set to "false" to have the script not wait and just use the previous
 #     ---- results.  By default the script will wait.
 #     ---- Now for a question to hose who are reading this...  How would yo feel about checking the last test time for each NVMe and if it
 #     ---- the last test time was less than 18 hours old, then skip the test.  Of course it will end up being a variable that the user could
-#     ---- change the time value.  I just thought of this becasue when I test, I end up running a lot of NVMe self-tests.
+#     ---- change the time value.  I just thought of this because when I test, I end up running a lot of NVMe self-tests.
 #     ---- Send me joeschmuck2023@hotmail.com an email or just message me on the forum if you have an option.
 #
 #   - Changed using smartmontool if v7.4 is installed to "enable" as TrueNAS (no version) supports scheduled NVMe self-testing.
@@ -187,6 +206,21 @@ Run_SMART_No_power_on_time="false"	# Some SCSI drives do not report power_on_tim
 					# a SMART Short Self-test, wait 2 minutes for the test to complete, and report the correct power_on_time.
 					# This is the same as using the '-scsismart' switch at the CLI.
 
+###### HDD/SSD SMART Testing
+Short_Test_Mode=3		# 1 = Use Short_Drives_Per_Day value, 2 = Use Short_Drives_Number_Of_Days, 3 = All Drives Tested Every Day, 4 = No Drives Tested.
+Short_Drives_Per_Day=1		# For Test_Mode 1) How many drives to run each day?  4=Test Only Four Drives A Day; Mon=ada0, ada1, ada2, ada3.  Tue=ada4, ada5, ada6, ada7.
+Short_Drives_Number_Of_Days=7	# For Test_Mode 2) How many days of the week do you want to split the drives across? 4=Evenly split across Mon,Tue,Wed,Thu.
+Short_Start_Day_Of_Week=5	# Day of the week drives start to be assigned. 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat, 7=Sun
+Short_Delay_Between_Drives=3	# Tests will have a XX second delay between the drives starting testing.
+Short_Mute="false"		# 'true' = Do not output messages.
+
+Long_Test_Mode=1		# 1 = Use Long_Drives_Per_Day value, 2 = Use Long_Drives_Number_Of_Days, 3 = All Drives Tested Every Day, 4 = No Drives Tested.
+Long_Drives_Per_Day=2		# For Test_Mode 1) How many drives to run each day? 4=Test Only Four Drives A Day; Mon=ada0, ada1, ada2, ada3.  Tue=ada4, ada5, ada6, ada7.
+Long_Drives_Number_Of_Days=6	# For Test_Mode 2) How many days of the week do you want to split the drives across? 4=Evenly split across Mon,Tue,Wed,Thu.
+Long_Start_Day_Of_Week=7	# Day of the week drives start to be assigned. 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat, 7=Sun
+Long_Delay_Between_Drives=3	# Tests will have a XX second delay between the drives starting testing.
+Long_Mute="false"		# 'true' = Do not output messages.
+
 ###### SSD/NVMe Specific Settings
 WearLevelCrit=9				# Wear Level Alarm Setpoint when a WARNING message. 9% is the default.
 NVM_Low_Power="true"    		# Set the NVMe power level to the minimum setting. This does not mean the NVMe will remain at this power level.
@@ -235,6 +269,8 @@ SeekErrorsCrit=100	# Number of seek errors to allow when a CRITICAL message will
 NVM_Media_Errors=1	# Number of Media Errors to alarm with a CRITICAL message.
 Partition_Check="false"	# Run sgdisk on each drive. Default = "false", this will install gdisk/sgdisk on TrueNAS CORE if not present.
 			#  -- It is "false" because you should choose to control what is installed or not.
+Partition_Backup="true"	# Set to "true" to save each partition table with the TrueNAS configuration backup.
+			# NOTE: You need sgdisk installed, run the Partition Check once to install on CORE.
 
 ###### Time-Limited Error Recovery (TLER)
 SCT_Enable="false"		# Set to "true" to send a command to enable SCT on your drives for user defined timeout.
@@ -273,7 +309,6 @@ TrueNASConfigEmailEnable="true"		# Set to "true" to save config backup (which re
 TrueNASConfigEmailDay="Mon"		# Set to the day of the week the config is emailed.  (All, Mon, Tue, Wed, Thu, Fri, Sat, Sun, Month)
 TrueNASConfigBackupSave="false"		# Set to "false" to delete TrueNAS config backup after mail is sent; "true" to keep it in dir below.
 TrueNASConfigBackupLocation="/tmp/"	# Directory in which to store the backup FreeNAS config files.
-
 
 ###### Attach multi_report_config.txt to email ######
 MRConfigEmailEnable="true"	# Set to "true" to enable periodic email (which renders next two options operational).
@@ -570,8 +605,8 @@ logfile_header="/tmp/${tempfilepath}smart_report_header.tmp"
 logfile_temp="/tmp/${tempfilepath}smart_report_temp.tmp"
 boundary="gc0p4Jq0M2Yt08jU534c0p"
 
-CurrentFilename="multi_report_v3.0.7_2024_06_08.txt"
-valid_config_version_date="2024-06-02"	# Configuration file valid date
+CurrentFilename="multi_report_v3.0.8Beta_2024_06_22.txt"
+valid_config_version_date="2024-06-18"	# Configuration file valid date
 progverdate="$(echo $CurrentFilename | cut -d '_' -f4,5,6 | cut -d '.' -f1 | sed -r 's/[_]+/-/g')"
 progname="Multi-Report "$(echo $CurrentFilename | cut -d '_' -f3)" dtd:"
 
@@ -677,6 +712,254 @@ spencer_error="false"
 	fi
 	}
 
+
+########## RUN SHORT SELFTEST ##########
+# This will run all but NVMe selftest based on schedule, similar to the NVMe Selftest.
+# This function is to run last just before exiting the script.  Results will not be part of this report, this run.
+
+smartctl_selftest () {
+	# Uses smartmontools to run the tests.
+if [[ $No_Drive_Test == "true" ]]; then return; fi		# Exit if we are doing a -dump.
+# All drives are divided up starting on Monday to Sunday of the week.  Need to make it a variable.
+
+#clear
+
+# variables we need:
+### $1="short" or "long" Passed variable
+
+selftest_drives=""
+temp_date=$(date '+%u')		# 1=mon --> 7=sun
+
+Word_Count=$(wc -w <<< "$smartdrives")
+
+if [[ $1 == "short" ]]; then main_loop=1; fi
+if [[ $1 == "long" ]]; then main_loop=2; fi
+if [[ $1 == "" ]]; then echo "No SMART Test is defined, Error."; break ; fi
+
+while [ $main_loop -lt 3 ]; do
+
+	if [[ $main_loop = 1 ]]; then
+
+		Drives_Per_Day=$Short_Drives_Per_Day
+		Test_Mode=$Short_Test_Mode
+		Selftest_Drives_Number_Of_Days=$Short_Drives_Number_Of_Days
+		Delay_Between_Drives=$Short_Delay_Between_Drives
+		Start_Day_Of_Week=$Short_Start_Day_Of_Week
+		Mute=$Short_Mute
+	else
+
+		Drives_Per_Day=$Long_Drives_Per_Day
+		Test_Mode=$Long_Test_Mode
+		Selftest_Drives_Number_Of_Days=$Long_Drives_Number_Of_Days
+		Delay_Between_Drives=$Long_Delay_Between_Drives
+		Start_Day_Of_Week=$Long_Start_Day_Of_Week
+		Mute=$Long_Mute
+	fi
+
+	if [[ $Test_Mode == 3 ]]; then Run_All_Drives="true"; else Run_All_Drives="false"; fi
+	if [[ $Mute != "true" ]]; then
+		if [[ $main_loop == 1 ]]; then
+			echo ">------- STARTING SHORT TESTING -------<"
+		else
+			echo ">------- STARTING LONG TESTING -------<"
+		fi
+	fi
+
+	#Zero Out Variables
+	Mon_Drive_List=""
+	Tue_Drive_List=""
+	Wed_Drive_List=""
+	Thu_Drive_List=""
+	Fri_Drive_List=""
+	Sat_Drive_List=""
+	Sun_Drive_List=""
+
+	if [[ $Test_Mode == 1 ]] && [[ $((Word_Count / Drives_Per_Day)) -gt 7 ]]; then		# Send an error message if there are too many drives to do this option.
+		if [[ $Mute != "true" ]]; then echo "Error, Too many drives to split across 7 days."; fi
+		Drives_Per_Day=$(((Word_Count * 10) / 7 ))
+		if [[ ${Drives_Per_Day: -1} != "0" ]]; then Drives_Per_Day=$(((Word_Count / 7) + 1)); else Drives_Per_Day=$((Word_Count / 7)); fi
+		if [[ $Mute != "true" ]]; then echo "Automatically adjusting to $Drives_Per_Day drives per day."; fi
+	fi
+
+	if [[ $Test_Mode == 1 ]] && [[ $((Word_Count / Drives_Per_Day)) -le 7 ]]; then    # good value and only for Drives Divided into number of days.
+		Drives_Per_Day=$(((Word_Count * 10) / 7 ))
+		if [[ ${Drives_Per_Day: -1} != "0" ]]; then Drives_Per_Day=$(((Word_Count / 7) + 1)); else Drives_Per_Day=$((Word_Count / 7)); fi
+		if [[ $Mute != "true" ]]; then echo "Splitting $Drives_Per_Day drives per day."; fi
+
+		loop_count=1
+		for Drive_List in $smartdrives; do
+			if [[ $loop_count -lt $(($Drives_Per_Day + 1)) ]]; then Mon_Drive_List=$Mon_Drive_List" "$Drive_List; fi
+			if [[ $loop_count -gt $(($Drives_Per_Day)) ]] && [[ $loop_count -lt $((($Drives_Per_Day * 2)+1)) ]]; then Tue_Drive_List=$Tue_Drive_List" "$Drive_List; fi
+			if [[ $loop_count -gt $(($Drives_Per_Day * 2)) ]] && [[ $loop_count -lt $((($Drives_Per_Day * 3)+1)) ]]; then Wed_Drive_List=$Wed_Drive_List" "$Drive_List; fi
+			if [[ $loop_count -gt $(($Drives_Per_Day * 3)) ]] && [[ $loop_count -lt $((($Drives_Per_Day * 4)+1)) ]]; then Thu_Drive_List=$Thu_Drive_List" "$Drive_List; fi
+			if [[ $loop_count -gt $(($Drives_Per_Day * 4)) ]] && [[ $loop_count -lt $((($Drives_Per_Day * 5)+1)) ]]; then Fri_Drive_List=$Fri_Drive_List" "$Drive_List; fi
+			if [[ $loop_count -gt $(($Drives_Per_Day * 5)) ]] && [[ $loop_count -lt $((($Drives_Per_Day * 6)+1)) ]]; then Sat_Drive_List=$Sat_Drive_List" "$Drive_List; fi
+			if [[ $loop_count -gt $(($Drives_Per_Day * 6)) ]] && [[ $loop_count -lt $((($Drives_Per_Day * 7)+1)) ]]; then Sun_Drive_List=$Sun_Drive_List" "$Drive_List; fi
+			((loop_count++))
+		done
+	fi
+
+	if [[ $Test_Mode == 2 ]] && [[ $Selftest_Drives_Number_Of_Days -gt 7 ]]; then
+		if [[ $Mute != "true" ]]; then
+			echo "I don't know where you live but hear on earth there are only 7 days a week."
+			echo 'I will Auto-Correct it for you to 7 week days "Your Majesty"'
+		fi
+		Selftest_Drives_Number_Of_Days=7
+	fi
+
+	if [[ $Test_Mode == 2 ]] && [[ $Selftest_Drives_Number_Of_Days -le 7 ]]; then    # good value and only for Drives Per Day to divide wc
+		total_days=$(((Word_Count * 10) / Selftest_Drives_Number_Of_Days ))
+		if [[ ${total_days: -1} != "0" ]]; then total_days=$(((Word_Count / Selftest_Drives_Number_Of_Days) + 1)); else total_days=$((Word_Count / Selftest_Drives_Number_Of_Days)); fi
+		if [[ $Mute != "true" ]]; then echo "Splitting up drives across $Selftest_Drives_Number_Of_Days week days, up to $total_days Drives Per Day."; fi
+
+		loop_count=1
+		for Drive_List in $smartdrives; do
+			if [[ $loop_count -lt $((total_days + 1)) ]]; then Mon_Drive_List=$Mon_Drive_List" "$Drive_List; fi
+			if [[ $loop_count -gt $((total_days)) ]] && [[ $loop_count -lt $(((total_days * 2)+1)) ]]; then Tue_Drive_List=$Tue_Drive_List" "$Drive_List; fi
+			if [[ $loop_count -gt $((total_days * 2)) ]] && [[ $loop_count -lt $(((total_days * 3)+1)) ]]; then Wed_Drive_List=$Wed_Drive_List" "$Drive_List; fi
+			if [[ $loop_count -gt $((total_days * 3)) ]] && [[ $loop_count -lt $(((total_days * 4)+1)) ]]; then Thu_Drive_List=$Thu_Drive_List" "$Drive_List; fi
+			if [[ $loop_count -gt $((total_days * 4)) ]] && [[ $loop_count -lt $(((total_days * 5)+1)) ]]; then Fri_Drive_List=$Fri_Drive_List" "$Drive_List; fi
+			if [[ $loop_count -gt $((total_days * 5)) ]] && [[ $loop_count -lt $(((total_days * 6)+1)) ]]; then Sat_Drive_List=$Sat_Drive_List" "$Drive_List; fi
+			if [[ $loop_count -gt $((total_days * 6)) ]] && [[ $loop_count -lt $(((total_days * 7)+1)) ]]; then Sun_Drive_List=$Sun_Drive_List" "$Drive_List; fi
+			((loop_count++))
+		done
+	fi
+
+# REARRANGE THE DRIVES TO MON->START DAY, ROTATE.
+	if [[ $Start_Day_Of_Week -eq 1 ]] ; then
+		Mon_Drive_List2=$Mon_Drive_List
+		Tue_Drive_List2=$Tue_Drive_List
+		Wed_Drive_List2=$Wed_Drive_List
+		Thu_Drive_List2=$Thu_Drive_List
+		Fri_Drive_List2=$Fri_Drive_List
+		Sat_Drive_List2=$Sat_Drive_List
+		Sun_Drive_List2=$Sun_Drive_List
+	fi
+	if [[ $Start_Day_Of_Week -eq 2 ]] ; then
+		Mon_Drive_List2=$Sun_Drive_List
+		Tue_Drive_List2=$Mon_Drive_List
+		Wed_Drive_List2=$Tue_Drive_List
+		Thu_Drive_List2=$Wed_Drive_List
+		Fri_Drive_List2=$Thu_Drive_List
+		Sat_Drive_List2=$Fri_Drive_List
+		Sun_Drive_List2=$Sat_Drive_List
+	fi
+	if [[ $Start_Day_Of_Week -eq 3 ]] ; then
+		Mon_Drive_List2=$Sat_Drive_List
+		Tue_Drive_List2=$Sun_Drive_List
+		Wed_Drive_List2=$Mon_Drive_List
+		Thu_Drive_List2=$Tue_Drive_List
+		Fri_Drive_List2=$Wed_Drive_List
+		Sat_Drive_List2=$Thu_Drive_List
+		Sun_Drive_List2=$Fri_Drive_List
+	fi
+	if [[ $Start_Day_Of_Week -eq 4 ]] ; then
+		Mon_Drive_List2=$Fri_Drive_List
+		Tue_Drive_List2=$Sat_Drive_List
+		Wed_Drive_List2=$Sun_Drive_List
+		Thu_Drive_List2=$Mon_Drive_List
+		Fri_Drive_List2=$Tue_Drive_List
+		Sat_Drive_List2=$Wed_Drive_List
+		Sun_Drive_List2=$Thu_Drive_List
+	fi
+	if [[ $Start_Day_Of_Week -eq 5 ]] ; then
+		Mon_Drive_List2=$Thu_Drive_List
+		Tue_Drive_List2=$Fri_Drive_List
+		Wed_Drive_List2=$Sat_Drive_List
+		Thu_Drive_List2=$Sun_Drive_List
+		Fri_Drive_List2=$Mon_Drive_List
+		Sat_Drive_List2=$Tue_Drive_List
+		Sun_Drive_List2=$Wed_Drive_List
+	fi
+	if [[ $Start_Day_Of_Week -eq 6 ]] ; then
+		Mon_Drive_List2=$Wed_Drive_List
+		Tue_Drive_List2=$Thu_Drive_List
+		Wed_Drive_List2=$Fri_Drive_List
+		Thu_Drive_List2=$Sat_Drive_List
+		Fri_Drive_List2=$Sun_Drive_List
+		Sat_Drive_List2=$Mon_Drive_List
+		Sun_Drive_List2=$Tue_Drive_List
+	fi
+	if [[ $Start_Day_Of_Week -eq 7 ]] ; then
+		Mon_Drive_List2=$Tue_Drive_List
+		Tue_Drive_List2=$Wed_Drive_List
+		Wed_Drive_List2=$Thu_Drive_List
+		Thu_Drive_List2=$Fri_Drive_List
+		Fri_Drive_List2=$Sat_Drive_List
+		Sat_Drive_List2=$Sun_Drive_List
+		Sun_Drive_List2=$Mon_Drive_List
+	fi
+
+	loop_count=1
+	shopt -s nocasematch
+	case $temp_date in
+		1)
+			selftest_drives=$Mon_Drive_List2
+		;;
+		2)
+			selftest_drives=$Tue_Drive_List2
+		;;
+		3)
+			selftest_drives=$Wed_Drive_List2
+		;;
+		4)
+			selftest_drives=$Thu_Drive_List2
+		;;
+		5)
+			selftest_drives=$Fri_Drive_List2
+		;;
+		6)
+			selftest_drives=$Sat_Drive_List2
+		;;
+		7)
+			selftest_drives=$Sun_Drive_List2
+		;;
+		*)
+		;;
+	esac
+
+	if [[ $Run_All_Drives == "true" ]]; then selftest_drives=$smartdrives; fi
+	if [[ $Mute != "true" ]]; then
+		if [[ $selftest_drives != "" ]]; then
+			echo "DRIVES BEING TESTED"
+			echo $selftest_drives
+		else
+			echo "No drives to test today."
+		fi
+	fi
+
+	loop_count=1
+	if [[ $selftest_drives == "all" ]]; then selftest_drives=$smartdrives; fi   # All HDD/SSD
+	for drive in $selftest_drives; do
+		if [[ $main_loop == 1 ]]; then
+			smartctl -t short /dev/$drive > /dev/null 2<&1
+			if [[ $Mute != "true" ]]; then echo "Drive: $drive in Short Test"; fi
+		else
+	#		(sh -c 'sleep 30 && smartctl -t long /dev/$drive') &
+			smartctl -t long /dev/$drive > /dev/null 2<&1
+			if [[ $Mute != "true" ]]; then echo "Drive: $drive in Long Test"; fi
+		fi
+		sleep $Delay_Between_Drives	# Wait DELAY seconds before running another drive.
+	done
+	if [[ $Mute != "true" ]] && [[ $Test_Mode != 4 ]]; then
+		if [[ $main_loop == 1 ]]; then
+			echo "Pausing 2 minutes 10 seconds to wait for tests to complete."
+			sleep 130	# Wait until Short tests complete
+			echo "<------- SHORT TESTING COMPLETE ------->"
+		else 
+			echo "Long tests running in background."
+		fi
+	fi
+	((main_loop++))
+	if [[ $1 == "short" ]]; then break; fi
+done
+
+if [[ $1 == "long" ]]; then return; fi
+
+	}
+
+
+
 ########## RUN NVMe SELFTEST ##########
 
 nvm_selftest () {
@@ -739,7 +1022,7 @@ check_nvme_test () {
 	sleep 1		# GIVE ALL THE NVME DRIVES 1 SECOND TO UPDATE TESTING THE STATUS CODE (ERROR ON THE SIDE OF CAUTION)
 	nvme_selftest_granularity=1
 	if [[ $1 == "Long" ]]; then smart_loops=2400; loop_stdout=10; else smart_loops=180; loop_stdout=5; fi	# 180=3 minutes, 2400=40 minutes
-	echo "Polling nvme test status... (Maximum Test Time before Abort = "$((( smart_loops * $nvme_selftest_granularity ) / 60 ))" minutes "$((( smart_loops * $nvme_selftest_granularity ) % 60))" seconds)"
+	echo "Polling nvme test status... (Maximum Test Time before continuing = "$((( smart_loops * $nvme_selftest_granularity ) / 60 ))" minutes "$((( smart_loops * $nvme_selftest_granularity ) % 60))" seconds)"
 	echo "Polling nvme test status..." >> /tmp/selftestlog
 	loopy_timer=0
 	selftest_pass_result=""
@@ -1540,7 +1823,10 @@ read_csv () {
 
 cleanup_files () {
 	### Clean up our temporary files
-	if test -e "/tmp/temp_purge_file.csv"; then rm "/tmp/temp_purge_file.csv"; fi
+# return
+#	if [[ -f "/tmp/temp_purge_file.csv" ]]; then echo "Deleting"; rm /tmp/temp_purge_file.csv; fi
+
+	if test -e "/tmp/temp_purge_file.csv"; then rm /tmp/temp_purge_file.csv; fi
 	rm /tmp/*smart_report* > /dev/null 2>&1
 	rm /tmp/${tempfilepath}* > /dev/null 2>&1
 	### Clean up multiple drive data files
@@ -1550,14 +1836,17 @@ cleanup_files () {
 	if [[ -f "${f[0]}" ]]; then rm /tmp/*_x.txt; fi
 	f=(/tmp/*.json)
 	if [[ -f "${f[0]}" ]]; then rm /tmp/*.json; fi
+	f=(/tmp/*.partition)
+	if [[ -f "${f[0]}" ]]; then rm /tmp/*.partition; fi
 	f=(/tmp/zfslist.txt)
 	if [[ -f "${f[0]}" ]]; then rm /tmp/zfslist.txt; fi
 	f=(/tmp/zpoollist.txt)
 	if [[ -f "${f[0]}" ]]; then rm /tmp/zpoollist.txt; fi
 	f=(/tmp/zpoolstatus.txt)
 	if [[ -f "${f[0]}" ]]; then rm /tmp/zpoolstatus.txt; fi
-
+	if [[ -f "/tmp/pool_to_drive.txt" ]]; then rm /tmp/pool_to_drive.txt; fi
 	if [[ -f "/tmp/selftestlog" ]]; then rm /tmp/selftestlog; fi
+	if [[ -f "/tmp/*.partition" ]]; then rm /tmp/*.partition; fi
 
 	### Clean up individual files
 	if test -e "/tmp/${Config_Name}.db"; then rm "/tmp/${Config_Name}.db"; fi
@@ -1798,6 +2087,29 @@ config_backup () {
 		fi
 	fi
 	}
+########## DUMP PARTITION DATA ##########
+
+dump_drive_partition () {
+
+if [[ "$drive" != "cd0" ]]; then
+	tempjson="$(smartctl -x --json /dev/${drive})"
+	serial1="$(echo "${tempjson}" | jq -Mre '.serial_number | values')"
+	rpm="$(echo "${tempjson}" | jq -Mre '.rotation_rate | values')"
+	if [[ "$rpm" == "0" ]]; then drivetype="SSD"; else drivetype="HDD"; fi
+#	if [[ "$(echo $tempjson | grep -i "nvm")" ]]; then drivetype="NVM"; fi
+	(
+		if [[ $Partition_Backup == "true" ]] && [[ $Attach_Files1 == "true" ]]; then
+			if test -e "/tmp/${tempfilepath}_${drive}_${serial1}.partition"; then
+				echo "--${boundary}"
+				echo "Content-Type: application/octet-stream"
+				echo "Content-Transfer-Encoding: base64"
+				echo "Content-Disposition: attachment; filename=${serial1}_SGDISK_Partition.par"
+				base64 "/tmp/${tempfilepath}_${drive}_${serial1}.partition"
+			fi
+		fi
+	) >> "$logfile"
+fi
+	}
 
 ##########  DUMP DRIVE DATA ##########
 # This routine will dump the selected drive data into individual files for troubleshooting.
@@ -1829,6 +2141,19 @@ if [[ "$drive" != "cd0" ]]; then
 				base64 "/tmp/${tempfilepath}${drive}_${serial1}_x.txt"
 			fi
 		fi
+		if ! [[ $drivetype == "NVM" ]]; then
+			midclt call disk.smart_attributes $drive | jq > "/tmp/${tempfilepath}${drivetype}_${drive}_${serial1}_API.json"
+		fi
+
+		if test -e "/tmp/${tempfilepath}${drivetype}_${drive}_${serial1}_API.json"; then
+			echo "--${boundary}"
+			echo "Content-Type: text/html"
+			echo "Content-Transfer-Encoding: base64"
+			echo "Content-Disposition: attachment; filename=${drivetype}_${drive}_${serial1}_API.json"
+			base64 "/tmp/${tempfilepath}${drivetype}_${drive}_${serial1}_API.json"
+		fi
+
+
 
 		if test -e "/tmp/${tempfilepath}${drivetype}_${drive}_${serial1}.json"; then
 			echo "--${boundary}"
@@ -1862,6 +2187,15 @@ if [[ "$drive" != "cd0" ]]; then
 			echo "Content-Transfer-Encoding: base64"
 			echo "Content-Disposition: attachment; filename=${drivetype}_${drive}_${serial1}_Error_Log.json"
 			base64 "/tmp/${tempfilepath}${drivetype}_${drive}_${serial1}_Error_Log.json"
+		fi
+		if [[ $Partition_Backup == "true" ]] && [[ $Attach_Files1 == "true" ]]; then
+			if test -e "/tmp/${tempfilepath}_${drive}_${serial1}.partition"; then
+				echo "--${boundary}"
+				echo "Content-Type: application/octet-stream"
+				echo "Content-Transfer-Encoding: base64"
+				echo "Content-Disposition: attachment; filename=${serial1}_SGDISK_Partition.par"
+				base64 "/tmp/${tempfilepath}_${drive}_${serial1}.partition"
+			fi
 		fi
 
 	) >> "$logfile"
@@ -2672,33 +3006,35 @@ get_smartNVM_listings () {
 		done | awk '{for (i=NF; i!=0 ; i--) print $i }' | tr ' ' '\n' | sort | tr '\n' ' ')
 		### Convert nvdx to nvmexx in smartdrivesNVM ###
 	fi > /dev/null 2<&1
+# smartdrivesNVM=""
+	if [[ "$smartdrivesNVM" != "" ]]; then	# Skip all this if there are no NVMe drives.
+		### Convert nvdx to nvmexx in smartdrivesNVM ###
+		smartdrivesNVM=$( echo "$smartdrivesNVM" | sed 's/nvd/nvme/g' )
 
-	### Convert nvdx to nvmexx in smartdrivesNVM ###
-	smartdrivesNVM=$( echo "$smartdrivesNVM" | sed 's/nvd/nvme/g' )
+		### Convert nvme0n1 to nvme0, or nvme34n1 to nvme34 to make compatible with Smartmontools 7.4
+		### Maybe this can go away with version 7.5?
+		for smartdrivesnvme in $smartdrivesNVM; do
+			nvme_drive=$nvme_drive$(echo "nvme"$(echo $smartdrivesnvme | sed -r 's#^nvme##' | cut -d 'n' -f 1)" ")
+		done
+		smartdrivesNVM=$nvme_drive
 
-	### Convert nvme0n1 to nvme0, or nvme34n1 to nvme34 to make compatible with Smartmontools 7.4
-	### Maybe this can go away with version 7.5?
-	for smartdrivesnvme in $smartdrivesNVM; do
-		nvme_drive=$nvme_drive$(echo "nvme"$(echo $smartdrivesnvme | sed -r 's#^nvme##' | cut -d 'n' -f 1)" ")
-	done
-	smartdrivesNVM=$nvme_drive
+		# Sort Drive Idents
+			sort_list=$smartdrivesNVM
+			if [ $softver != "Linux" ]; then
+				sort_drives
+			else
+				sort_drives_scale
+			fi
+			smartdrivesNVM=$sort_list
 
-	# Sort Drive Idents
-		sort_list=$smartdrivesNVM
-		if [ $softver != "Linux" ]; then
-			sort_drives
-		else
-			sort_drives_scale
-		fi
-		smartdrivesNVM=$sort_list
-
-	# Call Sort Routine with the drive string.
-	if [[ "$smartdrivesNVM" != "" ]]; then
-		if [[ "$Multipath" != "off" ]]; then
-			duplicate_list=$smartdrivesNVM
-			remove_duplicate		# Remove duplicate serial numbers
-			smartdrivesNVM=$duplicate_list
-		fi
+		# Call Sort Routine with the drive string.
+	#	if [[ "$smartdrivesNVM" != "" ]]; then
+			if [[ "$Multipath" != "off" ]]; then
+				duplicate_list=$smartdrivesNVM
+				remove_duplicate		# Remove duplicate serial numbers
+				smartdrivesNVM=$duplicate_list
+			fi
+	#	fi
 	fi
 	}
 
@@ -2758,6 +3094,7 @@ get_json_data () {
 			echo "$tempjson" > "/tmp/${tempfilepath}${drivetype}_${drive}_${serial1}.json"
 		fi
 	fi
+
 	}
 
 ########## GET DRIVE DATA ##########
@@ -3635,15 +3972,27 @@ if [[ "$reAlloc" != "" ]] && [[ "$reAlloc" != "0" ]]; then convert_to_decimal $r
 			temp_max="43"
 		fi
 	fi
+	# Grab partition data too
 
-		# Save data for -dump routine
-		if [[ "$dump_all" != "0" ]]; then
-			get_json_data
-			if [[ "$dump_all" == "4" ]]; then	# Dump '-dump emailextra'
-			"$(echo "$smartdata" > /tmp/${tempfilepath}${drive}_${serial}_a.txt)" 2> /dev/null
-			"$(smartctl -x /dev/"$drive" > /tmp/${tempfilepath}${drive}_${serial}_x.txt)" 2> /dev/null
-			fi
+	if [[ $Partition_Backup == "true" ]] && [[ $1 != "NVM" ]]; then
+		if ! [[ "$(find /usr/ -name "sgdisk")" ]]; then
+			echo "sgdisk not found" >> "$logfile_caution"
+		else		
+		sgdisk -b="/tmp/${tempfilepath}_${drive}_${serial}.partition" /dev/${drive} > /dev/null 2<&1
 		fi
+	fi
+
+
+	# Save data for -dump routine
+	if [[ "$dump_all" != "0" ]]; then
+		get_json_data
+		if [[ "$dump_all" == "4" ]]; then	# Dump '-dump emailextra'
+		"$(echo "$smartdata" > /tmp/${tempfilepath}${drive}_${serial}_a.txt)" 2> /dev/null
+		"$(smartctl -x /dev/"$drive" > /tmp/${tempfilepath}${drive}_${serial}_x.txt)" 2> /dev/null
+		fi
+	fi
+
+
 
 # Add a line return between drives
 	json_error_log=$json_error_log$'\n'
@@ -4114,48 +4463,65 @@ detailed_report () {
 		) >> "$logfile"
 
 		if test -e "$Config_File_Name"; then
-			echo "<b>External Configuration File in use dtd:$config_version_date </b>" >> "$logfile"
+			echo "<b>1) External Configuration File (Present) dtd:$config_version_date </b>" >> "$logfile"
 		else
-			echo "<b>No External Configuration File Exists</b>" >> "$logfile"
+			echo "<b>1) External Configuration File (Not Present)</b>" >> "$logfile"
 		fi
+
 
 		if [[ "$dump_all" == "3" ]]; then
 			echo "<b><span style='color:darkred;'>YOU have requested '-dump email' and thus an email was sent to Joe Schmuck for analysis.<br>He will try to contact you on the sending email address.  If this is an invalid<br>email address then please send a followup email to joeschmuck2023@hotmail.com<br>Your personal information will not be shared.</span></b><br>" >> "$logfile"
 		fi
 
-		if [[ $TrueNASConfigEmailEnable == "true" ]]; then echo "<b>TrueNAS Configuration File Emailed every: $TrueNASConfigEmailDay</b>" >> "$logfile"; fi
-		if [[ $MRConfigEmailEnable == "true" ]]; then echo "<b>Multi Report Configuration File Emailed every: $MRConfigEmailDay</b>" >> "$logfile"; fi
+
 		if [[ $SDF_DataRecordEnable == "true" ]]; then
+			if [[ $statistical_data_file_created == "1" ]]; then echo "<b>-- Statistical Data File Created.</b><br>" >> "$logfile"; fi
 			if [[ "$(echo $statistical_data_file | grep "/tmp/")" ]]; then
-				echo "<b><span style='color:darkred;'>The Statistical Data File is located in the /tmp directory and is not permanent.<br>Recommend changing to a proper dataset.</span></b>" >> "$logfile"
-			fi
-
-			if [[ $statistical_data_file_created == "1" ]]; then echo "Statistical Data File Created.<br>" >> "$logfile"; fi
-
-			if [[ $SDF_DataEmail == "true" ]]; then
-				(
-				echo "<b>Statistical Log Sent on: $SDF_DataEmailDay"
-				echo "Statistical Export Log Located: $statistical_data_file</b>"				
-				) >> "$logfile"
+				echo "<b><span style='color:darkred;'>2) The Statistical Data File is located in the /tmp directory and is not permanent.<br>Recommend changing to a proper dataset.</span></b>" >> "$logfile"
 			else
-				echo "<b>Statistical Export Log Located at:</b> $statistical_data_file" >> "$logfile"
+				echo "<b>2) Statistical Data Log (Present) @ ($statistical_data_file)</b>" >> "$logfile"
 			fi
 		fi
-		echo "<b>Multipath set to: $Multipath</b>" >> "$logfile"
-		if [[ $SMR_Enable == "true" ]]; then echo "<b>SMR Checking Enabled</b>"; else echo "<b>SMR Checking Disabled</b>"; fi >> "$logfile"
+		if [[ $NVM_Smartmontools_74_Override == "enable" ]]; then echo "<b>3) NVMe S.M.A.R.T. v7.4 Override (Enabled)</b>" >> "$logfile"; else echo "<b>3) NVMe S.M.A.R.T. v7.4 Override (Disabled)</b>" >> "$logfile"; fi
+		echo " "  >> "$logfile"
+		echo "<b>Attachments:</b>" >> "$logfile"
+		if [[ $TrueNASConfigEmailEnable == "true" ]]; then echo "<b>1) TrueNAS Configuration File ($TrueNASConfigEmailDay) - (Enabled)</b>" >> "$logfile"; else echo "<b>1) TrueNAS Configuration File ($TrueNASConfigEmailDay) - (Disabled)</b>" >> "$logfile"; fi
+		if [[ $MRConfigEmailEnable == "true" ]]; then echo "<b>2) Multi Report Configuration File ($MRConfigEmailDay) - (Enabled)</b>" >> "$logfile"; else echo "<b>2) Multi Report Configuration File ($MRConfigEmailDay) - (Disabled)</b>" >> "$logfile"; fi
+		if [[ $SDF_DataEmail == "true" ]]; then echo "<b>3) Statistical Log ($SDF_DataEmailDay) - (Enabled)</b>" >> "$logfile"; else echo "<b>3) Statistical Log ($SDF_DataEmailDay) - (Disabled)</b>" >> "$logfile"; fi
 
-		if [[ $partition_results -gt 0 ]]; then
-			echo "<b>Partition Check was run, Possible Errors Detected</b>" >> "$logfile"
-		elif [[ $partition_results -eq 0 ]]; then
-			echo "<b>Partition Check was run, No Errors</b>" >> "$logfile"
-		else echo "<b>Parition Check was not run</b>" >> "$logfile"
+		if [[ $Partition_Backup == "true" ]]; then echo "<b>4) HDD/SSD Partition Backup ($TrueNASConfigEmailDay) - (Enabled)</b>" >> "$logfile"; else echo "<b>4) HDD/SSD Partition Backup ($TrueNASConfigEmailDay) - (Disabled)</b>" >> "$logfile"; fi
+
+		if [[ $dump_type != "" ]]; then echo "<b>5) Dump Files ($dump_type)</b>" >> "$logfile"; fi
+		echo " " >> "$logfile"
+		echo "<b>Run via Script:</b>" >> "$logfile"
+		if [[ $SMR_Enable == "true" ]]; then
+			if [[ $smr_present == "" ]]; then echo "<b>1) SMR Checking (Enabled) - No Errors</b>" >> "$logfile"; else echo "<b>1) SMR Checking (Enabled) - Errors Detected</b>" >> "$logfile"; fi
+		else
+			echo "<b>1) SMR Checking (Disabled)</b>" >> "$logfile"
 		fi
+		if [[ $partition_results -gt 0 ]]; then
+			echo "<b>2) Partition Check (Enabled) - Possible Errors Detected</b>" >> "$logfile"
+		elif [[ $partition_results -eq 0 ]]; then
+			echo "<b>2) Partition Check (Enabled) - No Errors</b>" >> "$logfile"
+		else echo "<b>2) Parition Check (Disabled)</b>" >> "$logfile"
+		fi
+
+		if [[ $NVM_Daily_Short_Selftest == "true" ]] || [[ $NVM_Weekly_Long_Selftest == "true" ]]; then echo "<b>3) NVMe S.M.A.R.T. Self-test (Enabled)</b>" >> "$logfile"
+			if [[ $NVM_Daily_Short_Selftest == "true" ]]; then echo "<b>     Short Self-test Daily (Enabled)</b>" >> "$logfile"; else echo "<b>     Short Self-test Daily (Disabled)</b>" >> "$logfile"; fi
+			if [[ $NVM_Weekly_Long_Selftest == "true" ]]; then echo "<b>     Long Self-test Weekly (Enabled) - ($NVM_Weekly_Long_Selftest_Day)</b>" >> "$logfile"; else echo "<b>     Long Self-test Weekly (Disabled)</b>" >> "$logfile"; fi
+		else
+			echo "<b>3) NVMe S.M.A.R.T. Self-test (Disabled)</b>" >> "$logfile"
+		fi
+		
+		if [[ $Long_Test_Mode -ne 4 ]]; then echo "<b>4) HDD/SSD S.M.A.R.T. Self-test (Enabled)</b>" >> "$logfile"; else echo "<b>4) HDD/SSD S.M.A.R.T. Self-test (Disabled)</b>" >> "$logfile"; fi
+
+		echo "<b>5) Multipath - ($Multipath)</b>" >> "$logfile"
 
 		if [[ $spencer_error == "true" ]]; then
-			echo "<b>Spencer was run, Possible Errors Detected</b><br>" >> "$logfile"
+			echo "<b>6) Spencer (Enabled) - Possible Errors Detected</b><br>" >> "$logfile"
 		elif [[ $spencer_error == "false" ]]; then
-			echo "<b>Spencer was run, No Errors</b><br>" >> "$logfile"
-		else echo "<b>Spencer was not run</b><br>" >> "$logfile"
+			echo "<b>6) Spencer (Enabled) - No Errors</b><br>" >> "$logfile"
+		else echo "<b>6) Spencer (Disabled)</b><br>" >> "$logfile"
 		fi
 
 		if [ -f "/tmp/selftestlog" ]; then	# If there is a selftestlog file, then we did some selftests
@@ -4569,20 +4935,7 @@ attach_files () {
 		fi
 		) >> "$logfile"
 
-		# Attach dump files first
 
-		for drive in $smartdrives; do
-			dump_drive_data
-		done
-		for drive in $smartdrivesSSD; do
-			dump_drive_data
-		done
-		for drive in $smartdrivesNVM; do
-			dump_drive_data
-		done
-		for drive in $nonsmartdrives; do
-			dump_drive_data
-		done
 		doit="true"
 	fi
 
@@ -4692,6 +5045,16 @@ attach_files () {
 				echo "Content-Disposition: attachment; filename=json_error_log.txt"
 				base64 <<< $json_error_log
 			fi
+
+			$(midclt call smart.test.results | jq > "/tmp/smart_results_API.json")
+			if test -e "/tmp/smart_results_API.json"; then
+				echo "--${boundary}"
+				echo "Content-Type: text/html"
+				echo "Content-Transfer-Encoding: base64"
+				echo "Content-Disposition: attachment; filename=Smart_Results_API.json"
+				base64 "/tmp/smart_results_API.json"
+				rm "/tmp/smart_results_API.json"
+			fi
 		fi
 		) >> "$logfile"
 	fi
@@ -4707,6 +5070,38 @@ attach_files () {
 		fi
 		) >> "$logfile"
 	fi
+
+	if [[ "$dump_all" != "0" ]]; then
+		# Attach dump files first
+
+		for drive in $smartdrives; do
+			dump_drive_data
+		done
+		for drive in $smartdrivesSSD; do
+			dump_drive_data
+		done
+		for drive in $smartdrivesNVM; do
+			dump_drive_data
+		done
+		for drive in $nonsmartdrives; do
+			dump_drive_data
+		done
+	else
+		for drive in $smartdrives; do
+			dump_drive_partition
+		done
+		for drive in $smartdrivesSSD; do
+			dump_drive_partition
+		done
+	#	for drive in $smartdrivesNVM; do
+	#		dump_drive_data
+	#	done
+		for drive in $nonsmartdrives; do
+			dump_drive_partition
+		done
+	fi
+
+
 	}
 
 ########## CRUNCH THE NUMBERS and FORMAT MESSAGES and COLORS ##########
@@ -5569,6 +5964,23 @@ update_config_file () {
 		echo "					# a SMART Short Self-test, wait 2 minutes for the test to complete, and report the correct power_on_time."
 		echo "					# This is the same as using the '-scsismart' switch at the CLI."
 		echo " "
+
+		echo "###### HDD/SSD SMART Testing"
+		echo "Short_Test_Mode=$Short_Test_Mode		# 1 = Use Short_Drives_Per_Day value, 2 = Use Short_Drives_Number_Of_Days, 3 = All Drives Tested Every Day, 4 = No Drives Tested."
+		echo "Short_Drives_Per_Day=$Short_Drives_Per_Day		# For Test_Mode 1) How many drives to run each day?  4=Test Only Four Drives A Day; Mon=ada0, ada1, ada2, ada3.  Tue=ada4, ada5, ada6, ada7."
+		echo "Short_Drives_Number_Of_Days=$Short_Drives_Number_Of_Days	# For Test_Mode 2) How many days of the week do you want to split the drives across? 4=Evenly split across Mon,Tue,Wed,Thu."
+		echo "Short_Start_Day_Of_Week=$Short_Start_Day_Of_Week	# Day of the week drives start to be assigned. 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat, 7=Sun"
+		echo "Short_Delay_Between_Drives=$Short_Delay_Between_Drives	# Tests will have a XX second delay between the drives starting testing."
+		echo 'Short_Mute="'$Short_Mute'"		# "true" = Do not output messages.'
+		echo " "
+		echo "Long_Test_Mode=$Long_Test_Mode		# 1 = Use Long_Drives_Per_Day value, 2 = Use Long_Drives_Number_Of_Days, 3 = All Drives Tested Every Day, 4 = No Drives Tested."
+		echo "Long_Drives_Per_Day=$Long_Drives_Per_Day		# For Test_Mode 1) How many drives to run each day? 4=Test Only Four Drives A Day; Mon=ada0, ada1, ada2, ada3.  Tue=ada4, ada5, ada6, ada7."
+		echo "Long_Drives_Number_Of_Days=$Long_Drives_Number_Of_Days	# For Test_Mode 2) How many days of the week do you want to split the drives across? 4=Evenly split across Mon,Tue,Wed,Thu."
+		echo "Long_Start_Day_Of_Week=$Long_Start_Day_Of_Week	# Day of the week drives start to be assigned. 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat, 7=Sun"
+		echo "Long_Delay_Between_Drives=$Long_Delay_Between_Drives	# Tests will have a XX second delay between the drives starting testing."
+		echo 'Long_Mute="'$Long_Mute'"		# "true" = Do not output messages.'
+		echo " "
+
 		echo "###### SSD/NVMe Specific Settings"
 		echo "WearLevelCrit=$WearLevelCrit				# Wear Level Alarm Setpoint for WARNING message, 9% is the default."
 		echo 'NVM_Low_Power="'$NVM_Low_Power'"			# Set the NVMe power level to the minimum setting. This does not mean the NVMe will remain at this power level.'
@@ -5617,6 +6029,8 @@ update_config_file () {
 		echo "NVM_Media_Errors=$NVM_Media_Errors	# Number of NVM Media Errors will cause a CRITICAL alarm.  Default is 1."
 		echo 'Partition_Check="'$Partition_Check'"	# Run sgdisk on each drive. Default = "false", this will install gdisk/sgdisk on TrueNAS CORE if not present.'
 		echo '			# Default is "false" becasue you should choose to control what is installed or not.'
+		echo 'Partition_Backup="'$Partition_Backup'"	# Set to "true" to save each partiton table with the TrueNAS configuration backup.'
+		echo "			# NOTE: You need sgdisk installed, run the Partition Check once to install on CORE."
 		echo " "
 		echo "###### Time-Limited Error Recovery (TLER)"
 		echo 'SCT_Enable="'$SCT_Enable'"		# Set to "true" to send a command to enable SCT on your drives for user defined timeout.'
@@ -6014,7 +6428,7 @@ generate_config_file () {
 					echo "   N) NVMe Custom Settings (Set Low Power State, SMART Test Options)"
 					echo "   O) SCSI Drive Settings (Obtain true Power On Hours)"
 					echo "   S) Custom Drive Configuration"
-					echo "   T) SMR Drive Options and GPT Partition Checking"
+					echo "   T) SMR Drive Options and GPT Partition Checking/Backup"
 					echo "   U) Update Script - Automatic or Manual Internet (Github) Updates"
 					echo "   W) Write Configuration File (Save your changes)"
 					echo "   X) Exit - Will not automatically save changes"
@@ -8497,7 +8911,7 @@ generate_config_file () {
 
 						T)
 							clear
-							echo "SMR Drive Options and GPT Partition Checking"
+							echo "SMR DRIVE OPTIONS AND GPT PARTITION CHECKING/BACKUP"
 							echo " "
 							echo "Do you want to Enable SMR Drive Operations?"
 							echo "Current: "$SMR_Enable
@@ -8514,8 +8928,10 @@ generate_config_file () {
 								fi
 							fi
 							echo "Set Value: "$SMR_Enable
-							
+							sleep 2
 							if [[ $SMR_Enable == "true" ]]; then
+								clear
+								echo "DOWNLOAD SMR SCRIPT?"
 								echo " "
 								echo " "
 								echo "Do you want to download the SMR Script if it does not exist?"
@@ -8534,7 +8950,10 @@ generate_config_file () {
 								fi
 								echo "Set Value: "$SMR_Update
 							fi
-
+							sleep 2
+							clear
+							echo "IGNORE SMR ALARMS?"
+							echo " "
 							echo " "
 							echo "Do you want to Ignore SMR Alarm Notifications"
 							echo "When 'false' the Email Subject Line will denote a Warning,"
@@ -8556,12 +8975,17 @@ generate_config_file () {
 								fi
 							fi
 							echo "Set Value: "$SMR_Ignore_Alarm
+							sleep 3
+#							echo " "
+#							echo " "
+#							echo "Press any key to continue"
+#							read -s -n 1 key
+							clear							
+							echo "GPT PARTITION CHECKING"
 							echo " "
-							echo " "
-							echo "GPT Partition Checking"
 							echo " "
 							echo "If enabled this will check all partitions to ensure there are no"
-							echo "catestrophic errors.  If you suspect GPT Partiton issues, you would"
+							echo "catastrophic errors.  If you suspect GPT Partition issues, you would"
 							echo "be smart to make sure all is good, do not depend on this script alone."
 							echo " "
 							echo "Do you want to Enable GPT Partition Checking?"
@@ -8579,6 +9003,30 @@ generate_config_file () {
 								fi
 							fi
 							echo "Set Value: "$Partition_Check
+							sleep 3
+							clear
+							echo "GPT PARTITION BACKUP"
+							echo " "
+							echo " "
+							echo "If enabled (true) then a backup of each partition table (HDD/SSD) will"
+							echo "be created and added as a file attachment that will be issued when the"
+							echo "TrueNAS Config file is attached (Monday is the default)"
+							echo " "
+							echo "Current: "$Partition_Backup
+							echo " "
+							echo "(true=yes/enable, false=no/disable)"
+							echo " "
+							echo "Enter 't', 'f', or Enter/Return to retain the current value."
+							read -s -n 1 Keyboard_yn
+							if [[ $Keyboard_yn == "t" || $Keyboard_yn == "f" ]]; then
+								if [[ $Keyboard_yn == "t" ]]; then
+									Partition_Backup="true"
+								else
+									Partition_Backup="false"
+								fi
+							fi
+							echo "Set Value: "$Partition_Backup
+							echo " "
 							echo " "
 							echo "Make sure you write your changes."
 							echo "Press any key to continue"
@@ -9364,6 +9812,9 @@ zfs
 zpool
 )
 
+#Temporary testing location, move to end of script.
+#smartctl_selftest
+
 # Test if the commands exist
 for command in "${commands[@]}"; do
 	if ! type "${command}" &> /dev/null; then
@@ -9430,7 +9881,9 @@ fi
 # if -dump emailextra is used, send "-dump" plus smart _a.txt & -x.txt files (dump_all=4).
 # Dump the files into /tmp/ and then email them.
 
+No_Drive_Test="false"
 if [[ "$1" == "-dump" || "$3" == "-dump" ]]; then
+	No_Drive_Test="true"
 	Attach_Files1="true"
 	zpool list > /tmp/zpoollist.txt
 	zpool status -v > /tmp/zpoolstatus.txt
@@ -9580,9 +10033,9 @@ fi
 # 2 = -dump all : Attach Everything.
 # 3 = -dump email : Add Joe's email address and SAME data as #1.
 
-if [[ "$dump_all" == "1" ]]; then TrueNASConfigEmailEnable="false"; SDF_DataEmail="false"; fi
-if [[ "$dump_all" == "2" ]]; then TrueNASConfigEmailEnable="true"; SDF_DataEmail="true"; TrueNASConfigEmailDay="All"; SDF_DataEmailDay="All"; fi
-if [[ "$dump_all" > "2" ]]; then Email=$Email",joeschmuck2023@hotmail.com"; TrueNASConfigEmailEnable="false"; SDF_DataEmail="false"; fi
+if [[ "$dump_all" == "1" ]]; then TrueNASConfigEmailEnable="false"; SDF_DataEmail="false"; dump_type="Normal - Local"; fi
+if [[ "$dump_all" == "2" ]]; then TrueNASConfigEmailEnable="true"; SDF_DataEmail="true"; TrueNASConfigEmailDay="All"; SDF_DataEmailDay="All"; dump_type="Attach All Files - Local"; fi
+if [[ "$dump_all" > "2" ]]; then Email=$Email",joeschmuck2023@hotmail.com"; TrueNASConfigEmailEnable="false"; SDF_DataEmail="false"; dump_type="Attach All Files & Send to Joe"; fi
 
 testfilepath=""
 
@@ -9741,7 +10194,7 @@ fi
 Now=$(date +"%a")
 smart_ver=$(smartctl | grep "7." | cut -d " " -f 2)
 if [[ "$1" != "-t" ]]; then		# Skip if test file
-	if [[ "$smart_ver" < "7.4" || $NVM_Smartmontools_74_Override == "enable" ]] && [[ "$NVM_Daily_Short_Selftest" == "true" || "$NVM_Weekly_Long_Selftest" == "true" ]] && [[ "$dump_all" == "0" ]]; then
+	if [[ "$smart_ver" < "7.4" || $NVM_Smartmontools_74_Override == "enable" ]] && [[ "$NVM_Daily_Short_Selftest" == "true" || "$NVM_Weekly_Long_Selftest" == "true" ]] && [[ "$dump_all" == "0" ]] && ! [[ "$smartdrivesNVM" == "" ]]; then
 		
 		if [[ "$NVM_Daily_Short_Selftest" == "true" ]] && [[ "$Wait_For_SMART_Short_Test" == "true" ]] && ! [[ "$Now" == "$NVM_Weekly_Long_Selftest_Day" ]]; then
 			nvm_selftest Short
@@ -9759,6 +10212,8 @@ if [[ "$1" != "-t" ]]; then		# Skip if test file
 		fi
 	fi
 fi
+
+smartctl_selftest short 	# Run Short HDD/SSD SMART Tests
 
 # Lets start processing the drives baby!
 if [[ $Develop == "true" ]]; then
@@ -9780,7 +10235,6 @@ if [[ "$smartdrives" != "" ]]; then
 	done
 	end_table "HDD"
 fi
-
 if [[ $Develop == "true" ]]; then
 	echo "End of HDD Section"
 	duration=$SECONDS
@@ -9790,7 +10244,6 @@ if [[ $Develop == "true" ]]; then
 	echo "smartdrivesSSD="${smartdrivesSSD[*]}
 	echo " "
 fi
-
 # Generate SSD Report
 SER1=""
 sas_message=""
@@ -9804,7 +10257,6 @@ if [[ $smartdrivesSSD != "" ]]; then
 	done
 	end_table "SSD"
 fi
-
 if [[ $Develop == "true" ]]; then
 	echo "End of SSD Section"
 	duration=$SECONDS
@@ -9814,7 +10266,6 @@ if [[ $Develop == "true" ]]; then
 	echo "smartdrivesNVM="${smartdrivesNVM[*]}
 	echo " "
 fi
-
 # Generate NVMe Report
 SER1=""
 sas_message=""
@@ -9828,7 +10279,6 @@ if [[ $smartdrivesNVM != "" ]]; then
 	done
 	end_table "NVM"
 fi
-
 if [[ $Develop == "true" ]]; then echo "End of NVMe Section"; fi
 
 #if [[ "$testfilepath" == "" ]]; then
@@ -9850,7 +10300,6 @@ if [[ $SDF_DataPurgeDays != 0 ]]; then
 fi
 
 write_ATA_Errors="0"
-
 if [[ "$Enable_Text_Section" == "true" ]]; then
 	if [[ $spencer_enable == "true" ]]; then
 		if test -e "$spencer_script_name"; then cd $SCRIPT_DIR && python3 "$spencer_script_name" multi_report; fi
@@ -9918,8 +10367,10 @@ if [[ $NVM_Low_Power == "true" ]]; then
 		fi
 	fi
 fi
+smartctl_selftest long 	# Run Long HDD/SSD SMART Tests
 
 cleanup_files
+
 duration=$SECONDS
 if [[ $Develop == "true" ]]; then echo "$(($duration / 60)) minutes and $(($duration % 60)) seconds elapsed."; fi
 
