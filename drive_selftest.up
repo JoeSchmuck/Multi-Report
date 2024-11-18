@@ -1,5 +1,15 @@
-Version: 1.0 Dated: 2024-11-17
+#!/bin/bash
 
-Play text, this is a placeholder for the new complementing script to Multi-Report.
+LANG="en_US.UTF-8"
+if [[ $TERM == "dumb" ]]; then          # Set a terminal as the script may generate an error message if using 'dumb'.
+    export TERM=unknown
+fi
+Version 1.0       # Must remain on line 7.
 
-  
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+
+### FILE NAME SHOULD BE 'drive_selftest.sh' TO INTEGRATE WITH MULTI-REPORT
+###
+### MULTIPLE DRIVE SMART SELF-TEST SCRIPT (TO EASE YOUR CONFIGURATION NEEDS)
+###
+### WHAT DOES THIS SCRIPT DO?
