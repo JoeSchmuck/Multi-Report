@@ -1086,9 +1086,9 @@ update_script () {
 # THIS GOES AWAY IN THE NEXT VERSION OR SOMETHING SIMILAR NEEDS TO HAPPEN.  ALSO VERSION CHECKING IS NEEDED TO ENSURE
 # WE ARE USING A COMPATABLE VERSION.  ALSO ADD CHKSUM TO DRIVE-SELFTEST IN NEXT VERSION.
 #		if ! test -e $SCRIPT_DIR"/drive_selftest.sh"; then
-#			curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/drive_selftest_v1_2024_12_10.txt
+#			curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/drive_selftest_v1_2024_12_11.txt
 #			curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/Drive_Selftest_User_Guide.pdf
-#			cp "/tmp/Multi-Report/drive_selftest_v1_2024_12_10.txt" $SCRIPT_DIR"/"drive_selftest.sh
+#			cp "/tmp/Multi-Report/drive_selftest_v1_2024_12_11.txt" $SCRIPT_DIR"/"drive_selftest.sh
 #			cp "/tmp/Multi-Report/Drive_Selftest_User_Guide.pdf" $SCRIPT_DIR"/."
 #		fi
 		)
@@ -10493,9 +10493,9 @@ fi
 			echo "this will become a seperate function in the next version of the script."
 			if ! test -e "/tmp/Multi-Report"; then mkdir /tmp/Multi-Report; fi
 			cd /tmp/Multi-Report
-			curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/drive_selftest_v1_2024_12_10.txt
+			curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/drive_selftest_v1_2024_12_11.txt
 			curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/Drive_Selftest_User_Guide.pdf
-			cp "/tmp/Multi-Report/drive_selftest_v1_2024_12_10.txt" $SCRIPT_DIR"/"drive_selftest.sh
+			cp "/tmp/Multi-Report/drive_selftest_v1_2024_12_11.txt" $SCRIPT_DIR"/"drive_selftest.sh
 			cp "/tmp/Multi-Report/Drive_Selftest_User_Guide.pdf" $SCRIPT_DIR"/."
 		fi
 		)
