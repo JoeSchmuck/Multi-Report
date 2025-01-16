@@ -1,14 +1,74 @@
 #!/bin/bash
-#
+# shellcheck disable=SC1075,SC2027,SC2034,SC2128,SC2002,SC2004,SC2086,SC2162
 LANG="en_US.UTF-8"
 #
 TrueNASConfigEmailEncryption=""	 # Set this to "" for no encryption, MUST REMAIN ON LINE 5.
 # NOTE: Some email providers will not send some encrypted file types, such as GMAIL, but .zip files are okay.
 # NOTE: 7zip is used for the compression/encryption and will not be installed unless encryption is enabled.
 
+##### Version 3.1
+
 ###### Get Config File Name and Location
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 Config_File_Name="$SCRIPT_DIR/multi_report_config.txt"
+
+set -E -o functrace
+
+failure(){
+    local -n _lineno="${1:-LINENO}"
+    local -n _bash_lineno="${2:-BASH_LINENO}"
+    local _last_command="${3:-${BASH_COMMAND}}"
+    local _code="${4:-0}"
+
+    ## Workaround for read EOF combo tripping traps
+    if ! ((_code)); then
+        return "${_code}"
+    fi
+
+    local _last_command_height="$(wc -l <<<"${_last_command}")"
+	local _date="$(date)"
+    local -a _output_array=()
+    _output_array+=(
+        '-----------------------------------'
+		"Start: ${_date}"
+		' '
+        "lines_history: [${_lineno} ${_bash_lineno[*]}]"
+        "function_trace: [${FUNCNAME[*]}]"
+        "exit_code: ${_code}"
+    )
+
+    if [[ "${#BASH_SOURCE[@]}" -gt '1' ]]; then
+        _output_array+=('source_trace:')
+        for _item in "${BASH_SOURCE[@]}"; do
+            _output_array+=("  - ${_item}")
+        done
+    else
+        _output_array+=("source_trace: [${BASH_SOURCE[*]}]")
+    fi
+
+    if [[ "${_last_command_height}" -gt '1' ]]; then
+        _output_array+=(
+            'last_command: ->'
+            "${_last_command}"
+        )
+    else
+        _output_array+=("last_command: ${_last_command}")
+    fi
+
+#	echo "End: $(date)"
+    date >> /tmp/multi_report_errors.txt
+    _output_array+=('---------------------------------')
+	printf '%s\n' "${_output_array[@]}"
+    printf '%s\n' "${_output_array[@]}" >> /tmp/multi_report_errors.txt
+ #   exit ${_code}
+}
+
+if test -e "/tmp/multi_report_errors.txt"; then
+	rm /tmp/multi_report_errors.txt
+	echo "Deleted"
+fi
+
+# trap 'failure "LINENO" "BASH_LINENO" "${BASH_COMMAND}" "${?}"' ERR
 
 # Use [-help] to read the Help Section.  For a short list of commands use [-h].
 # Use [-config] to create a configuration file in the directory this script is run from.
@@ -18,9 +78,78 @@ Config_File_Name="$SCRIPT_DIR/multi_report_config.txt"
 ### Modified by Bidule0hm, melp, toomuchdata
 ### Thanks goes out to Basil Hendroff who created the SMR Drive Check script.
 ### Currently maintained by joeschmuck (joeschmuck2023@hotmail.com)
+### Currently sendemail.py is maintained by Oxyde (oxyde1989@gmail.com)
 
+
+# Version
 ### Changelog:
 #
+# V3.1 Beta 7 (14 January 2025)
+#
+#   VERIFY DEFAULT VALUES
+#
+#   - The multi_report script when generating a new config file had the wrong default value for
+#     ---- the value 'Use_multi_report_config_values' which should have been "true".  This has been corrected.
+#
+#
+#  NEXT VERSION --> ADD TROUBLESHOOTING ANALYTICS.
+#
+#  CHECK INTO TESTING NVME DRIVES ONLY SETTING FOR DRIVE_SELFTEST.  PUT THE SETTING IN MR CONFIG FILE.
+#
+#  DONE --> VERIFY THE MR -CONFIG COVERS THE NEW FUNCTIONS.
+#
+#  ENSURE DOCS ARE COPIED TO SCRIPT DIRECTORY (UPDATE DOCS).
+#
+#  CONSIDER CHANGING FILES TO THE NORMAL NAMES AND USING ##### Version X.X AT THE BEGINING OF THE SCRIPT TO IDENTIFY THE VERSION NUMBER.
+#
+#  NEED TO TEST ON 24.10.1 WITH NON-NVME DRIVES ---> .PAR FILES NEED TO BE .TAR AS THERE COULD BE A LOT OF THEM.  ONLY FOR 24.10.1 OR GREATER.
+#
+#  NEED TO REARRANGE THE ATTACHMENTS SO ONLY: MULTI_REPORT_CONFIG, TRUENAS_CONFIG, STATISTICAL DATA FILE, ARE INDIVIDUAL FILES, EVERYTHING ELSE IS .TAR
+#  -- WE CAN INDIVIDUALLY .TAR THE PAR FILES, BUT EVERYTHING ELSE IS A TROUBLESHOOTING.TAR FILE
+#
+#  midclt call smart.test.results COMMAND FAILS IN 25.04 (14 JAN 2025)  CHECK AGAIN WHEN BETA HITS.  NOT A HUGE LOSS BUT AN API LOSS NONE THE LESS.
+# 
+
+# V3.1 (14 January 2025)
+#
+#   - Removed all S.M.A.R.T. testing from Multi-Report and created companion script Drive-Selftest.
+#     ---- Drive-Selftest script provides all the required functionality to run SMART tests on
+#     ---- on all the system drives and report any issues.  This is in preparation for when
+#     ---- TrueNAS has resolved the NVMe SMART testing issues, then the companion script
+#     ---- will no longer be required.  Additionally it simplifies the Multi-Report script.
+#   - A Zpool error now flags the suspect drive as well in the text section of the output file.
+#   - Replacing switches '-dump emailextra' with '-dump emailall'. Either will function for now.
+#   - Added NVMe Temperature Sensors 1 and 2 to the Chart, if then exist.
+#   - Fixed sgdisk partition error for drives named 'sdp'.
+#   - Added Memory Total, Used, Available, and SWAP to report.
+#   - Replaced sendmail (iXsystems removed it) with sendemail.py courtesy of Oxyde.
+#   - -dump will generate a single .tar file vice many individual files in TrueNAS 24.10.1 or greater.
+#   
+#
+
+# V3.0.8 Beta  (18 November 2024)
+#
+#   - Fix for some NVMe drives may report self-test results with leading white space.
+#   - Fix for not checking if NVMe drives exist before attempting to run self-test.
+#   - Fix for a drive serial number with white space.
+#   - Added more data collection for NVMe drives (NVMe Self-Test Log and NVMe Error-Log).
+#   - REMOVED SMART Testing from within Multi-Report and created new seperate companion script for SMART testing called Drive_Selftest.
+#   - Added Partition Backups generated and attached when TrueNAS Configuration is attached (by request).
+#   - Cleaned up the Text Section and added a little more data.
+#   - Added dumping of API drive data to aid in development efforts using the API.
+#   - Added automatic update to statistical data file (reformatting the file to fix 30 day Total Data Read/Written issue).
+#   - Updated SMR Drive Checking to report drives for 14 runs of the script.
+#   - Fix for NVMe errors messages for drive checks on NVMe drive which does not support Self-test.
+#   - Added message that if using TrueNAS 24.10 or greater, the Smartmontools Override is no longer "required".  However people may still desire to use it.
+#   - Fixed some (null) error messages while collecting smart data from drive.
+#   - Added error message for statistical data file not containing a driver serial number.
+#   - Added ZFS/Pool ONLINE (green) or if other (red).
+#   - Added API data capture routine for -dump routine supporting troubleshooting.
+#   - Updated the JSON Error Log to remove some of the un-needed data.
+#   - Added option to Enable/Disable running external SMART test script.  Internal testing removed from Multi-Report.
+#   - Added checking previous SMART check pass/fail.  This will catch any SMART Long test failures from a previous run.
+#   - No longer download all github files, only downloads the files we need.
+
 # V3.0.7 (08 June 2024)
 #
 #   - Fixed for some NVMe drives may report self-test results with leading white space.
@@ -33,14 +162,14 @@ Config_File_Name="$SCRIPT_DIR/multi_report_config.txt"
 #   - (The push for this change) Fix for Zpool gptid listing in text section (listing cache, log, meta, spare, and dedup).
 #
 #   - Added polling NVMe drives for self-test completion when 'waiting' for test complete.  The default is now to wait for the test(s) to complete.
-#     ---- The smart self-test will start on ALL NVMe drive at the same timewill be asked if the test completed or failed once a second.
+#     ---- The smart self-test will start on ALL NVMe drive at the same time will be asked if the test completed or failed once a second.
 #     ---- When the results are present the script will continue on to each successive NVMe drive, which if they were all identical, the tests
 #     ---- should be completing within a second of the first drive polled.  This happens for both Short and Long tests.
 #     ---- A new pair of variables in the multi_report_config.txt file can be set to "false" to have the script not wait and just use the previous
 #     ---- results.  By default the script will wait.
 #     ---- Now for a question to hose who are reading this...  How would yo feel about checking the last test time for each NVMe and if it
 #     ---- the last test time was less than 18 hours old, then skip the test.  Of course it will end up being a variable that the user could
-#     ---- change the time value.  I just thought of this becasue when I test, I end up running a lot of NVMe self-tests.
+#     ---- change the time value.  I just thought of this because when I test, I end up running a lot of NVMe self-tests.
 #     ---- Send me joeschmuck2023@hotmail.com an email or just message me on the forum if you have an option.
 #
 #   - Changed using smartmontool if v7.4 is installed to "enable" as TrueNAS (no version) supports scheduled NVMe self-testing.
@@ -117,149 +246,147 @@ Config_File_Name="$SCRIPT_DIR/multi_report_config.txt"
 #   - Updated script to work in a directory with a 'space character' in the path.
 #   - Removed variables (IncludedSSD and IncludeNVM).
 #
-# V2.5.1 (3 December 2023)
-#
-#   - Changed exported configuration file to use .tar/.zip appropriately.
-#   - Moved NVMe power state setting to end of script. 
-#
 
+
+###### EMAIL SECTION ######
 
 ###### Email Address(s)
-Email="YourEmail@Address.com"			# Normal email address to send report.
+Email="YourEmail@Address.com"		# Normal email address to send report.
 From="TrueNAS@local.com"			# From address (default works for many)
 
 ###### Alert Email Configuration - For Temperature and Critical Error monitoring when you suspect a problem.
 ### You must use the '-m' switch
 AlertEmail="YourAlertEmail@Address.com"		# Alert email address used with the '-m' switch.
-AlertOnWarningTemp="true"			# Send alert on Warning Temp. Default="true"
-AlertOnCriticalError="true"			# Send alert on Critical Error. Default="true"
+AlertOnWarningTemp="true"			# Send alert on Warning Temp. Default = "true"
+AlertOnCriticalError="true"			# Send alert on Critical Error. Default = "true"
 
-###### EMAIL ON ALARM ONLY
+###### EMAIL ON ALARM ONLY ######
 Email_On_Alarm_Only="false"			# When true, an email will only be sent if an alarm condition exists.  Default = 'false'
 Email_On_Alarm_Only_And_Attachments="true"   	# When true, email attachments will be sent even when no alarm condition exists.  Default = 'true'
 
-###### IGNORE LOCK ###### ONLY IN THE SCRIPT, NOT THE CONFIG FILE BECAUSE THIS VALUE IS REQUIRED BEFORE READING THE EXERNAL CONFIG FILE.
-Ignore_Lock="disable"		# Ignore_Lock when set to "enable" will disable checking for multiple instances of multi_report.sh running.
+###### HDD/SSD/NVMe SMART Testing ######
+### SMART Testing - SMART Testing is no longer an intergral part of Multi-Report and you must use an add_on script to perform the testing.
+External_SMART_Testing="true"			# When set to "true" it will check if 'drive_selftest.sh' is present and run it.
+External_Script_Name="$SCRIPT_DIR/drive_selftest.sh"	# Default setting is "$SCRIPT_DIR/drive_selftest.sh"
 
+###### IGNORE LOCK ######
+# LOCATED ONLY IN THE SCRIPT, NOT THE CONFIG FILE BECAUSE THIS VALUE IS REQUIRED BEFORE READING THE EXTERNAL CONFIG FILE.
+Ignore_Lock="disable"		# Ignore_Lock when set to "enable" will ignore checking for multiple instances of multi_report.sh running. Default = "disable"
+
+###### SCRIPT UPDATE ######
 ###### Script Update
 ### Ensure you understand these options.  Defaults check only, will not automatically update.
-CheckForUpdates="true"		# Will check GitHub for updates and include message in next email.
-AutomaticUpdate="false"		# WARNING !!!  This option will automatically update the script if a newer version exists on GitHub with no user interaction.
-SMR_Enable="true"		# Will enable SMR operations if set to "true".
-SMR_Update="true"		# Will automatically download Basil Hendroff's smr-check.sh file from Github if the file does not exist.
-SMR_Ignore_Alarm="false"	# When "true" will not generate an alarm condition, however the Drive ID will still change the background color.
+Check_For_Updates="true"	# Will check GitHub for updates and include message in next email.  Default = "true"
+Automatic_Update="false"	# WARNING !!!  This option will automatically update the script if a newer version exists on GitHub with no user interaction. Default = "false"
 
-###### Spencer Integration
-### Warning Levels are: None, Warning, Critical -- This only affects the Email Subject Line, if any errors are present, an attachment will occur.
-spencer_new_warning_level="Warning"		# What to do if a "new" error occurs.
-spencer_existing_warning_level="None"		# What to do for an existing error.
-spencer_enable="true"				# To call the Spencer.py script if "true" or "false" to not run the Spencer.py script.
+###### SCRIPT ADD-ONS ######
+SMR_Enable="true"			# Will enable SMR operations if set to "true".  Default = "true"
+SMR_Update="true"			# Will automatically download Basil Hendroff's smr-check.sh file from Github if the file does not exist.  Default = "true"
+SMR_Ignore_Alarm="false"	# When "true" will not generate an alarm condition, however the Drive ID will still change the background color.  Default = "false"
+SMR_New_Drive_Det_Count=14	# The SMR script will check the statistical_data_file for how many times the drive serial number has been listed.  Default = 14
+						# - If it is less than or equal to this value, then run the SMR script.  0=Disable (Run SMR Check every time).
+
+### PARTITION CHECK AND BACKUP
+Partition_Check="false"	# Run sgdisk on each drive. Default = "false", this will install gdisk/sgdisk on TrueNAS CORE if not present.
+			#  -- It is "false" because you should choose to control what is installed or not.
+Partition_Backup="true"	# Set to "true" to save each partition table with the TrueNAS configuration backup.
+			# NOTE: You need sgdisk installed, run the Partition Check once to install on CORE.
+
+### Spencer Integration
+# Warning Levels are: None, Warning, Critical -- This only affects the Email Subject Line, if any errors are present, an attachment will occur.
+spencer_new_warning_level="Warning"				# What to do if a "new" error occurs.		Default = "Warning"
+spencer_existing_warning_level="None"			# What to do for an existing error.		Default = "None"
+spencer_enable="true"							# To call the Spencer.py script if "true" or "false" to not run the Spencer.py script.  Default = "true"
 spencer_script_name="$SCRIPT_DIR/spencer.py"	# The default is "spencer.py" located in the default script directory.
 
-##### Multipath Enable/Disable
-### When active this will (read below options):
-Multipath="off"		# 'off' = No processing of serial numbers and is the default value.
-			# 'normal' = Automatically remove duplicate serial numbers.
-			# 'Exos2x' = Remove duplicate serial numbers ONLY IF the gptid matches.
-			# 'serial' = Sort by serial numbers.
 
-###### Zpool Status Summary Table Settings
-PoolUsedWarn=80		# Pool used percentage for CRITICAL color to be used.
-ScrubAgeWarn=37		# Maximum age (in days) of last pool scrub before CRITICAL color will be used. Default=37.
- 
-###### Temperature Settings
-HDDtempWarn=45		# HDD Drive Warning Temp (in C) when a WARNING message will be used.
-HDDtempCrit=50		# HDD Drive Critical Temp (in C) when a CRITICAL message will be used.
+###### GENERAL THRESHOLDS ######
 
-SSDtempWarn=50		# SSD Drive Warning Temp (in C) when a WARNING message will be used.
-SSDtempCrit=60		# SSD Drive Critical Temp (in C) when a CRITICAL message will be used.
+### Zpool Status Summary Table Settings
+PoolUsedWarn=80		# Pool used percentage for CRITICAL color to be used.  Default = 80
+ScrubAgeWarn=37		# Maximum age (in days) of last pool scrub before CRITICAL color will be used. Default = 37.
+ZpoolFragWarn=80	# Percent of fragmentation before a Warning message occurs.
 
-NVMtempWarn=55		# NVM Drive Warning Temp (in C) when a WARNING message will be used.
-NVMtempCrit=65		# NVM Drive Critical Temp (in C) when a CRITICAL message will be used.
+### Temperature Settings
+HDDtempWarn=45		# HDD Drive Warning Temp (in C) when a WARNING message will be used.  Default = 45
+HDDtempCrit=50		# HDD Drive Critical Temp (in C) when a CRITICAL message will be used.  Default = 50
 
-##### Current Power Cycle Maximum Temperature Override
+SSDtempWarn=50		# SSD Drive Warning Temp (in C) when a WARNING message will be used.  Default = 50
+SSDtempCrit=60		# SSD Drive Critical Temp (in C) when a CRITICAL message will be used.  Default = 60
+
+NVMtempWarn=55		# NVM Drive Warning Temp (in C) when a WARNING message will be used.  Default = 55
+NVMtempCrit=65		# NVM Drive Critical Temp (in C) when a CRITICAL message will be used.  Default = 65
+
+### Current Power Cycle Maximum Temperature Override
 HDD_Cur_Pwr_Max_Temp_Ovrd="true"	# HDD Max Drive Temp Override. This value when "true" will NOT alarm on any Current Power Cycle Max Temperature Limit.
 SSD_Cur_Pwr_Max_Temp_Ovrd="true"	# SSD Max Drive Temp Override. This value when "true" will NOT alarm on any Current Power Cycle Max Temperature Limit.
 NVM_Cur_Pwr_Max_Temp_Ovrd="true"	# NVM Max Drive Temp Override. This value when "true" will NOT alarm on any Current Power Cycle Max Temperature Limit.
 
-##### SCSI Specific Settings
-Run_SMART_No_power_on_time="false"	# Some SCSI drives do not report power_on_time, yet they report SMART Self-test times. This option will force
-					# a SMART Short Self-test, wait 2 minutes for the test to complete, and report the correct power_on_time.
-					# This is the same as using the '-scsismart' switch at the CLI.
+### Media Alarms
+SectorsWarn=0			# Number of sectors per drive when a WARNING message will be used, this value should be less than SectorsCrit.
+SectorsCrit=9			# Number of sectors per drive when a CRITICAL message will be used.
+ReAllocWarn=0			# Number of Reallocated sector events allowed.
+MultiZoneWarn=0			# Number of MultiZone Errors to allow when a Warning message will be used.  Default is 0.
+MultiZoneCrit=5			# Number of MultiZone Errors to allow when a Warning message will be used.  Default is 5.
+DeviceRedFlag="true"	# Set to "true" to have the Device Column indicate RED for ANY alarm condition.  Default is true.
+HeliumAlarm="true"		# Set to "true" to set for a critical alarm any He value below "HeliumMin" value.  Default is true.
+HeliumMin=100			# Set to 100 for a zero leak helium result.  An alert will occur below this value.
+RawReadWarn=5			# Number of read errors to allow when a WARNING message will be used, this value should be less than RawReadCrit.
+RawReadCrit=100			# Number of read errors to allow when a CRITICAL message will be used.
+SeekErrorsWarn=5		# Number of seek errors to allow when a WARNING message will be used, this value should be less than SeekErrorsCrit.
+SeekErrorsCrit=100		# Number of seek errors to allow when a CRITICAL message will be used.
+NVM_Media_Errors=1		# Number of Media Errors to alarm with a CRITICAL message.
+WearLevelCrit=9			# Wear Level Alarm Setpoint when a WARNING message. 9% is the default.
+TestWarnAge=2			# Maximum age (in days) of last SMART test before CRITICAL color/message will be used.
 
-###### SSD/NVMe Specific Settings
-WearLevelCrit=9				# Wear Level Alarm Setpoint when a WARNING message. 9% is the default.
-NVM_Low_Power="true"    		# Set the NVMe power level to the minimum setting. This does not mean the NVMe will remain at this power level.
-NVM_Daily_Short_Selftest="true"		# This will run a short test on all NVMe drives everyday of the week, IF smartmontools is not 7.4 or greater.
-NVM_Weekly_Long_Selftest="true"		# This will run a long test on all NVMe drives on Sunday and ignore the short test run if set, IF smartmontools is not 7.4 or greater.
-NVM_Weekly_Long_Selftest_Day="Sun"	# Value must be "Sun, Mon, Tue, Wed, Thu, Fri, Sat".  Default is Sun.
-NVM_Smartmontools_74_Override="enable"	# Set to 'enable' to override the check for smartmontools 7.4 and force the script to run the SMART tests. Default is 'enable'.
-Wait_For_SMART_Short_Test="true"	# Waits for the NVMe drive(s) to complete a Short Test.  Takes approx. 2 minutes total to complete.
-Wait_For_SMART_Long_Test="true"		# Waits for the NVMe drive(s) to complete a Long Test.  Takes approx. 2.5 minutes per TB of capacity to complete.
+### NVMe Low Power / Invalid Errors
+NVM_Low_Power="true"    				# Set the NVMe power level to the minimum setting. This does not mean the NVMe will remain at this power level. Only works in CORE.
 NVMe_Ignore_Invalid_Errors="disable"	# Set to 'enable' to ignore 'Invalid Field in Command' messages.  Google this message to see if you are comfortable ignoring it.
 
-###### General Settings
+### Time-Limited Error Recovery (TLER)
+SCT_Enable="false"					# Set to "true" to send a command to enable SCT on your drives for user defined timeout.
+SCT_Warning_Level="TLER_No_Msg"		# Set to "all" will generate a Warning Message for all devices not reporting SCT enabled. "TLER" reports only drive which support TLER.
+									# "TLER_No_Msg" will only report for TLER drives and not report a Warning Message if the drive can set TLER on.
+
+SCT_Read_Timeout=70			# Set to the read threshold. Default = 70 = 7.0 seconds.
+SCT_Write_Timeout=70		# Set to the write threshold. Default = 70 = 7.0 seconds.
+
+##### SCSI Specific Settings ######
+Run_SMART_No_power_on_time="false"	# Some SCSI drives do not report power_on_time, yet they report SMART Self-test times. This option will force
+									# a SMART Short Self-test, wait 2 minutes for the test to complete, and report the correct power_on_time.
+									# This is the same as using the '-scsismart' switch at the CLI.
+
+###### General Settings ######
 ### Output Formats
-PowerTimeFormat="h"		# Format for power-on hours string, valid options are "ymdh", "ymd", "ym", "y", or "h" (year month day hour).
-TempDisplay="*C"		# The format you desire the temperature to be displayed. Common formats are: "*C", "^C", or "^c". Choose your own.
-Non_Exist_Value="---"		# How do you desire non-existent data to be displayed.  The Default is "---", popular options are "N/A" or " ".
-Pool_Capacity_Type="zfs"	# Select "zfs" or "zpool" for Zpool Status Report - Pool Size and Free Space capacities. "zfs" is default.
-Last_Test_Type_poh="true"	# Include the Last Test Power On Hours.
+PowerTimeFormat="h"				# Format for power-on hours string, valid options are "ymdh", "ymd", "ym", "y", or "h" (year month day hour).
+TempDisplay="*C"				# The format you desire the temperature to be displayed. Common formats are: "*C", "^C", or "^c". Choose your own.
+Non_Exist_Value="---"			# How do you desire non-existent data to be displayed.  The Default is "---", popular options are "N/A" or " ".
+Pool_Capacity_Type="zfs"		# Select "zfs" or "zpool" for Zpool Status Report - Pool Size and Free Space capacities. "zfs" is default.
+Last_Test_Type_poh="true"		# Include the Last Test Power On Hours.
 lastTestTypeHoursIdent="hrs"	# Test to follow power on hours numbers.  Default = "hrs".
  
-###### Ignore or Activate Alarms
+### Ignore or Activate Alarms
 IgnoreUDMA="false"	# Set to "true" to ignore all UltraDMA CRC Errors for the summary alarm (Email Header) only, errors will appear in the graphical chart. Default is "false".
 IgnoreSeekError="true"	# Set to "true" to ignore all Seek Error Rate/Health errors.  Default is true.
 IgnoreReadError="true"	# Set to "true" to ignore all Seek Error Rate/Health errors.  Default is true.
 IgnoreMultiZone="false"	# Set to "true" to ignore all MultiZone Errors. Default is false.
 DisableWarranty="true"	# Set to "true to disable Email Subject line alerts for any expired warranty alert. The Email body will still report the alert. Default is "true".
- 
-###### Disable or Activate Input/Output File Settings
+
+### Enable-Disable Text Portion
+Enable_Text_Section="true"	# This will display the Text Section below the CHART when "true".  Default="true"
+
+### Disable or Activate Input/Output File Settings
 ReportNonSMART="true"	# Will force even non-SMART devices to be reported, "true" = normal operation to report non-SMART devices.
 DisableRAWdata="false"	# Set to "true" to remove the smartctl -a data and non-smart data appended to the normal report.  Default is false.
 ATA_Auto_Enable="false"	# Set to "true" to automatically update Log Error count to only display a log error when a new one occurs.
  
-###### Media Alarms
-SectorsWarn=0		# Number of sectors per drive when a WARNING message will be used, this value should be less than SectorsCrit.
-SectorsCrit=9		# Number of sectors per drive when a CRITICAL message will be used.
-ReAllocWarn=0		# Number of Reallocated sector events allowed.
-MultiZoneWarn=0		# Number of MultiZone Errors to allow when a Warning message will be used.  Default is 0.
-MultiZoneCrit=5		# Number of MultiZone Errors to allow when a Warning message will be used.  Default is 5.
-DeviceRedFlag="true"	# Set to "true" to have the Device Column indicate RED for ANY alarm condition.  Default is true.
-HeliumAlarm="true"	# Set to "true" to set for a critical alarm any He value below "HeliumMin" value.  Default is true.
-HeliumMin=100		# Set to 100 for a zero leak helium result.  An alert will occur below this value.
-RawReadWarn=5		# Number of read errors to allow when a WARNING message will be used, this value should be less than RawReadCrit.
-RawReadCrit=100		# Number of read errors to allow when a CRITICAL message will be used.
-SeekErrorsWarn=5	# Number of seek errors to allow when a WARNING message will be used, this value should be less than SeekErrorsCrit.
-SeekErrorsCrit=100	# Number of seek errors to allow when a CRITICAL message will be used.
-NVM_Media_Errors=1	# Number of Media Errors to alarm with a CRITICAL message.
-Partition_Check="false"	# Run sgdisk on each drive. Default = "false", this will install gdisk/sgdisk on TrueNAS CORE if not present.
-			#  -- It is "false" because you should choose to control what is installed or not.
-
-###### Time-Limited Error Recovery (TLER)
-SCT_Enable="false"		# Set to "true" to send a command to enable SCT on your drives for user defined timeout.
-SCT_Warning_Level="TLER_No_Msg"	# Set to "all" will generate a Warning Message for all devices not reporting SCT enabled. "TLER" reports only drive which support TLER.
-				# "TLER_No_Msg" will only report for TLER drives and not report a Warning Message if the drive can set TLER on.
-###### Read/Write Timeout
-SCT_Read_Timeout=70	# Set to the read threshold. Default = 70 = 7.0 seconds.
-SCT_Write_Timeout=70	# Set to the write threshold. Default = 70 = 7.0 seconds.
- 
-###### SMART Testing Alarm
-TestWarnAge=2		# Maximum age (in days) of last SMART test before CRITICAL color/message will be used.
-
-###### Zpool Fragmentation Alarm
-ZpoolFragWarn=80	# Percent of fragmentation before a Warning message occurs.
-
-###### Enable-Disable Text Portion
-Enable_Text_Section="true"    # This will display the Text Section below the CHART when "true".  Default="true"
-
-## Text Output Selection
-Enable_Messages="true"		# This will enable the Warning/Caution type messages. Default="true".
+### Text Output Selection
+Enable_Messages="true"			# This will enable the Warning/Caution type messages. Default="true".
 Enable_Zpool_Messages="true"	# This will list all 'zpool -v status' and identify drives by gptid to drive ident.  Default="true".
 Enable_SMART_Messages="true"	# This will output SMART data if available.  Default="true".
 
-###### Total Data Written - 30 Day or Current Month
-TDW_Month="30Days"		# Options are: "month" for Current Month, or "30Days" for the rolling previous 30 days.
+### Total Data Written - 30 Day or Current Month
+Total_Data_Written_Month="30Days"	# Options are: "month" for Current Month, or "30Days" for the rolling previous 30 days.
 
 ###### Statistical Data File
 statistical_data_file="$SCRIPT_DIR/statisticalsmartdata.csv"  # Default location is where the script is located.
@@ -270,15 +397,15 @@ SDF_DataEmailDay="Mon"		# Set to the day of the week the statistical report is e
  
 ###### TrueNAS config backup settings
 TrueNASConfigEmailEnable="true"		# Set to "true" to save config backup (which renders next two options operational); "false" to keep disable config backups.
-TrueNASConfigEmailDay="Mon"		# Set to the day of the week the config is emailed.  (All, Mon, Tue, Wed, Thu, Fri, Sat, Sun, Month)
+TrueNASConfigEmailDay="Mon"			# Set to the day of the week the config is emailed.  (All, Mon, Tue, Wed, Thu, Fri, Sat, Sun, Month)
 TrueNASConfigBackupSave="false"		# Set to "false" to delete TrueNAS config backup after mail is sent; "true" to keep it in dir below.
 TrueNASConfigBackupLocation="/tmp/"	# Directory in which to store the backup FreeNAS config files.
-
 
 ###### Attach multi_report_config.txt to email ######
 MRConfigEmailEnable="true"	# Set to "true" to enable periodic email (which renders next two options operational).
 MRChangedEmailSend="true"	# If "true" will attach the updated/changed file to the email.
 MRConfigEmailDay="Mon"		# Set to the day of the week the multi_report_config.txt is emailed.  (All, Mon, Tue, Wed, Thu, Fri, Sat, Sun, Month, Never)
+
 
 ###### REPORT CHART CONFIGURATION
 
@@ -292,8 +419,8 @@ Subject_Line_Normal="SMART Testing Results for ${host} - All is Good"
  
 ###### REPORT HEADER TITLE
 HDDreportTitle="Spinning Rust Summary Report"	# This is the title of the HDD report, change as you desire.
-SSDreportTitle="SSD Summary Report"		# This is the title of the SSD report, change as you desire.
-NVMreportTitle="NVMe Summary Report"		# This is the title of the NVMe report, change as you desire.
+SSDreportTitle="SSD Summary Report"				# This is the title of the SSD report, change as you desire.
+NVMreportTitle="NVMe Summary Report"			# This is the title of the NVMe report, change as you desire.
  
 ###### CUSTOM REPORT CONFIGURATION
 ### By default most items are selected. Change the item to false to have it not displayed in the graph, true to have it displayed.
@@ -372,8 +499,8 @@ HDD_Last_Test_Type="true"
 HDD_Last_Test_Type_Title="Last Test Type (time conducted)"
 HDD_Total_Data_Written="true"
 HDD_Total_Data_Written_Title="Total Data Read<br>/ Written"
-HDD_TDW_Month="true"
-HDD_TDW_Month_Title="Total Data Written 30 Days"
+HDD_Total_Data_Written_Month="true"
+HDD_Total_Data_Written_Month_Title="Total Data Written 30 Days"
  
 ###### For Solid State Drive Section
 SSD_Device_ID="true"
@@ -414,8 +541,8 @@ SSD_Last_Test_Type="true"
 SSD_Last_Test_Type_Title="Last Test Type (time conducted)"
 SSD_Total_Data_Written="true"
 SSD_Total_Data_Written_Title="Total Data Read<br>/ Written"
-SSD_TDW_Month="true"
-SSD_TDW_Month_Title="Total Data Written 30 Days"
+SSD_Total_Data_Written_Month="true"
+SSD_Total_Data_Written_Month_Title="Total Data Written 30 Days"
  
 ###### For NVMe Drive Section
 NVM_Device_ID="true"
@@ -434,9 +561,9 @@ NVM_Critical_Warning="true"
 NVM_Critical_Warning_Title="Critical Warning"
 NVM_Drive_Temp="true"
 NVM_Drive_Temp_Title="Curr Temp"
-NVM_Drive_Temp_Min="false"               # Not NVMe drive yet
+NVM_Drive_Temp_Min="false"               # Not usable on NVMe drive yet
 NVM_Drive_Temp_Min_Title="Temp Min"
-NVM_Drive_Temp_Max="false"               # Not NVMe drive yet
+NVM_Drive_Temp_Max="false"               # Not usable on NVMe drive yet
 NVM_Drive_Temp_Max_Title="Temp Max"
 NVM_Power_Level="true"
 NVM_Power_Level_Title="Power State"
@@ -452,8 +579,8 @@ NVM_Last_Test_Type="true"
 NVM_Last_Test_Type_Title="Last Test Type (time conducted)"
 NVM_Total_Data_Written="true"
 NVM_Total_Data_Written_Title="Total Data Read<br>/ Written"
-NVM_TDW_Month="true"
-NVM_TDW_Month_Title="Total Data Written 30 Days"
+NVM_Total_Data_Written_Month="true"
+NVM_Total_Data_Written_Month_Title="Total Data Written 30 Days"
 
 ###### Drive Ignore List
 ### What does it do:
@@ -489,7 +616,8 @@ Ignore_Drives_List=""
 ### Format: CRC_Errors_List="serial_number:current_udma_error_count,serial_number:current_udma_error_count"
 ###
 ### Example: CRC_Errors_List="WD-WMC4N2578099:1,S2X1J90CA48799:2,P02618119268:1"
- 
+
+ATA_Errors_List="" 
 CRC_Errors_List=""
 MultiZone_List=""
 ReAllocated_Sector_List=""
@@ -541,7 +669,37 @@ ovrdColor="#ffffe4"     # Hex code for Override Yellow.
 blueColor="#87ceeb"     # Hex code for Sky Blue, used for the SCRUB/SMART Test In Progress/background.
 yellowColor="#f1ffad"   # Hex code for pale green-yellow.
 pohColor="#ffffcc"      # Hex code for pale yellow.
-pinkColor="#ffc0fc"
+
+###### THIS SECTION FOR DRIVE_SELFTEST SCRIPT ONLY
+###### SCRIPT UPDATES ---- NOT OPERATIONAL YET
+Allow_Drive_Selftest_Script_Update="true"	# When set to "true" then the script will automatically update itself if a new update is present.
+
+###### HDD/SSD/NVMe SMART Testing
+### SHORT SETTINGS
+Short_Test_Mode=3                           # 1 = Use Short_Drives_to_Test_Per_Day value, 2 = All Drives Tested (Ignores other options), 3 = No Drives Tested.
+Short_Time_Delay_Between_Drives=1           # Tests will have a XX second delay between the drives starting testing. If drives are always spinning, this can be "0".
+Short_SMART_Testing_Order="DriveID"         # Test order is for Test Mode 1 ONLY, select "Serial" or "DriveID" for sort order.  Default = 'Serial'
+Short_Drives_to_Test_Per_Day=1              # For Test_Mode 1) How many drives to run each day minimum?
+Short_Drives_Test_Period="Week"             # "Week" (7 days) or "Month" (28 days)
+Short_Drives_Tested_Days_of_the_Week="1,2,3,4,5,6,7"    # Days of the week to run, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat, 7=Sun.  # This takes over for number of days variable.
+Short_Drives_Test_Delay=130					# How long to delay when running Short tests, before exiting to controlling procedure.  Default is 130 second should allow.
+											# Short tests to complete before continuing.  If using without Mulit-Report, set this value to 1.
+### LONG SETTINGS
+Long_Test_Mode=3                            # 1 = Use Long_Drives_to_Test_Per_Day value, 2 = All Drives Tested (Ignores other options), 3 = No Drives Tested.
+Long_Time_Delay_Between_Drives=1            # Tests will have a XX second delay between the drives starting the next test.
+Long_SMART_Testing_Order="Serial"           # Test order is either "Serial" or "DriveID".  Default = 'Serial'
+Long_Drives_to_Test_Per_Day=1               # For Test_Mode 1) How many drives to run each day minimum?
+Long_Drives_Test_Period="Week"             # "Week" (7 days) or "Month" (28 days)
+Long_Drives_Tested_Days_of_the_Week="1,2,3,4,5,6,7"     # Days of the week to run, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat, 7=Sun. # This takes over for number of days variable.
+
+### REPORT
+Drive_List_Length=10                        # This is how many drive IDs to list per line.  Default is 10.
+Enable_Logging="true"                       # This will create a text file named "drive_test_xx.txt". Run -clearlog
+LOG_DIR=$SCRIPT_DIR"/DS_Logs"   			# The default log directory is the script directory.
+
+### EXTERNAL CONFIGURATION FILE
+Use_multi_report_config_values="true"		# A "true" value here will use the $Config_File_Name file values to override the values defined above.
+											# This allows the values to be retained between versions.  A "false" will utilize the values above.
 
 
 ##########################
@@ -570,31 +728,128 @@ logfile_header="/tmp/${tempfilepath}smart_report_header.tmp"
 logfile_temp="/tmp/${tempfilepath}smart_report_temp.tmp"
 boundary="gc0p4Jq0M2Yt08jU534c0p"
 
-CurrentFilename="multi_report_v3.0.7_2024_06_08.txt"
-valid_config_version_date="2024-06-02"	# Configuration file valid date
+CurrentFilename="multi_report_v3.1Beta7_2025_01_13a.txt"
+valid_config_version_date="2025-01-05"	# Configuration file valid date
 progverdate="$(echo $CurrentFilename | cut -d '_' -f4,5,6 | cut -d '.' -f1 | sed -r 's/[_]+/-/g')"
 progname="Multi-Report "$(echo $CurrentFilename | cut -d '_' -f3)" dtd:"
 
+physmem=$(midclt call system.info | jq -Mre '.physmem')
+if [[ $physmem -gt 1024 ]]; then physmem=$((( $physmem / 1024 ))); memunit="Ki"; fi
+if [[ $physmem -gt 1024 ]]; then physmem=$((( $physmem / 1024 ))); memunit="Mi"; fi
+if [[ $physmem -gt 1024 ]]; then physmem=$((( $physmem / 1024 ))); memunit="Gi"; fi
+if [[ $physmem -gt 1024 ]]; then physmem=$((( $physmem / 1024 ))); memunit="Ti"; fi
+if [[ $physmem -gt 1024 ]]; then physmem=$((( $physmem / 1024 ))); memunit="Pi"; fi
+physmem=$physmem$memunit
+uptime=$(midclt call system.info | jq -Mre '.uptime')
+	
 if [[ $softver != "Linux" ]]; then
+  top -d1 | head -n 7 > /tmp/memory_free.txt
+  
   if [[ "$(cat /etc/version | grep "FreeNAS")" ]]; then
-     programver=progname$progverdate" (FreeNAS "$(cat /etc/version | cut -d " " -f1 | sed 's/FreeNAS-//')")"
-     programver2="$(cat /etc/version | cut -d"-" -f1)"
-     programver3="$(cat /etc/version | cut -d " " -f1 | sed 's/FreeNAS-//')"
+    programver=progname$progverdate" (FreeNAS "$(cat /etc/version | cut -d " " -f1 | sed 's/FreeNAS-//')")"
+    programver2="$(cat /etc/version | cut -d"-" -f1)"
+    programver3="$(cat /etc/version | cut -d " " -f1 | sed 's/FreeNAS-//')"
   else
-     programver=$progname$progverdate" (TrueNAS Core "$(cat /etc/version | cut -d " " -f1 | sed 's/TrueNAS-//')")"
-     programver2="$(cat /etc/version | cut -d"-" -f1)_Core"
-     programver3="$(cat /etc/version | cut -d " " -f1 | sed 's/TrueNAS-//')"
+    programver=$progname$progverdate" (TrueNAS Core "$(cat /etc/version | cut -d " " -f1 | sed 's/TrueNAS-//')")"
+    programver2="$(cat /etc/version | cut -d"-" -f1)_Core"
+    programver3="$(cat /etc/version | cut -d " " -f1 | sed 's/TrueNAS-//')"
   fi
+  totalmem=$physmem
+#  usedmem=$(top -d1 | head -n 7 | tail -4 | grep "Mem:" | awk '{printf $7}')
+  freemem=$(top -d1 | head -n 7 | tail -4 | grep "Mem:" | awk '{printf $8}')"i"
+  swapused="Swap Total: "$(top -d1 | head -n 7 | tail -4 | grep "Swap:" | awk '{printf $2}')"i"
+  swapused=$swapused", Swap Free: "$(top -d1 | head -n 7 | tail -4 | grep "Swap:" | awk '{printf $4}')"i"
+  programver4="Total Memory: "$totalmem", Free Memory: "$freemem", "$swapused"<br>System Uptime: "$uptime
+  truenas_ver=$(cat /etc/version | cut -d"-" -f2 | cut -d"." -f1)	# Provides a whole number like '13'
 else
+  free > /tmp/memory_free.txt			# Add this to the dump
+  totalmem=$(free -h | grep "Mem:" | awk '{printf $2}')
+  usedmem=$(free -h | grep "Mem:" | awk '{printf $3}')
+  freemem=$(free -h | grep "Mem:" | awk '{printf $4}')
+  swapused=$(free -h | grep "Swap:" | awk '{printf $3}')
   programver=$progname$progverdate" (TrueNAS Scale "$(cat /etc/version)")"
   programver2="TrueNAS_Scale_$(cat /etc/version | cut -d" " -f1)"
   programver3="$(cat /etc/version)"
+  programver4="Total Memory: "$totalmem", Used Memory: "$usedmem", Free Memory: "$freemem", Swap Used: "$swapused"<br>System Uptime: "$uptime
+  truenas_ver=$(cat /etc/version | cut -d"-" -f1)	# Provides the entire version number like '24.10.0.2'
 fi
+
+truenas_ver_major=$(echo $truenas_ver | cut -d"." -f1)
+truenas_ver_minor=$(echo $truenas_ver | cut -d"." -f2)
+truenas_ver_low=$(echo $truenas_ver | cut -d"." -f3)
+truenas_ver_sub=$(echo $truenas_ver | cut -d"." -f4)
+
+if [[ $truenas_ver > 24.10.0.2 ]]; then
+	echo "TrueNAS does not support sendmail function, using sendemail.py to send you your email."
+	truenas_sendmail_support="No"
+else
+	truenas_sendmail_support="Yes"
+fi
+
+	(echo " "
+	echo "Pysical Memory from API"
+	echo $physmem
+	echo " "
+	echo "Up Time"
+	echo $uptime
+	) >> /tmp/memory_free.txt
+	
+nvme_supports_selftest=""		# To stop nvme check if self-test not supported.
+drive_name=""
 
 declare -a testfilenames
 declare -a testfilenamesHDD
 declare -a smartdrives
-if test -e /tmp/pool_to_drive.txt ; then rm /tmp/pool_to_drive.txt; fi
+UpdateAvailable=""
+UpdateDriveAvailable=""
+UpdateSendemailAvailable=""
+smr_already_tested=0
+No_External_File="false"
+attachment=()
+
+# Declaring the global drive arrays
+
+# HDD/SSD/NVMe Common
+	Drives_ID_Array=""						# Drive Obtained Value
+	Drives_SN_Array=""						# Drive Obtained Value
+	Drives_Subsystem_Array=""				# API
+	Drives_Model_Array=""					# Drive Obtained Value
+	Drives_Capacity_Array=0					# Drive Obtained Value
+	Drives_Rotation_Array=0					# Drive Obtained Value
+	Drives_SMART_Status_Array=""			# Drive Obtained Value
+	Drives_Type_Array=""					# API Obtained Value
+	Drives_ZFSGUID_Array=""					# API Obtained Value
+	Drives_Size_Array=0						# Drive Obtained Value
+	Drives_Multipath_Array=""				# Drive Obtained Value
+	Drives_Description_Array=""				# API Obtained Value
+	Drives_BUS_Array=""						# API Obtained Value
+	Drives_Pool_Array=""					# API Obtained Value
+	Drives_Current_Temp_Array=0				# Drive Obtained Value
+	Drives_Min_Temp=0						# Drive Obtained Value
+	Drives_Max_Temp=0						# Drive Obtained Value
+	Drives_Power_On_Time_Array=0			# Drive Obtained Value
+	Drives_Start_Stop_Array=0				# Drive Obtained Value
+	Drives_Load_Cycle_Array=0				# Drive Obtained Value
+	Drives_Spin_Retry_Array=0				# Drive Obtained Value
+	Drives_Reallocated_Sectors_Array=0		# Drive Obtained Value
+	Drives_Reallocated_Events_Array=0		# Drive Obtained Value
+	Drives_Current_Pending_Sectors_Array=0	# Drive Obtained Value
+	Drives_Offline_Uncorrectable_Sectors_Array=0	# Drive Obtained Value
+	Drives_UDMA_CRC_Errors_Array=0			# Drive Obtained Value
+	Drives_Raw_Read_Error_Rate_Array=0		# Drive Obtained Value
+	Drives_Seek_Error_Rate_Array=0			# Drive Obtained Value
+	Drives_MultiZone_Error_Array=0			# Drive Obtained Value
+	Drives_He_Level_Array=0					# Drive Obtained Value
+	Drives_Last_Test_Hours_Array=0			# Drive Obtained Value
+	Drives_Last_Test_Type_Array=""			# Drive Obtained Value
+	Drives_Last_Test_Age_Array=0			# Calculated Value
+
+# SSD/NVMe Unique	
+	Drives_Critical_Warning_Array=""		# Drive Obtained Value
+	Drives_Wear_Level_Array=0				# Drive Obtained Value
+	Drives_Wear_Level_Thresh_Array=0		# Drive Obtained Value
+	Drives_Media_Errors_Array=0				# Drive Obtained Value
+
 
 ##########################
 ##########################
@@ -608,11 +863,12 @@ if test -e /tmp/pool_to_drive.txt ; then rm /tmp/pool_to_drive.txt; fi
 
 #Unique programming hacks to properly emulate other hardware that is not actually on the system.
 
-VMWareNVME="off"	# Set to "off" normally, "on" to assist in incorrect VMWare reporting.
+VMWareNVME="off"	# Set to "off" normally, "on" to assist in incorrect VMWare fake drives reporting.
 Joes_System="false"	# Custom settings for my system and to remove these from your system.
 Sample_Test="false"	# Setup static test values for testing.
 Develop="false"		# Set to 'true' for development output.
 GitHubSimulate="false"	# Use test section of GitHub.
+Debug_Steps="false"	# Lists each process when it runs.
 
 ##########################
 ##########################
@@ -640,6 +896,55 @@ trap 'rm -rf /tmp/multi_report.lock' EXIT 	# Remove the lock directory on exit
 
 #################### FUNCTIONS ####################
 
+########## CREATE ATTACHMENT FILE ##########
+# This file will convert and create any required attachments.
+# Call with attachment_file_path and attachment_file_name
+# Example: create_attachement_file /tmp/temp_body_report.txt report.txt
+
+create_attachment_file () {
+if [[ $Debug_Steps == "true" ]]; then echo "create_attachment"; fi
+	if test -e "/tmp/attachment.json"; then		# If the file exists then we need to add on to the end, but need to delete the last ']'.
+
+	# LETS SEE IF THE LIST ALREADY CONTAINS THIS FILE
+	if grep -q $2 "/tmp/attachment.json"; then
+		return
+	fi
+	
+		# I need to read the file back, remove the last 2 lines, add line ' },', then add new header.
+		updating_attachment=$(head -n -2 /tmp/attachment.json)  # This removes the last lines.
+		(
+		echo "${updating_attachment}"
+		echo ' },'
+		) > /tmp/attachment.json
+	else
+		(
+		echo '['
+		) > /tmp/attachment.json
+	fi
+	encoded_content=$(base64 --wrap=0 $1)
+	# add header 'new' information
+	(
+	echo ' {'
+	echo '  "headers": ['
+	echo '   {'
+	echo '    "name": "Content-Transfer-Encoding",'
+	echo '    "value": "base64"'
+	echo '   },'
+	echo '   {'
+	echo '    "name": "Content-Type",'
+	echo '    "value": "application/octet-stream",'
+	echo '    "params": {'
+	echo '     "name": "'"$2"'"'
+	echo '    }'
+	echo '   }'
+	echo '  ],'
+	echo '  "content": "'"$encoded_content"'"'
+	echo ' }'
+	echo ']'
+	) >> /tmp/attachment.json
+	
+	}
+
 ########## SPENCER INTEGRATION - CHECK MESSAGES FILE FOR ERROR MESSAGES ##########
 # We will check the /var/log/messages file for any iscsi, cam, ctl, or cdb error messages
 #
@@ -652,6 +957,7 @@ trap 'rm -rf /tmp/multi_report.lock' EXIT 	# Remove the lock directory on exit
 #
 
 spencer () {
+if [[ $Debug_Steps == "true" ]]; then echo "spencer"; fi
 # Check status of "/tmp/spencer_report.txt" file, then if we have errors process it.
 spencer_error="false"
 	if [ -f "/tmp/spencer_report.txt" ]; then
@@ -674,137 +980,90 @@ spencer_error="false"
 			fi
 		spencer_error="true"
 		fi
+	else
+		if ! test -e "$spencer_script_name"; then
+			spencer_error="notinstalled"
+		fi
 	fi
 	}
 
-########## RUN NVMe SELFTEST ##########
 
-nvm_selftest () {
-# $1 is long or short
-	# Smartmontools is less than 7.4 or Overridden
-	if [[ $smart_ver < "7.4" ]]; then echo "<b>TrueNAS using smartmontools v$smart_ver</b>" >> /tmp/selftestlog; echo "TrueNAS using smartmontools v$smart_ver"; fi
-	# FIRST KICK OFF EACH TEST
-	for drive in $smartdrivesNVM; do
-		if [ $softver != "Linux" ]; then
-			# FreeBSD Commands
-			check_nvme_selftest=$(nvmecontrol identify $drive | grep -i "self-test")
-			shopt -s nocasematch  # Make test not case sensitive
-			if [[ $check_nvme_selftest != *"Not"* ]]; then
-				if [[ $Wait_For_SMART_Short_Test != "true" ]]; then
-					echo "Running $1 Self-test for $drive in background"
-					echo "Running $1 Self-test for $drive in background" >> /tmp/selftestlog
+### Using Drive_id_data_temp=list of drive IDs, Return is both serial or ID
+### This routine uses the TrueNAS API. Called: gets_drive_serial_numbers_api "serials"
+
+get_drive_serial_numbers_api () {
+if [[ $Debug_Steps == "true" ]]; then echo "get_drive_serial_numbers_api"; fi
+	api_x=0
+	api_drive_name=""
+	api_drive_serial_number=""
+	echo -n "Scanning Drives"
+	while [[ "$(midclt call disk.query | jq -r '.['$api_x'].name')" != "null" ]]; do
+		for api_temp_loop in $drive_id_data_temp; do
+			api_drive_name_test=$(midclt call disk.query | jq -r '.['$api_x'].name' | sed 's/nvd/nvme/g')
+			if [[ "$api_drive_name_test" == *"$api_temp_loop"* ]]; then
+				echo -n "."  # $api_drive_name_test
+				if [[ "$api_drive_name_test" == *"nvme"* ]]; then
+					api_drive_name=$api_drive_name" "$(echo "nvme"$(echo $api_drive_name_test | sed -r 's#^nvme##' | cut -d 'n' -f 1)" ")
 				else
-					echo "Running $1 Self-test for $drive"
-					echo "Running $1 Self-test for $drive" >> /tmp/selftestlog
+					api_drive_name=$api_drive_name" "$api_drive_name_test
 				fi
-				if [[ "$1" != "Long" ]]; then	#Default run Short self-test.
-					smart_selftest="1"
-				else
-					smart_selftest="2"
-				fi
-				nvmecontrol selftest -c $smart_selftest $drive
-			else
-				echo "$drive does not support Self-test"
-				echo "$drive does not support Self-test"  >> /tmp/selftestlog
+				api_drive_serial_number=$api_drive_serial_number" "$(midclt call disk.query | jq -r '.['$api_x'].serial')
+				continue
 			fi
-			shopt -u nocasematch
-		else
-			# Debian Commands
-			check_nvme_selftest=$(nvme id-ctrl /dev/$drive -H | grep -i "self-test")
-			if [[ $check_nvme_selftest != *"Not"* ]]; then
-				if [[ $Wait_For_SMART_Long_Test != "true" ]]; then
-					echo "Running $1 Self-test for $drive in background "
-					echo "Running $1 Self-test for $drive in background" >> /tmp/selftestlog
-				else
-					echo "Running $1 Self-test for $drive"
-					echo "Running $1 Self-test for $drive" >> /tmp/selftestlog
-				fi
-				if [[ "$1" != "Long" ]]; then
-					smart_selftest="1"
-				else
-					smart_selftest="2"
-				fi
-				nvme device-self-test /dev/$drive -s $smart_selftest
-			else
-				echo "$drive does not support Self-test"
-				echo "$drive does not support Self-test" >> /tmp/selftestlog
-			fi
-		fi
+		done
+		((api_x ++))
 	done
-}
+	api_drive_name=$(echo $api_drive_name | xargs)
+	api_drive_serial_number=$(echo $api_drive_serial_number | xargs)
 
-########## CHECK EACH DRIVE FOR COMPLETION ##########
+	}
 
-check_nvme_test () {
-	sleep 1		# GIVE ALL THE NVME DRIVES 1 SECOND TO UPDATE TESTING THE STATUS CODE (ERROR ON THE SIDE OF CAUTION)
-	nvme_selftest_granularity=1
-	if [[ $1 == "Long" ]]; then smart_loops=2400; loop_stdout=10; else smart_loops=180; loop_stdout=5; fi	# 180=3 minutes, 2400=40 minutes
-	echo "Polling nvme test status... (Maximum Test Time before Abort = "$((( smart_loops * $nvme_selftest_granularity ) / 60 ))" minutes "$((( smart_loops * $nvme_selftest_granularity ) % 60))" seconds)"
-	echo "Polling nvme test status..." >> /tmp/selftestlog
-	loopy_timer=0
-	selftest_pass_result=""
-	cnt=0
-	
-	for drive in $smartdrivesNVM; do
-		if [[ $softver != "Linux" ]]; then
-		# FREEBSD
-			for (( selftest_timer=1; selftest_timer<=$smart_loops; selftest_timer++ )); do    # Delay up to 3 minutes, sleeping 5 seconds each loop.
-				if ! [[ $(nvmecontrol logpage -p 0x06 $drive | grep -i "Current Completion") ]]; then
+
+##### GET DRIVE SERAL NUMBERS VIA SMARTCTL TO SEE IF THIS IS FASTER OR NOT.  ALSO KEEP IS AS A BACKUP ROUTINE.
+# STILL NEED TO BE CHANGED FROM API TO SMARTCTL.
+
+sort_serial_number () {
+if [[ $Debug_Steps == "true" ]]; then echo "sort_serial_number"; fi
+	# Input - api_drive_serial_number, Output - smartdrives_sorted
+	api_x=0
+	api_y=0
+	api_drive_name=""
+	echo " "
+	echo -n "Organizing Drive Test Order "
+
+	for api_drive_serial_order in $api_drive_serial_number; do
+		while [[ "$(midclt call disk.query | jq -r '.['$api_y'].name')" != "null" ]]; do		# Loop through all of the drives comparing S/N Order to drive
+			api_drive_serial_test=$(midclt call disk.query | jq -r '.['$api_y'].serial')
+			echo -n "."
+			Serial_Length=$(wc -c <<< "$api_drive_serial_test")					# Too short of a S/N = Not Valid Drive
+			if [[ $Serial_Length -gt 3 ]]; then
+				if [[ $api_drive_serial_order == $api_drive_serial_test ]]; then
+					api_drive_name_test=$(midclt call disk.query | jq -r '.['$api_y'].name')
+					if [[ $softver != "Linux" ]]; then
+						api_drive_name=$api_drive_name" "$api_drive_name_test" "
+					else
+						if [[ $api_drive_name_test == *"nvme"* ]]; then
+							api_drive_name=$api_drive_name" "$(echo "nvme"$(echo $api_drive_name_test | sed -r 's#^nvme##' | cut -d 'n' -f 1)" ")
+						else
+							api_drive_name=$api_drive_name" "$api_drive_name_test" "
+						fi
+					fi
 					break
 				fi
-				sleep $nvme_selftest_granularity
-				cnt=$(( $cnt + $nvme_selftest_granularity ))
-				if [[ $cnt -ge $loop_stdout ]]; then echo -n $(($selftest_timer * $nvme_selftest_granularity))"."; cnt=0; fi
-			done
-			loopy_timer=$(($loopy_timer+$(($selftest_timer * $nvme_selftest_granularity))))
-			if [[ $selftest_timer -gt 4 ]]; then
-				echo $'\n'"$1 Test Time: "$(($loopy_timer / 60))" minutes "$(( $loopy_timer % 60))" ("$loopy_timer" seconds)"
-				echo "$1 Test Time: "$(($loopy_timer / 60))" minutes "$(( $loopy_timer % 60))" ("$loopy_timer" seconds)"  >> /tmp/selftestlog
 			fi
-			if [[ $(nvmecontrol logpage -p 0x06 $drive | grep "\[ 0\]" | grep -i "completed without error") ]]; then
-				echo "S.M.A.R.T. $1 Self-test completed - PASS"
-				echo "S.M.A.R.T. $1 Self-test completed - PASS" >> /tmp/selftestlog
-			else
-				echo "S.M.A.R.T. $1 Self-test completed - FAILED ?"
-				echo "S.M.A.R.T. $1 Self-test completed - FAILED ?" >> /tmp/selftestlog
-			fi
-		else
-		# DEBIAN
-			for (( selftest_timer=1; selftest_timer<=$smart_loops; selftest_timer++ )); do    # Delay up to 3 minutes, sleeping 5 seconds each loop.
-				if [[ $(nvme self-test-log /dev/$drive | grep -B 2 -A 3 -i "Self Test Result\[0\]" | grep -i "current operation" | cut -d':' -f2 | cut -d' ' -f2) == "0" ]]; then
-					break
-				fi
-					if [[ $(nvme self-test-log /dev/$drive | grep -B 2 -A 3 -i "Self Test Result\[0\]" | grep -i "operation result" | cut -d':' -f2 | cut -d' ' -f2) != "0" ]]; then
-					break
-				fi
-					sleep $nvme_selftest_granularity
-					cnt=$(( $cnt + $nvme_selftest_granularity ))
-					if [[ $cnt -ge $loop_stdout ]]; then echo -n $(($selftest_timer * $nvme_selftest_granularity))"."; cnt=0; fi
-			done
-				loopy_timer=$(($loopy_timer + $(($selftest_timer * $nvme_selftest_granularity))))
-			if [[ $selftest_timer -gt 4 ]]; then
-				echo $'\n'"$1 Test Time: "$(($loopy_timer / 60))" minutes "$(( $loopy_timer % 60))" ("$loopy_timer" seconds)"
-				echo "$1 Test Time: "$(($loopy_timer / 60))" minutes "$(( $loopy_timer % 60))" ("$loopy_timer" seconds)"  >> /tmp/selftestlog
-			fi
-				if [[ $softver != "Linux" ]]; then
-				if [[ $(nvmecontrol logpage -p 0x06 $drive | grep -i "Current Completion") ]]; then selftest_pass_result="0"; fi
-			else
-				selftest_pass_result=$(nvme self-test-log /dev/$drive | grep -B 2 -A 3 -i "Self Test Result\[0\]" | grep -i "operation result" | cut -d':' -f2 | cut -d' ' -f2)
-			fi
-				if [[ $selftest_pass_result == "0" ]]; then
-				echo $drive" S.M.A.R.T. $1 Self-test completed - PASS"
-				echo $drive" S.M.A.R.T. $1 Self-test completed - PASS" >> /tmp/selftestlog
-			else
-				echo $drive" S.M.A.R.T. $1 Self-test completed - FAILED ?"
-				echo $drive" S.M.A.R.T. $1 Self-test completed - FAILED ?" >> /tmp/selftestlog
-			fi
-		fi
+			((api_y ++))
+		done
+		api_y=0
+		((api_x ++))
 	done
+	smartdrives_sorted=$(echo $api_drive_name | xargs |  sed 's/nvd/nvme/g' )
+
 	}
 
 ########## SET NVMe TO LOWEST POWER SETTING ##########
 
 nvm_power () {
+if [[ $Debug_Steps == "true" ]]; then echo "nvm_power"; fi
 	for drive in $smartdrivesNVM; do
 		current_power_state=$(($(nvmecontrol power $drive | head -1 | rev | cut -c1-2 | rev)))
 		lowest_power_state=$(($(nvmecontrol power -l $drive | tail -1 | cut -c1-2)))
@@ -818,43 +1077,46 @@ nvm_power () {
 		current_power_state=$(($(nvmecontrol power $drive | head -1 | rev | cut -c1-2 | rev)))
 		echo "Power state is "$current_power_state
 	done
+
 	}
 
 ########## SEE IF 7ZIP IS LOADED AND IF NOT, INSTALL IT ##########
 # NOTE: We check for 7zip installed and if not install it.
 
 check_7zip () {
+if [[ $Debug_Steps == "true" ]]; then echo "check_7zip"; fi
+	if type "7z" &> /dev/null; then return; fi
 
-if type "7z" &> /dev/null; then return; fi
+	# No 7zip is installed, lets go get it.
+	echo "Installing 7-Zip..."
+	wget https://www.7-zip.org/a/7z2201-linux-x64.tar.xz > /dev/null 2>&1			# Get 7-zip
+	tar xf 7z*-linux-x64.tar.xz 7zzs > /dev/null 2>&1					# Extract the executable file only
 
-# No 7zip is installed, lets go get it.
-echo "Installing 7-Zip..."
-wget https://www.7-zip.org/a/7z2201-linux-x64.tar.xz > /dev/null 2>&1	# Get 7-zip
-tar xf 7z*-linux-x64.tar.xz 7zzs > /dev/null 2>&1	# Extract the executable file only
+	# Check if /usr is readonly (SCALE 24.x started this)
+	if grep "[[:space:]]ro[[:space:],]" /proc/mounts | grep -q "/usr"; then
+		mount -o remount,rw '/usr'
+		romount="true"
+	fi
 
-# Check if /usr is readonly (SCALE 24.x started this)
-if grep "[[:space:]]ro[[:space:],]" /proc/mounts | grep -q "/usr"; then
-	mount -o remount,rw '/usr'
-	romount="true"
-fi
+	cp 7zzs /usr/local/bin									# Copy to /bin
+	ln -s /usr/local/bin/7zzs /usr/local/bin/7z						# Symlink it to "7z"
+	echo "7-Zip Installed"
 
-cp 7zzs /usr/local/bin						# Copy to /bin
-ln -s /usr/local/bin/7zzs /usr/local/bin/7z		# Symlink it to "7z"
-echo "7-Zip Installed"
+	# Cleanup
+	if test -e "7z2201-linux-x64.tar.xz"; then rm "7z2201-linux-x64.tar.xz"; fi
+	if test -e "7zzs"; then rm "7zzs"; fi
 
-# Cleanup
-if test -e "7z2201-linux-x64.tar.xz"; then rm "7z2201-linux-x64.tar.xz"; fi
-if test -e "7zzs"; then rm "7zzs"; fi
+	# If /usr was originally 'ro', change it back.
+	if [[ romount == "true" ]]; then
+		mount -o remount,ro '/usr'
+	fi
 
-# If /usr was originally 'ro', change it back.
-if [[ romount == "true" ]]; then
-	mount -o remount,ro '/usr'
-fi
 	}
 
 ########## DOWNLOAD SMR-CHECK from GITHUB ##########
 
 update_smr () {
+if [[ $Debug_Steps == "true" ]]; then echo "update_smr"; fi
 	echo "Downloading SMR-CHECK Script for GitHub"
 	echo "Removing Old Script if it exists"
 	if test -e "/tmp/truenas-smr-check"; then rm -R "/tmp/truenas-smr-check"; echo "Directory Removed";fi  # Failed, possible loop
@@ -868,21 +1130,26 @@ update_smr () {
 		cp /tmp/truenas-smr-check/smr-check.sh $SCRIPT_DIR"/."
 	fi
 	echo "File downloaded...  Continuing with Multi-Report script..."
+
 	}
 
 
 ########## CHECK FOR GDISK/SGDISK ##########
 
 check_gdisk () {
-			# Check for gdisk and sgdisk (FreeBSD Only)
+if [[ $Debug_Steps == "true" ]]; then echo "check_gdisk"; fi
+	# Check for gdisk and sgdisk (FreeBSD Only)
 	if [[ $softver != "Linux" ]]; then
 		if ! [[ "$(find /usr/ -name "gdisk")" ]]; then
-			echo "gdisk not found"		# WE NEED TO COPY THE FILE
+			echo "gdisk not found"							# WE NEED TO COPY THE FILE
 			if ! test -e "/tmp/Multi-Report"; then
 				if [[ "$(curl -is https://github.com | head -n 1)" ]]; then
 					# Go git the file
-					( cd /tmp
-					git clone -q https://github.com/JoeSchmuck/Multi-Report.git
+					( mkdir /tmp/Multi-Report
+					cd /tmp/Multi-Report
+			#		git clone -q https://github.com/JoeSchmuck/Multi-Report.git
+					curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/gdisk
+					curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/sgdisk
 					)
 				fi
 			else
@@ -896,7 +1163,7 @@ check_gdisk () {
 			echo "gdisk and sgdisk copied to /usr/local/sbin and made executable."
 		fi
 		if ! [[ "$(find /usr/ -name "sgdisk")" ]]; then
-			echo "sgdisk not found"		# WE NEED TO COPY THE FILE
+			echo "sgdisk not found"							# WE NEED TO COPY THE FILE
 		fi
 	fi
 
@@ -912,15 +1179,37 @@ check_gdisk () {
 #   Edit line #5 with a password if one was present.
 
 update_script () {
+if [[ $Debug_Steps == "true" ]]; then echo "update_script"; fi
 	echo "Update Script Routine"
+	
+#
+# ENSURE WE DELETE /TMP/MULTI-REPORT DIRECTORY WHEN EITHER WE END THE SCRIPT OR START THE SCRIPT.  MAYBE IN THE UPDATE?
+#
+
 	echo "Removing Old Script Source if it exists"
 	if test -e "/tmp/Multi-Report"; then rm -R "/tmp/Multi-Report"; fi
 	if test -e "/tmp/multi_report_update.txt"; then rm "/tmp/multi_report_update.txt"; fi
 	echo "Downloading new script files"
 	if [[ "$(curl -is https://github.com | head -n 1)" ]]; then
 		# Go git the file
-		( cd /tmp
-		git clone -q https://github.com/JoeSchmuck/Multi-Report.git
+		( mkdir /tmp/Multi-Report
+		cd /tmp/Multi-Report
+		curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/current_script
+		new_script=$(cat current_script)
+		curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/${new_script}
+		curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/current_cksum
+		curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/Multi_Report_User_Guide.pdf
+		curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/Multi_Report_Quick_Start_Guide.pdf
+		curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/changelog.txt
+		curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/current_drive_script
+		new_drive_script=$(cat current_drive_script)
+		curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/${new_drive_script}
+#		curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/current_sendemail_script
+#		new_sendemail_script=$(cat current_sendemail_script)
+#		curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/${new_sendemail_script}		
+# FOR OXYDE GITHUB
+		new_sendemail_script="multireport_sendemail.py"
+		curl -LJOs https://raw.githubusercontent.com/oxyde1989/standalone-tn-send-email/refs/heads/main/multireport_sendemail.py
 		)
 
 # For the Public distribution
@@ -951,13 +1240,13 @@ update_script () {
 			echo "File is valid"
 		else
 			echo "Downloaded file is corrupt, does not match CRC."
-			if [[ $AutomaticUpdate == "true" ]]; then
-				AutomaticUpdate="false"
+			if [[ $Automatic_Update == "true" ]]; then
+				Automatic_Update="false"
 				return
 			fi
 		fi
 
-		if [[ $AutomaticUpdate != "true" ]]; then
+		if [[ $Automatic_Update != "true" ]]; then
 			echo "Enter 'y' to commit or any other key to abort."
 			read Keyboard_yn
 		else
@@ -985,7 +1274,7 @@ update_script () {
 
 			# Copy the new multi_report.sh file and set permissions
 			cp /tmp/multi_report_update.txt $SCRIPT_DIR"/"$runfilename
-			chmod 755 $SCRIPT_DIR"/"$runfilename # > /dev/null 2<&1
+			chmod 755 $SCRIPT_DIR"/"$runfilename > /dev/null 2<&1
 
 			# Copy the User Guide
 			echo "1"
@@ -993,10 +1282,16 @@ update_script () {
 			cp "/tmp/Multi-Report/Multi_Report_User_Guide.pdf" $SCRIPT_DIR"/."
 			cp "/tmp/Multi-Report/Multi_Report_Quick_Start_Guide.pdf" $SCRIPT_DIR"/." > /dev/null 2<&1
 			cp "/tmp/Multi-Report/changelog.txt" $SCRIPT_DIR"/."
+			cp "/tmp/Multi-Report/"${new_drive_script} $SCRIPT_DIR"/drive_selftest.sh"
+			cp "/tmp/Multi-Report/"${new_sendemail_script} $SCRIPT_DIR"/mr_sendemail.py"
 			echo " "
 			echo "Your script has been updated and a new copy of the User Guide and changelog is in your directory."
 			sleep 1
-
+				
+			### THIS IS NOT COMPLETE AND IS INTENTIONED TO UPDATE THE DRIVE SELF-TEST SCRIPT.
+			# Copy the drive_selftest.sh script.  When it runs, if it sees a newer version, it will automatically update itself.
+			#    cp "/tmp/Multi-Report/drive_selftest.up" $SCRIPT_DIR"/drive_selftest.sh"	# Temporary to get the script on systems.
+		
 			# Cleanup Leftover Files
 			if test -e "/tmp/Multi-Report"; then rm -R "/tmp/Multi-Report"; fi
 			if test -e "/tmp/multi_report_update.txt"; then	rm "/tmp/multi_report_update.txt"; fi
@@ -1008,10 +1303,11 @@ update_script () {
 	else
 		echo "GitHub is Not Available"
 	fi
-	if [[ $AutomaticUpdate != "true" ]]; then 
+	if [[ $Automatic_Update != "true" ]]; then 
 		echo "Exiting..."
 		exit 0
 	fi
+
 	}
 
 ########## CHECK FOR NEWER SCRIPT ##########
@@ -1020,62 +1316,91 @@ update_script () {
 # It's up to the user if they want the update or not.
 
 checkforupdate () {
+if [[ $Debug_Steps == "true" ]]; then echo "checkforupdate"; fi
 	echo "Checking for Updates"
 	if test -e "/tmp/Multi-Report"; then rm -R "/tmp/Multi-Report"; fi
 	if [[ "$(curl -is https://github.com | head -n 1)" ]]; then
 		# Go git the file
 		(
 			cd /tmp
-			git clone -q https://github.com/JoeSchmuck/Multi-Report.git
+			mkdir Multi-Report
+			cd Multi-Report
+			curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/current_script
+			curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/messages.txt
+			curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/current_drive_script
+			new_drive_script=$(cat current_drive_script)
+			curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/${new_drive_script}
+			curl -LJOs https://raw.githubusercontent.com/oxyde1989/standalone-tn-send-email/refs/heads/main/multireport_sendemail.py
 		)
 
 		# Examine the file name in 'current_script' for version and date.
 		if test -e "/tmp/Multi-Report/current_script"; then
 			GitVersion="$(cat "/tmp/Multi-Report/current_script" | cut -d 'v' -f 2 | cut -d '_' -f 1)"
 
-# For the Development distribution
-if [[ $GitHubSimulate == "true" ]]; then
-		if test -e "/tmp/Multi-Report/current_script1"; then
-			GitVersion="$(cat "/tmp/Multi-Report/current_script1" | cut -d 'v' -f 2 | cut -d '_' -f 1)"
-		fi
-fi
-
-		VersionFilename="$(echo $CurrentFilename | cut -d 'v' -f 2 | cut -d '_' -f 1)"
-		echo "Current Version "$VersionFilename" -- GitHub Version "$GitVersion
+			VersionFilename="$(echo $CurrentFilename | cut -d 'v' -f 2 | cut -d '_' -f 1)"
+			echo "   1. Multi-Report - Installed: "$VersionFilename", GitHub: "$GitVersion
 
 			if [[ $GitVersion > $VersionFilename ]] && [[ $VersionFilename != "" ]]; then
-
 				UpdateAvailable="true"
-				echo "Update Available -- Use the '-update' switch to update the script."
-			else
-				echo "No Update Required"
 			fi
 		else
 			echo "No GitHub Version File Available"
 		fi
+		new_drive_script=$(cat /tmp/Multi-Report/current_drive_script)
+		# Examine the file name in 'current_drive_script' for version and date.
+		if test -e "/tmp/Multi-Report/current_drive_script"; then
+			GitDriveVersion="$(cat "/tmp/Multi-Report/"${new_drive_script} | grep "##### Version" | cut -d 'n' -f 2 | tr -d ' ')"
+
+			VersionDriveFilename=$(cat $SCRIPT_DIR"/drive_selftest.sh" | grep "##### Version" | cut -d 'n' -f2 | tr -d ' ')
+
+			echo "   2. Drive_Selftest - Installed: "$VersionDriveFilename", GitHub: "$GitDriveVersion
+
+			if [[ $GitDriveVersion > $VersionDriveFilename ]] && [[ $VersionDriveFilename != "" ]]; then
+				UpdateDriveAvailable="true"
+				rm /tmp/Multi-Report/${new_drive_script}
+			fi
+		else
+			echo "No GitHub Version File Available"
+		fi
+		
+		# Check sendemail.py for version.
+		online_sendemail_version=$(cat /tmp/Multi-Report/multireport_sendemail.py | grep "##### V" | cut -d 'V' -f2 | tr -d ' ')
+		current_sendemail_version=$(cat $SCRIPT_DIR"/mr_sendemail.py" | grep "##### V" | cut -d 'V' -f2 | tr -d ' ')
+		echo "   3. sendemail.py - Installed: "$current_sendemail_version", Github: "$online_sendemail_version
+		if [[ "$online_sendemail_version" > "$current_sendemail_version" ]]; then
+			UpdateSendemailAvailable="true"
+			rm /tmp/Multi-Report/multireport_sendemail.py
+		fi		
+		
 	else
 		echo "GitHub.com Not Available"
 	fi
 
 	if test -e "/tmp/Multi-Report/messages.txt"; then
 		Messages="$(cat "/tmp/Multi-Report/messages.txt")"
-		if [[ $Messages != "" ]]; then echo "Message from the Creator"; fi
+		if [[ $Messages != "" ]]; then echo "Message from Joe"; fi
 	else
 		echo "No GitHub Message Available"
 	fi
+	
+	if [[ $UpdateAvailable == "true" ]] || [[ $UpdateDriveAvailable == "true" ]] || [[ $UpdateSendemailAvailable == "true" ]]; then
+		echo "UPDATE AVAILABLE -- Use the '-update' switch to force the update."
+	else
+		echo "NO UPDATES AVAILABLE"
+	fi
+
 	}
 
 ########## LOAD EXTERNAL CONFIGURATION FILE ##########
 
 load_config () {
-
+if [[ $Debug_Steps == "true" ]]; then echo "load_config"; fi
 	if test -e "$Config_File_Name"; then
 	. "$Config_File_Name"
 
-
-	# Lets test if the config file needs to be updated first.
-	config_version_date="$(cat "$Config_File_Name" | grep "dtd" | cut -d ':' -f 2 | cut -d ' ' -f 1 )"
-	if [[ $config_version_date < $valid_config_version_date ]]; then echo "Found Old Configuration File"; echo "Automatically updating configuration file..."; update_config_file; echo "Continuing to run script"; fi
+		# Lets test if the config file needs to be updated first.
+		config_version_date="$(cat "$Config_File_Name" | grep "dtd" | cut -d ':' -f 2 | cut -d ' ' -f 1 )"
+		if [[ $config_version_date < $valid_config_version_date ]]; then echo "Found Old Configuration File"; echo "Automatically updating configuration file..."; update_config_file; echo "Continuing to run script"; fi
 		. "$Config_File_Name"
 	else
 		echo " "
@@ -1096,12 +1421,14 @@ load_config () {
 			return
 		fi
 	fi
+
 	}
 
 ########## CLEAR VARIABLES ##########
 # Setup variables for each drive pass.
 
 clear_variables () {
+if [[ $Debug_Steps == "true" ]]; then echo "clear_variables"; fi
 	altlastTestHours=""
 	altlastTestType=""
 	capacity=""
@@ -1153,7 +1480,7 @@ clear_variables () {
 	warrantytemp=""
 	wearLevel=""
 	wearLevelAdj=""
-        zpool_TDR=""
+    zpool_TDR=""
 	ssdtdr=""
 
 	# And Reset bgColors
@@ -1181,33 +1508,36 @@ clear_variables () {
 	WarrantyBackgroundColor=$bgColor
 	WarrantyBoxColor="black"
 	wearLevelColor=$bgColor
+
 	}
 
 ########## CHECK FOR SMR DRIVE #########
 
 check_for_smr () {
-smr_present=""
-if ! test -e "$SCRIPT_DIR/smr-check.sh"; then
-	#echo "Basil Heddroff's 'smr-check.sh' script is not present."
-	if [[ "$SMR_Update" == "true" ]]; then
-		echo "SMR Update Authorized, grabbing a copy from Github..."
-		update_smr
-	else
-		if [[ $get_smr_update_message == "" ]]; then
-			echo "SMR Drive Check - No File Present"
-			echo "Please use '-smr_update' switch to obtain smr-check.sh from Github."
-			get_smr_update_message="Already Posted the message once."
+if [[ $Debug_Steps == "true" ]]; then echo "check_for_smr"; fi
+	if [[ $smr_already_tested -eq 1 ]]; then return; else smr_already_tested=1; fi
+	smr_present=""
+	if ! test -e "$SCRIPT_DIR/smr-check.sh"; then
+		#echo "Basil Heddroff's 'smr-check.sh' script is not present."
+		if [[ "$SMR_Update" == "true" ]]; then
+			echo "SMR Update Authorized, grabbing a copy from Github..."
+			update_smr
+		else
+			if [[ $get_smr_update_message == "" ]]; then
+				echo "SMR Drive Check - No File Present"
+				echo "Please use '-smr_update' switch to obtain smr-check.sh from Github."
+				get_smr_update_message="Already Posted the message once."
+			fi
 		fi
 	fi
-fi
-if test -e "$SCRIPT_DIR/smr-check.sh"; then
-	if [[ "$($SCRIPT_DIR"/smr-check.sh" | grep $serial)" ]]; then
-		smr_present=$serial
-		if [[ $SMR_Ignore_Alarm != "true" ]]; then
-			logfile_warning=$logfile_warning"$(printf "Drive "$serial" is probably an SMR Drive. You can run the '-disable_smr_alarm' switch<br>to stop the alarm notifications.  You will continue to have a yellow chart indication.<br>")"
-		fi
-	fi  > /dev/null 2<&1
-fi
+	if test -e "$SCRIPT_DIR/smr-check.sh"; then
+		if [[ "$($SCRIPT_DIR"/smr-check.sh" | grep $serial)" ]]; then
+			smr_present=$serial
+			if [[ $SMR_Ignore_Alarm != "true" ]]; then
+				logfile_warning=$logfile_warning"$(printf "Drive "$serial" is probably an SMR Drive.<br>")"
+			fi
+		fi  > /dev/null 2<&1
+	fi
 
 	}
 
@@ -1215,20 +1545,24 @@ fi
 # Convert any number into decimal format
 
 convert_to_decimal () {
+if [[ $Debug_Steps == "true" ]]; then echo "convert_to_decimal"; fi
 	if [[ "$1" == "" ]]; then return; fi
 	Converting_Value=${1#0}
 	Converting_Value="${Converting_Value//,}"
 	Return_Value=$Converting_Value
 	if [[ $1 == "0" ]]; then Return_Value=0; fi
+
 	}
 
 ########## SORT DRIVES ROUTINE for CORE ##########
 # Sort drives into alphabetical order.
 
 sort_drives () {
+if [[ $Debug_Steps == "true" ]]; then echo "sort_drives"; fi
 	sort_list=$(for i in `echo $sort_list`; do
 	echo "$i"
 	done | sort -V)
+
 	}
 
 
@@ -1236,6 +1570,7 @@ sort_drives () {
 # Sort drives into alphabetical order.
 
 sort_drives_scale () {
+if [[ $Debug_Steps == "true" ]]; then echo "sort_drives_scale"; fi
 	sort_list_short=$(for i in `echo $sort_list`; do
 	echo "$i"
 	done | awk 'length<4' | sort -V)
@@ -1244,11 +1579,13 @@ sort_drives_scale () {
 	done | awk 'length>3' | sort -V)
 	sort_list=$sort_list_short" "$sort_list_long
 	sort_list="$(echo $sort_list | tr -s " ")"
+
 	}
 
 ########## REMOVE DUPLICATE DRIVE SERIAL NUMBERS - MULTIPATH FIX ##########
 
 remove_duplicate () {
+if [[ $Debug_Steps == "true" ]]; then echo "remove_duplicate"; fi
 	# Passed Variable is 'duplicate_list'
 	good_serial=""
 	good_drive=""
@@ -1269,20 +1606,13 @@ remove_duplicate () {
 			if [[ "$(smartctl -d sat -x --json=u /dev/"$i" | grep -i "serial_number")" ]]; then  # Is this SCSI to ATA Translation
 				smartdata5="$(smartctl -d sat -x --json=u /dev/"$i")"	# Yes, then reload the newer SMART data
 				smartdata="$(smartctl -d sat -a --json=u /dev/"$i")"
-
-#echo "remove_duplicate: Drive is in SCSI to ATA translation mode "$i
-#			else
-#echo "remove_duplicate: Drive was SCSI, but not in translation mode "$i
 			fi
-#		else
-#echo "remove_duplicate: Drive not SCSI "$i
-
 		fi
 
-
 # Need to put simulated smartdata5 here.
-		dup_test="$(echo "${smartdata5}" | jq -Mre '.serial_number | values')"  # Drive Serial Number
-# Get the gptid
+		dup_test="$(echo "${smartdata5}" | jq -Mre '.serial_number | values' | tr -d ' ')"  # Drive Serial Number
+
+		# Get the gptid
 		if [ $softver != "Linux" ]; then
 			# For FreeBSD
 			gptid_test="$(glabel status | tail -n +2 | grep " $i" | cut -d '/' -f2 | cut -d ' ' -f1)"
@@ -1345,43 +1675,43 @@ remove_duplicate () {
 	done
 
 	if [[ "$Multipath" == "serial" ]]; then		   	# Sort by serial number
-			u_serial=$(echo $s_serial | tr -s " ")
-			sort_list=$s_serial
-			if [ $softver != "Linux" ]; then
-				sort_drives
-			else
-				sort_drives_scale
-			fi
-			s_serial=$sort_list
-			d_serial=$(echo $d_serial | tr -s " ")
+		u_serial=$(echo $s_serial | tr -s " ")
+		sort_list=$s_serial
+		if [ $softver != "Linux" ]; then
+			sort_drives
+		else
+			sort_drives_scale
+		fi
+		s_serial=$sort_list
+		d_serial=$(echo $d_serial | tr -s " ")
 
 # We have serial numbers sorted.  Now look up the drives by serial number
-			for k in ${s_serial}; do	# Not used except to loop the number of times for serial numbers.
-			st="1"
-			good_test=""
-				for j in ${u_serial}; do	# Rotate through all the sorted serial numbers, the order they are displayed
-					good_test="$(echo $u_serial | awk '{print $var}' var="${st}")"
-					if [[ "$j" == "$k" ]]; then
-							good_test="$(echo $d_serial | awk '{print $var}' var="${st}")"
-							good_drive=$good_drive" "$good_test
-						continue
-					else
-						st=$((${st} + 1))
-					fi
-				done
+		for k in ${s_serial}; do	# Not used except to loop the number of times for serial numbers.
+		st="1"
+		good_test=""
+			for j in ${u_serial}; do	# Rotate through all the sorted serial numbers, the order they are displayed
+				good_test="$(echo $u_serial | awk '{print $var}' var="${st}")"
+				if [[ "$j" == "$k" ]]; then
+						good_test="$(echo $d_serial | awk '{print $var}' var="${st}")"
+						good_drive=$good_drive" "$good_test
+					continue
+				else
+					st=$((${st} + 1))
+				fi
 			done
+		done
 	fi
-if [[ "$Develop" == "true" ]]; then
-	echo "----"
-	echo "good_drive="$good_drive
-	echo "good_serial="$good_serial
-	echo "good_gptid="$good_gptid
-	echo "---"
-	echo "bad_drive="$bad_drive
-	echo "bad_serial="$bad_serial
-	echo "bad_gptid="$bad_gptid
-fi
-		duplicate_list=$good_drive
+	if [[ "$Develop" == "true" ]]; then
+		echo "----"
+		echo "good_drive="$good_drive
+		echo "good_serial="$good_serial
+		echo "good_gptid="$good_gptid
+		echo "---"
+		echo "bad_drive="$bad_drive
+		echo "bad_serial="$bad_serial
+		echo "bad_gptid="$bad_gptid
+	fi
+	duplicate_list=$good_drive
 
 	}
 
@@ -1391,6 +1721,7 @@ fi
 # Accommodating 208 drives in SCALE !
 
 number_to_letters () {
+if [[ $Debug_Steps == "true" ]]; then echo "number_to_letters"; fi
 	declare -i j=$numbertoletters+1
 
 	if [[ $j -gt 182 && $j -lt 209 ]]; then		# First Character 'd'
@@ -1447,12 +1778,14 @@ number_to_letters () {
 		firstletter=$(printf \\$(printf '%03o' $k))	
 		numbertoletters=$firstletter
 	fi
+
 	}
 
 ########## PURGE OLD DATA FROM CSV FILE ##########
 # This routine will purge the "statistical_data_file" of data older then "SDF_DataPurgeDays".
 
 purge_exportdata () {
+if [[ $Debug_Steps == "true" ]]; then echo "purge_exportdata"; fi
 	# Delete temp file if it exists
 	if test -e "/tmp/temp_purge_file.csv"; then rm "/tmp/temp_purge_file.csv"; fi
 
@@ -1464,33 +1797,37 @@ purge_exportdata () {
 
 	awk -v expireDate="$expireDate" -F, '{ if($1 >= expireDate) print $0;}' "$statistical_data_file" > "/tmp/temp_purge_file.csv"
 	cp -R "/tmp/temp_purge_file.csv" "$statistical_data_file"
+
 	}
 
 ########## PURGE TEST DATA FROM CSV FILE ##########
 # This routine will purge the "statistical_data_file" of test data matching "TEST".
 
 purge_testdata () {
+if [[ $Debug_Steps == "true" ]]; then echo "purge_testdata"; fi
 	echo "Purging Statistical Database of Test Data"
 	# Delete temp file if it exists
 	if test -e "/tmp/temp_purge_file.csv"; then rm "/tmp/temp_purge_file.csv"; fi
 
 	awk -F, '{ if($3 != "TEST") print $0;}' "$statistical_data_file" > "/tmp/temp_purge_file.csv"
 	cp -R "/tmp/temp_purge_file.csv" "$statistical_data_file"
+
 	}
 
 ########## UPDATE CSV HEADER ##########
 # This will rewrite the log file header first line automatically is the goal.
 
-rewrite_csv () {
 
+rewrite_csv () {
+if [[ $Debug_Steps == "true" ]]; then echo "rewrite_csv"; fi
 	# Delete temp file if it exists
 	if test -e "/tmp/temp_purge_file.csv"; then rm "/tmp/temp_purge_file.csv"; fi
 
 	# Does file exist?
 
-	# Create the file does not exist, create it.
+	# If the file does not exist, create it.
 		printf "Date,Time,Device ID,Drive Type,Serial Number,SMART Status,Temp,Power On Hours,Wear Level,Start Stop Count,Load Cycle,Spin Retry,Reallocated Sectors,\
-		Reallocated Sector Events,Pending Sectors,Offline Uncorrectable,UDMA CRC Errors,Seek Error Rate,Multi Zone Errors,Read Error Rate,Helium Level,Total Bytes Written,Total Bytes Read\n" > "/tmp/temp_purge_file.csv"
+Reallocated Sector Events,Pending Sectors,Offline Uncorrectable,UDMA CRC Errors,Seek Error Rate,Multi Zone Errors,Read Error Rate,Helium Level,Total MBytes Written,Total MBytes Read\n" > "/tmp/temp_purge_file.csv"
 
 	# Now read current CSV file, skip line 1 and write the rest to the temp file.
 		cat $statistical_data_file | tail -n +2 >> "/tmp/temp_purge_file.csv"
@@ -1504,7 +1841,7 @@ rewrite_csv () {
 ########## READ TDW DATA FROM CSV FILE Current Month or Past 30 days ##########
 
 read_csv () {
-
+if [[ $Debug_Steps == "true" ]]; then echo "read_csv"; fi
 	# Delete temp file if it exists
 	if test -e "/tmp/temp_purge_file.csv"; then rm "/tmp/temp_purge_file.csv"; fi
 
@@ -1521,7 +1858,6 @@ read_csv () {
 			expireDate=$(date -d '-30days' +%Y/%m/%d) 
 		fi
 	fi
-		#echo "Read Log Date="$expireDate
 
 # Need to read the date, S/N, and TDW, then make sure we can set TDW variable
 
@@ -1529,20 +1865,31 @@ read_csv () {
 	awk -v expireDate="$expireDate" -F, '{ if($1 >= expireDate) print $0;}' "$statistical_data_file" > "/tmp/temp_purge_file.csv"
 
 # Start at the beginning of the file, search for serial number, when match, grab last entry (TDW)
-	tdw_read="$(cat $statistical_data_file | grep -m 1 $serial | cut -d',' -f22)"
-	tdr_read="$(cat $statistical_data_file | grep -m 1 $serial | cut -d',' -f23)"
-#echo "tdw_read="$tdw_read
+#	tdw_read="$(cat /tmp/temp_purge_file.csv | grep -m 1 "${serial}" | cut -d',' -f22)"
+#	tdr_read="$(cat /tmp/temp_purge_file.csv | grep -m 1 "${serial}" | cut -d',' -f23)"
+	tdw_read="$(grep -m 1 "${serial}" /tmp/temp_purge_file.csv | cut -d',' -f22)"
+	tdr_read="$(grep -m 1 "${serial}" /tmp/temp_purge_file.csv | cut -d',' -f23)"
+
+# Place a fake zero in place of a null for the older file structure
+	if [[ $tdw_read == "" ]]; then
+		tdw_read="0"
+		logfile_warning=$logfile_warning"$(printf "No Statistical data on file for this drive "$drive".<br>If this is the first time testing this drive with Multi-Report, you can ignore this message.<br>")"
+	fi
+	
+	if [[ $tdr_read == "" ]]; then tdr_read="0"; fi   #  echo "No Statistical data on file for this drive."; fi
 
 	if test -e "/tmp/temp_purge_file.csv"; then rm "/tmp/temp_purge_file.csv"; fi
+
 	}
 
 ########## CLEAN UP TEMPORARY FILES ##########
 
 cleanup_files () {
+if [[ $Debug_Steps == "true" ]]; then echo "cleanup_files"; fi
 	### Clean up our temporary files
-	if test -e "/tmp/temp_purge_file.csv"; then rm "/tmp/temp_purge_file.csv"; fi
-	rm /tmp/*smart_report* > /dev/null 2>&1
-	rm /tmp/${tempfilepath}* > /dev/null 2>&1
+	if test -e "/tmp/temp_purge_file.csv"; then rm /tmp/temp_purge_file.csv; fi
+	if test -e "/tmp/*smart_report*"; then rm /tmp/*smart_report*; fi   # > /dev/null 2>&1
+	if test -e "/tmp/${tempfilepath}*"; then rm /tmp/${tempfilepath}*; fi   # > /dev/null 2>&1
 	### Clean up multiple drive data files
 	f=(/tmp/*_a.txt)
 	if [[ -f "${f[0]}" ]]; then rm /tmp/*_a.txt; fi
@@ -1550,19 +1897,31 @@ cleanup_files () {
 	if [[ -f "${f[0]}" ]]; then rm /tmp/*_x.txt; fi
 	f=(/tmp/*.json)
 	if [[ -f "${f[0]}" ]]; then rm /tmp/*.json; fi
+	f=(/tmp/*.partition)
+	if [[ -f "${f[0]}" ]]; then rm /tmp/*.partition; fi
+	f=(/tmp/*.tar)
+	if [[ -f "${f[0]}" ]]; then rm /tmp/*.tar; fi
 	f=(/tmp/zfslist.txt)
 	if [[ -f "${f[0]}" ]]; then rm /tmp/zfslist.txt; fi
 	f=(/tmp/zpoollist.txt)
 	if [[ -f "${f[0]}" ]]; then rm /tmp/zpoollist.txt; fi
 	f=(/tmp/zpoolstatus.txt)
 	if [[ -f "${f[0]}" ]]; then rm /tmp/zpoolstatus.txt; fi
-
+	f=(/tmp/*smart_report*)
+	if [[ -f "${f[0]}" ]]; then rm /tmp/*smart_report*; fi
+	f=(/tmp/truenas-smr-check)
+	if [[ -f "${f[0]}" ]]; then rm -R /tmp/truenas-smr-check; fi
+	
 	if [[ -f "/tmp/selftestlog" ]]; then rm /tmp/selftestlog; fi
+#	if [[ -f "/tmp/*.partition" ]]; then rm /tmp/*.partition; fi
+
+	if [[ -d "/tmp/Multi-Report" ]]; then rm -R "/tmp/Multi-Report"; fi
+
 
 	### Clean up individual files
 	if test -e "/tmp/${Config_Name}.db"; then rm "/tmp/${Config_Name}.db"; fi
-	if test -e /tmp/config_backup.md5; then rm /tmp/config_backup.md5; fi
-	if test -e /tmp/config_backup.sha256; then rm /tmp/config_backup.sha256; fi
+	if test -e "/tmp/config_backup.md5"; then rm /tmp/config_backup.md5; fi
+	if test -e "/tmp/config_backup.sha256"; then rm /tmp/config_backup.sha256; fi
 	if test -e "/tmp/${Config_Name}.zip"; then rm "/tmp/$Config_Name.zip"; fi
 	if test -e "/tmp/${Config_Name}.tar"; then rm "/tmp/$Config_Name.tar"; fi
 	if test -e "/tmp/freenas-v1.db"; then rm "/tmp/freenas-v1.db"; fi
@@ -1571,19 +1930,38 @@ cleanup_files () {
 	if test -e "/tmp/pwenc_secret"; then rm "/tmp/pwenc_secret"; fi
 	if test -e "/tmp/pwenc_secret.md5"; then rm "/tmp/pwenc_secret.md5"; fi
 	if test -e "/tmp/pwenc_secret.sha256"; then rm "/tmp/pwenc_secret.sha256"; fi
+	if test -e "/tmp/drive_selftest_log.txt"; then rm "/tmp/drive_selftest_log.txt"; fi
+	if test -e "/tmp/attachment.json"; then rm "/tmp/attachment.json"; fi
+	if test -e "/tmp/attachment_files.txt"; then rm "/tmp/attachment_files.txt"; fi
+	if test -e "/tmp/memory_free.txt"; then rm "/tmp/memory_free.txt"; fi
+	if test -e "/tmp/gptid.txt"; then rm "/tmp/gptid.txt"; fi
+	if test -e "/tmp/json_error_log.txt"; then rm "/tmp/json_error_log.txt"; fi
+	if test -e "/tmp/logfile_tmp"; then rm "/tmp/logfile_tmp"; fi
+	if test -e "/tmp/output.html"; then rm "/tmp/output.html"; fi
+	if test -e "/tmp/mr_sendemail.py"; then rm "/tmp/mr_sendemail.py"; fi
+	if test -e "/tmp/mr_sendemail_cksum.txt"; then rm "/tmp/mr_sendemail_cksum.txt"; fi
+	if test -e "/tmp/attachment_files2.txt"; then rm "/tmp/attachment_files2.txt"; fi
+#	if test -e "/tmp/Old_multi_report_config.txt"; then rm "/tmp/Old_multi_report_config.txt"; fi
 
 	### Clean up Spencer File
 	if test -e "/tmp/spencer_report.txt"; then rm "/tmp/spencer_report.txt"; fi
 
+	### Clean up Drive Self-test files
+	if test -e "/tmp/drive_test_temp.txt"; then rm "/tmp/drive_test_temp.txt"; fi
+	if test -e "/tmp/drive_test_timer_temp.txt"; then rm "/tmp/drive_test_timer_temp.txt"; fi
+	if test -e "/tmp/smartdrive_selftest_text.txt"; then rm "/tmp/smartdrive_selftest_text.txt"; fi
+
 	### Clean up complete!
+
 	}
 
 #################### EMAIL FUNCTIONS ####################
 
-########## EMAIL EXPORT DATA CVS FILE ##########
+########## EMAIL EXPORT DATA CSV FILE ##########
 # Attach statistical data file
 
 Email_datafile () {
+if [[ $Debug_Steps == "true" ]]; then echo "Email_datafile"; fi
 	if [ "$SDF_DataEmail" == "true" ]; then
 		Now=$(date +"%a")
 		doit="false"
@@ -1636,13 +2014,37 @@ Email_datafile () {
 		esac
 		if [[ "$doit" == "true" ]] || [[ "$dump_all" != "0" ]]; then Attach_Multi_Report="true"; Attach_Files1="true"; else Attach_Multi_Report="false"; fi
 	fi
+
 	}
 
 ########## COMBINE ALL DATA INTO A FORMAL EMAIL MESSAGE AND SEND IT ##########
 # Create Email Header and Send Email
 
+get_sendemail () {
+if [[ $Debug_Steps == "true" ]]; then echo "get_sendemail"; fi
+	# Fetch the Python based sendemail.py file.  THIS SHOULD ONLY RUN ONCE TO GET THJE FILE ON THE SYSTEM, AFTER THAT THE UPDAES SECTION TAKES CARE OF IT.
+	# Big thanks goes out to @oxyde
+
+	if [[ "$(curl -is https://github.com | head -n 1)" ]]; then
+		# Go git the file
+		(
+			cd /tmp
+			curl -LJOs https://raw.githubusercontent.com/oxyde1989/standalone-tn-send-email/refs/heads/main/multireport_sendemail.py
+		)
+
+		cp /tmp/multireport_sendemail.py $SCRIPT_DIR"/mr_sendemail.py"
+		rm /tmp/multireport_sendemail.py
+	else
+		echo "github not available, try again later"
+		exit 1
+	fi
+
+	}
+
 create_Email () {
+if [[ $Debug_Steps == "true" ]]; then echo "create_Email"; fi
 	# Test if there is a Warning Message and Setup Subject Line
+
 	if [[ $logfile_critical != "" ]]; then
 		subject=$Subject_Line_Critical
 	elif [[ $logfile_warning != "" ]]; then
@@ -1663,28 +2065,35 @@ create_Email () {
 	fi
 
 	### Set email headers ###
-	(
-		echo "MIME-Version: 1.0"	
-		echo "Content-Type: multipart/mixed; boundary=${boundary}"
-
-		echo "From: ${From}"		
-		echo "To: ${Email}"
-		echo "Subject: ${subject}"
-
-		echo "--${boundary}"
-		echo "Content-Type: text/html"
+	if test -e "${logfile_header}"; then rm "${logfile_header}"; fi
+		if [[ "$truenas_sendmail_support" != "No" ]]; then	# Add this if sendmail works.
+			(
+			echo "MIME-Version: 1.0"	
+			echo "Content-Type: multipart/mixed; boundary=${boundary}"
+			echo "From: ${From}"		
+			echo "To: ${Email}"
+			echo "Subject: ${subject}"
+			echo " "
+			echo "--${boundary}"
+			echo "Content-Type: text/html"
+			) > ${logfile_header}
+		fi
+		(
 		if [[ $Monitor == "false" ]]; then
-			if [[ "$(echo $programver | grep -i "beta")" ]] || [[ $UpdateAvailable == "true" ]]; then echo "<b><span style='color:darkred;'>"; fi
+			if [[ "$(echo $programver | grep -i "beta")" ]] || [[ $UpdateAvailable == "true" ]] || [[ $UpdateDriveAvailable == "true" ]] || [[ $UpdateSendemailAvailable == "true" ]]; then echo "<b><span style='color:darkred;'>"; fi
 				echo $programver"<br>Report Run "$(date "+%d-%b-%Y %A")" @ "$timestamp"<br>"
+				echo $programver4"<br>"
 				duration=$SECONDS
 				if [[ $duration -lt 60 ]]; then
-					echo "Execution Time: $(($duration % 60)) Seconds"
+					echo "Script Execution Time: $(($duration % 60)) Seconds"
 				else
-					echo "Execution Time: $(($duration / 60)) Minutes : $(($duration % 60)) Seconds"
+					echo "Script Execution Time: $(($duration / 60)) Minutes : $(($duration % 60)) Seconds"
 				fi
-				if [[ $UpdateAvailable == "true" ]]; then echo "<br>UPDATE AVAILABLE --> "$GitVersion; fi
-				if [[ $Messages != "" ]]; then echo "<br>Message from the Creator: "$Messages"<br>"; fi
-			if [[ "$(echo $programver | grep -i "beta")" ]] || [[ $UpdateAvailable == "true" ]]; then echo "</span></b>"; fi
+				if [[ $UpdateAvailable == "true" ]]; then echo "<br>MULTI-REPORT UPDATE AVAILABLE --> "$GitVersion; fi
+				if [[ $UpdateDriveAvailable == "true" ]]; then echo "<br>DRIVE_SELFTEST UPDATE AVAILABLE --> "$GitDriveVersion; fi
+				if [[ $UpdateSendemailAvailable == "true" ]]; then echo "<br>SENDEMAIL.PY UPDATE AVAILABLE --> "$GitSendemailVersion; fi
+				if [[ $Messages != "" ]]; then echo "<br>Message from Joe: "$Messages"<br>"; fi
+			if [[ "$(echo $programver | grep -i "beta")" ]] || [[ $UpdateAvailable == "true" ]] || [[ $UpdateDriveAvailable == "true" ]] || [[ $UpdateSendemailAvailable == "true" ]]; then echo "</span></b>"; fi
 			if [[ $TrueNASConfigEmailEncryption != "" ]] && [[ $Config_Encrypted == "true" ]]; then echo "<br>Attached zip file is encrypted."; fi
 			echo "<br><br>"
 			# Keyboard_Message comes from the '-dump email' command.
@@ -1692,18 +2101,97 @@ create_Email () {
 				echo "<b><span style='color:darkred;'>"$Keyboard_Message"</span></b><br><br>"
 			fi
 		fi
-	) > ${logfile_header}
+		) >> ${logfile_header}
 
 	cat $logfile >> $logfile_header
 	### Send report
-	sendmail -t -oi < "$logfile_header"
+#	sendmail -t -oi < "$logfile_header"
+
+# THIS LINE ALONE IS REQUIRED TO PREPROCESS THE HTML AND SEND NO ATTACHMENTS
+html_data=$(cat $logfile_header | jq -Rs .)	#Expecting ',' delimiter: line 1 column 145 (char 144)
+
+if [[ $truenas_sendmail_support == "No" ]]; then 	# ONLY DO THIS IF WE MUST USE CURL, FORCING ATTACHMENTS.
+	if ! test -e "/tmp/attachment_files.txt"; then
+		touch /tmp/attachment_files.txt	# NEED THIS TO CREATE AN EMPTY FILE.  THIS IS A TEMOPARY MEASURE UNTIL WE CAN SEND HTML IN CRON, LIKE WE CAN IN CLI.
+	fi
+fi
+
+if test -e /tmp/attachment_files.txt; then
+	# WE NEED TO FORCE EVERYTHING TO BE AN ATTACHMENT UNTIL WE CAN FIX THE ISSUE WITH THE BODY NOT ACCEPTING THE FULL HTML FILE.
+	create_attachment_file $logfile_header Chart.html
+
+	if [[ $dump_all != "0" ]]; then
+		tar_attachments
+	fi
+	while read line; do eval "$line"; done < /tmp/attachment_files.txt
+	html_data="Due to TrueNAS 24.10.1 and later (for now) changing the email software, the chart you are use to seeing is now an attachment called <b>'Chart.html'</b>.<br><br>This will only happen when you have attachments acompanying the email.  If you have no attachments then the Email body will display the Chart.html data as it use to.<br><br>This will be fixed as soon as a solution becomes available.<br><br>Thank you,<br>The Management"
+	
+	if [[ $subject == $Subject_Line_Normal ]]; then
+		html_data="All is NORMAL.<br><br>TrueNAS 24.10.1 and later currently do not support sending a complex email body.  We have resorted to sending the information as an attachment until this can be rectified.<br><br>Thank you,<br>The Management"
+	elif [[ $subject == $Subject_Line_Warning ]]; then
+		html_data="You have a WARNING present.  Please refer to the Chart.html attachemnt for further information.<br><br>TrueNAS 24.10.1 and later currently do not support sending a complex email body.  We have resorted to sending the information as an attachment until this can be rectified.<br><br>Thank you,<br>The Management"
+	else	# Must be critical.
+		html_data="You have a CRITICAL ALERT present.  Refer to the Chart.html attachemnt for further information.<br><br>TrueNAS 24.10.1 and later currently do not support sending a complex email body.  We have resorted to sending the information as an attachment until this can be rectified.<br><br>Thank you,<br>The Management"
+	fi
+		
+else
+#	"NO File Attachments Section"
+	html_data=$(cat $logfile_header | jq -Rs .)		# THIS WORKS ONLY FOR NO ATTACHMENTS, SO FAR.
+fi
+
+# No Attachments (No attachment file required) (works)
+
+if ! test -e "/tmp/attachment.json"; then
+	if [[ $truenas_sendmail_support == "Yes" ]]; then
+		sendmail -t -oi < "$logfile_header"		# I have no idea if the format will be good or not.
+	else
+		#echo "Must be SCALE - No Attachments"
+		(
+	midclt call -job mail.send "{
+		\"subject\": \"${subject}\",
+		\"html\": $html_data,
+		\"to\": [\"${Email}\"]
+		}"
+		) #> /dev/null 2<&1
+	fi
+else
+	#echo "Must be SCALE - With Attachments"
+	# With Attachments (works)
+
+#	port_address=$(midclt call system.general.config | jq | grep ui_port | sed "s/[^0-9.]*//g")
+
+	sed 's/\w*.//' /tmp/attachment_files.txt | sed 's/\s.*$//' > /tmp/attachment_files2.txt
+	sleep .1
+
+	if test -e "/tmp/temp_attach.txt"; then rm /tmp/temp_attach.txt; fi
+		while read line; do
+		attachment+=("$line")
+	done < /tmp/attachment_files2.txt
+	
+#echo ${attachment[@]} > test.txt
+
+echo "Sending Email Courtesy of @oxyde"
+(
+python3 mr_sendemail.py \
+	--subject "$subject" \
+	--to_address "$Email" \
+	--mail_body_html "$logfile_header" \
+	--attachment_files "${attachment[@]}" 
+) > /dev/null 2<&1
+
+#(	curl -k –location-trusted -i -u $curl_account:$curl_password --form-string 'data={"method": "mail.send", "params": [{"subject": "'"${subject}"'", "to": ["'"${Email}"'"], "html": "'"${html_data}"'", "attachments": true}]}' -F "file=@/tmp/attachment.json" http://127.0.0.1:${port_address}/_upload/) > /dev/null 2<&1
+fi
+
+if test -e "/tmp/attachment.json"; then rm "/tmp/attachment.json"; fi
+
+
 	}
 
 ########## TRUENAS CONFIGURATION BACKUP ##########
 # TrueNAS Configuration Backup (if enabled)
 
 config_backup () {
-
+if [[ $Debug_Steps == "true" ]]; then echo "config_backup"; fi
 	if [[ "$Monitor" == "true" ]]; then return; fi
 
 ###### Config backup (if enabled)
@@ -1736,13 +2224,19 @@ config_backup () {
 
 			if ! [ "$(sqlite3 /data/freenas-v1.db "pragma integrity_check;")" == "ok" ]; then
 				# Config integrity check failed, set MIME content type to html and print warning
-				(
+				if [[ "$truenas_sendmail_support" == "No" ]]; then
+					(echo "echo 'echo "<b>Automatic backup of FreeNAS configuration has failed! The configuration file is corrupted!</b>"
+					echo "<b>You should correct this problem as soon as possible!</b>"
+					echo "<br>"'" >> /tmp/attachment_files.txt)
+				else
+					(
 					echo "--${boundary}"
 					echo "Content-Type: text/html"
 					echo "<b>Automatic backup of FreeNAS configuration has failed! The configuration file is corrupted!</b>"
 					echo "<b>You should correct this problem as soon as possible!</b>"
 					echo "<br>"
-				) >> "$logfile"
+					) >> "$logfile"
+				fi
 			else
 				Attach_TrueNAS_Config="true"
 				Attach_Files1="true"
@@ -1792,9 +2286,43 @@ config_backup () {
 				# If logfile saving is enabled, copy .zip file to specified location before it (and everything else) is removed below
 				if [ "$TrueNASConfigBackupSave" == "true" ]; then
 					TrueNASConfigBackupLocation="$(echo $TrueNASConfigBackupLocation | sed 's:/*$::')"
-					cp "/tmp/${Config_Name}" "${TrueNASConfigBackupLocation}/${Config_Name}"
+					if [[ $TrueNASConfigBackupLocation != "/tmp" ]]; then
+						cp "/tmp/${Config_Name}" "${TrueNASConfigBackupLocation}/${Config_Name}"
+					fi
 				fi
 			fi
+		fi
+	fi
+	}
+########## DUMP PARTITION DATA ##########
+
+dump_drive_partition () {
+if [[ $Debug_Steps == "true" ]]; then echo "dump_drive_partition"; fi
+	if [[ "$drive" != "cd0" ]]; then
+		tempjson="$(smartctl -x --json /dev/${drive})"
+		if [[ $(echo $tempjson) != *"Virtual"* ]]; then		# If the drive is Virtual, then skip it.
+			serial1="$(echo "${tempjson}" | jq -Mre '.serial_number | values' | tr -d ' ')"
+			rpm="$(echo "${tempjson}" | jq -Mre '.rotation_rate | values')"
+			if [[ "$rpm" == "0" ]]; then drivetype="SSD"; else drivetype="HDD"; fi
+#			if [[ "$(echo $tempjson | grep -i "nvm")" ]]; then drivetype="NVM"; fi
+		
+			if [[ $Partition_Backup == "true" ]] && [[ $Attach_Files1 == "true" ]]; then
+				if test -e "/tmp/${tempfilepath}_${drive}_${serial1}.partition"; then
+					if [[ "$truenas_sendmail_support" == "No" ]]; then
+						(echo "create_attachment_file /tmp/${tempfilepath}_${drive}_${serial1}.partition ${serial1}_SGDISK_Partition.par" >> /tmp/attachment_files.txt)
+					else
+						(
+						echo "--${boundary}"
+						echo "Content-Type: application/octet-stream"
+						echo "Content-Transfer-Encoding: base64"
+						echo "Content-Disposition: attachment; filename=${serial1}_SGDISK_Partition.par"
+						base64 "/tmp/${tempfilepath}_${drive}_${serial1}.partition"
+						) >> "$logfile"
+					fi
+				fi
+			fi
+		else
+			if [[ $Debug_Steps == "true" ]]; then echo "$drive - Virtual, dump_drive_partition Skipped"; fi
 		fi
 	fi
 	}
@@ -1803,39 +2331,75 @@ config_backup () {
 # This routine will dump the selected drive data into individual files for troubleshooting.
 
 dump_drive_data () {
-
-if [[ "$drive" != "cd0" ]]; then
-	tempjson="$(smartctl -x --json /dev/${drive})"
-	serial1="$(echo "${tempjson}" | jq -Mre '.serial_number | values')"
-	rpm="$(echo "${tempjson}" | jq -Mre '.rotation_rate | values')"
-	if [[ "$rpm" == "0" ]]; then drivetype="SSD"; else drivetype="HDD"; fi
-	if [[ "$(echo $tempjson | grep -i "nvm")" ]]; then drivetype="NVM"; fi
-	(
+if [[ $Debug_Steps == "true" ]]; then echo "dump_drive_data"; fi
+	if [[ "$drive" != "cd0" ]]; then
+		tempjson="$(smartctl -x --json /dev/${drive})"
+		serial1="$(echo "${tempjson}" | jq -Mre '.serial_number | values' | tr -d ' ')"
+		rpm="$(echo "${tempjson}" | jq -Mre '.rotation_rate | values')"
+		if [[ "$rpm" == "0" ]]; then drivetype="SSD"; else drivetype="HDD"; fi
+		if [[ "$(echo $tempjson | grep -i "nvm")" ]]; then drivetype="NVM"; fi
+#		(
 		if [[ $json_error_log != "" ]]; then
-
 			if test -e "/tmp/${tempfilepath}${drive}_${serial1}_a.txt"; then
-				echo "--${boundary}"
-				echo "Content-Type: text/html"
-				echo "Content-Transfer-Encoding: base64"
-				echo "Content-Disposition: attachment; filename=${drive}_${serial1}_a.txt"
-				base64 "/tmp/${tempfilepath}${drive}_${serial1}_a.txt"
+				if [[ "$truenas_sendmail_support" == "No" ]]; then
+					(echo "create_attachment_file /tmp/${tempfilepath}${drive}_${serial1}_a.txt ${drive}_${serial1}_a.txt" >> /tmp/attachment_files.txt)
+				else
+					(
+					echo "--${boundary}"
+					echo "Content-Type: text/html"
+					echo "Content-Transfer-Encoding: base64"
+					echo "Content-Disposition: attachment; filename=${drive}_${serial1}_a.txt"
+					base64 "/tmp/${tempfilepath}${drive}_${serial1}_a.txt"
+					) >> "$logfile"
+				fi
 			fi
 
 			if test -e "/tmp/${tempfilepath}${drive}_${serial1}_x.txt"; then
+				if [[ "$truenas_sendmail_support" == "No" ]]; then
+					(echo "create_attachment_file /tmp/${tempfilepath}${drive}_${serial1}_x.txt ${drive}_${serial1}_x.txt" >> /tmp/attachment_files.txt)
+				else
+					(
+					echo "--${boundary}"
+					echo "Content-Type: text/html"
+					echo "Content-Transfer-Encoding: base64"
+					echo "Content-Disposition: attachment; filename=${drive}_${serial1}_x.txt"
+					base64 "/tmp/${tempfilepath}${drive}_${serial1}_x.txt"
+					) >> "$logfile"
+				fi
+			fi
+		fi
+		# Get all the data, NVMe may not produce results until TrueNAS has incorporated the middleware.
+
+		if [[ $(midclt call disk.smart_attributes $drive | jq | grep "python") == "" ]]; then
+			midclt call disk.smart_attributes $drive | jq > "/tmp/${tempfilepath}${drivetype}_${drive}_${serial1}_API.json"
+		fi > /dev/null 2<&1
+
+		if test -e "/tmp/${tempfilepath}${drivetype}_${drive}_${serial1}_API.json"; then
+			if [[ "$truenas_sendmail_support" == "No" ]]; then
+				(echo "create_attachment_file /tmp/${tempfilepath}${drivetype}_${drive}_${serial1}_API.json ${drivetype}_${drive}_${serial1}_API.json" >> /tmp/attachment_files.txt)
+			else
+				(
 				echo "--${boundary}"
 				echo "Content-Type: text/html"
 				echo "Content-Transfer-Encoding: base64"
-				echo "Content-Disposition: attachment; filename=${drive}_${serial1}_x.txt"
-				base64 "/tmp/${tempfilepath}${drive}_${serial1}_x.txt"
+				echo "Content-Disposition: attachment; filename=${drivetype}_${drive}_${serial1}_API.json"
+				base64 "/tmp/${tempfilepath}${drivetype}_${drive}_${serial1}_API.json"
+				) >> "$logfile"
 			fi
 		fi
 
 		if test -e "/tmp/${tempfilepath}${drivetype}_${drive}_${serial1}.json"; then
-			echo "--${boundary}"
-			echo "Content-Type: text/html"
-			echo "Content-Transfer-Encoding: base64"
-			echo "Content-Disposition: attachment; filename=${drivetype}_${drive}_${serial1}.json"
-			base64 "/tmp/${tempfilepath}${drivetype}_${drive}_${serial1}.json"
+			if [[ "$truenas_sendmail_support" == "No" ]]; then
+				(echo "create_attachment_file /tmp/${tempfilepath}${drivetype}_${drive}_${serial1}.json ${drivetype}_${drive}_${serial1}.json" >> /tmp/attachment_files.txt)
+			else
+				(
+				echo "--${boundary}"
+				echo "Content-Type: text/html"
+				echo "Content-Transfer-Encoding: base64"
+				echo "Content-Disposition: attachment; filename=${drivetype}_${drive}_${serial1}.json"
+				base64 "/tmp/${tempfilepath}${drivetype}_${drive}_${serial1}.json"
+				) >> "$logfile"
+			fi
 		fi
 
 		if [[ $drivetype == "NVM" ]]; then
@@ -1849,24 +2413,111 @@ if [[ "$drive" != "cd0" ]]; then
 		fi
 
 		if test -e "/tmp/${tempfilepath}${drivetype}_${drive}_${serial1}_Selftest_Log.json"; then
-			echo "--${boundary}"
-			echo "Content-Type: text/html"
-			echo "Content-Transfer-Encoding: base64"
-			echo "Content-Disposition: attachment; filename=${drivetype}_${drive}_${serial1}_Selftest_Log.json"
-			base64 "/tmp/${tempfilepath}${drivetype}_${drive}_${serial1}_Selftest_Log.json"
+			if [[ "$truenas_sendmail_support" == "No" ]]; then
+				(echo "create_attachment_file /tmp/${tempfilepath}${drivetype}_${drive}_${serial1}_Selftest_Log.json ${drivetype}_${drive}_${serial1}_Selftest_Log.json" >> /tmp/attachment_files.txt)
+			else
+				(
+				echo "--${boundary}"
+				echo "Content-Type: text/html"
+				echo "Content-Transfer-Encoding: base64"
+				echo "Content-Disposition: attachment; filename=${drivetype}_${drive}_${serial1}_Selftest_Log.json"
+				base64 "/tmp/${tempfilepath}${drivetype}_${drive}_${serial1}_Selftest_Log.json"
+				) >> "$logfile"
+			fi
 		fi
 
 		if test -e "/tmp/${tempfilepath}${drivetype}_${drive}_${serial1}_Error_Log.json"; then
-			echo "--${boundary}"
-			echo "Content-Type: text/html"
-			echo "Content-Transfer-Encoding: base64"
-			echo "Content-Disposition: attachment; filename=${drivetype}_${drive}_${serial1}_Error_Log.json"
-			base64 "/tmp/${tempfilepath}${drivetype}_${drive}_${serial1}_Error_Log.json"
+			if [[ "$truenas_sendmail_support" == "No" ]]; then
+				(echo "create_attachment_file /tmp/${tempfilepath}${drivetype}_${drive}_${serial1}_Error_Log.json ${drivetype}_${drive}_${serial1}_Error_Log.json" >> /tmp/attachment_files.txt)
+			else
+				(
+				echo "--${boundary}"
+				echo "Content-Type: text/html"
+				echo "Content-Transfer-Encoding: base64"
+				echo "Content-Disposition: attachment; filename=${drivetype}_${drive}_${serial1}_Error_Log.json"
+				base64 "/tmp/${tempfilepath}${drivetype}_${drive}_${serial1}_Error_Log.json"
+				) >> "$logfile"
+			fi
 		fi
+		if [[ $Partition_Backup == "true" ]] && [[ $Attach_Files1 == "true" ]]; then
+			if test -e "/tmp/${tempfilepath}_${drive}_${serial1}.partition"; then
+				if [[ "$truenas_sendmail_support" == "No" ]]; then
+					(echo "create_attachment_file /tmp/${tempfilepath}_${drive}_${serial1}.partition ${serial1}_SGDISK_Partition.par" >> /tmp/attachment_files.txt)
+				else
+					(
+					echo "--${boundary}"
+					echo "Content-Type: application/octet-stream"
+					echo "Content-Transfer-Encoding: base64"
+					echo "Content-Disposition: attachment; filename=${serial1}_SGDISK_Partition.par"
+					base64 "/tmp/${tempfilepath}_${drive}_${serial1}.partition"
+					) >> "$logfile"
+				fi
+			fi
+		fi
+		if test -e "/tmp/multi_report_errors.txt"; then
+			if [[ "$truenas_sendmail_support" == "No" ]]; then
+				(echo "create_attachment_file /tmp/multi_report_errors.txt multi_report_errors.txt" >> /tmp/attachment_files.txt)
+			else
+				(
+				echo "--${boundary}"
+				echo "Content-Type: text/html"
+				echo "Content-Transfer-Encoding: base64"
+				echo "Content-Disposition: attachment; filename=multi_report_errors.txt"
+				base64 "/tmp/multi_report_errors.txt"
+				) >> "$logfile"
+			fi
+		fi
+		if test -e "/tmp/drive_test_temp.txt"; then
+			if [[ "$truenas_sendmail_support" == "No" ]]; then
+				
+				if ! grep -q "drive_test_temp.txt" "/tmp/attachment_files.txt"; then 
+					(echo "create_attachment_file /tmp/drive_test_temp.txt drive_test_temp.txt" >> /tmp/attachment_files.txt)
+				fi
+			else
+			(
+				echo "--${boundary}"
+				echo "Content-Type: text/html"
+				echo "Content-Transfer-Encoding: base64"
+				echo "Content-Disposition: attachment; filename=drive_test_temp.txt"
+				base64 "/tmp/drive_test_temp.txt"
+				rm "/tmp/drive_test_temp.txt"
+				) >> "$logfile"
+			fi
+		fi
+		if test -e "/tmp/drive_test_timer_temp.txt"; then
+			if [[ "$truenas_sendmail_support" == "No" ]]; then
+				if ! grep -q "drive_test_timer_temp.txt" "/tmp/attachment_files.txt"; then
+					(echo "create_attachment_file /tmp/drive_test_timer_temp.txt drive_test_timer_temp.txt" >> /tmp/attachment_files.txt)
+				fi
+			else
+				(
+				echo "--${boundary}"
+				echo "Content-Type: text/html"
+				echo "Content-Transfer-Encoding: base64"
+				echo "Content-Disposition: attachment; filename=drive_test_timer_temp.txt"
+				base64 "/tmp/drive_test_timer_temp.txt"
+				rm "/tmp/drive_test_timer_temp.txt"
+				) >> "$logfile"
+			fi
+		fi
+		if test -e "/tmp/memory_free.txt"; then
+			if [[ "$truenas_sendmail_support" == "No" ]]; then
+				(echo "create_attachment_file /tmp/memory_free.txt memory_free.txt" >> /tmp/attachment_files.txt)
+			else
+				(
+				echo "--${boundary}"
+				echo "Content-Type: text/html"
+				echo "Content-Transfer-Encoding: base64"
+				echo "Content-Disposition: attachment; filename=memory_free.txt"
+				base64 "/tmp/memory_free.txt"
+				rm "/tmp/memory_free.txt"
+				) >> "$logfile"
+			fi
+		fi	
+#		) >> "$logfile"
+	fi
 
-	) >> "$logfile"
-fi
-}
+	}
 
 #################### ZPOOL FUNCTIONS ####################
 
@@ -1874,7 +2525,7 @@ fi
 # Report Summary Section (html tables)
 
 zpool_report () {
-
+if [[ $Debug_Steps == "true" ]]; then echo "zpool_report"; fi
 	if [[ "$Monitor" == "false" ]]; then
 	(
 		echo "<table style=\"border: 1px solid black; border-collapse: collapse;\">"
@@ -1900,7 +2551,7 @@ zpool_report () {
 		echo "  <th style=\"text-align:center; width:180px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$Zpool_Total_Data_Written_Title"</th>"
 		echo "</tr>"
 	) > "$logfile"
-fi
+	fi
 
 	# Let's find out the name of the pools and sort them.
 
@@ -1913,14 +2564,11 @@ fi
 		pools="$(zpool list -H -o name | sort)"
 	fi
 
-#	sort_list=$pools
-#	sort_drives
-#	pools=$sort_list
 	poolNum=0			# Alternate background in pools table
-tempIFS=$IFS
+	tempIFS=$IFS
 	IFS=$'\n'
 	for pool in $pools; do
-
+		scrub_errors=0
 		# zpool health summary
 		pool_length=$(wc -w <<< $pool)
 		status="$(zpool list -H -o health "$pool")"
@@ -1954,10 +2602,10 @@ tempIFS=$IFS
 			fi
 			cksumErrors=$((cksumErrors + err))
 		done
+		if [[ $readErrors -ne 0 ]] || [[ $writeErrors -ne 0 ]] || [[ $cksumErrors -ne 0 ]]; then scrub_errors=1; fi
 		if [ "$readErrors" -gt 999 ]; then readErrors=">1K"; fi
 		if [ "$writeErrors" -gt 999 ]; then writeErrors=">1K"; fi
 		if [ "$cksumErrors" -gt 999 ]; then cksumErrors=">1K"; fi
-
 
 		# Get ZFS capacity (the real capacity)
 		Errors_Loc=$(( $pool_length + 1 ))
@@ -2013,24 +2661,31 @@ tempIFS=$IFS
 		frag="$(echo $frag | tr -d '%' )"
 		if ! [[ $frag =~ $re ]]; then frag=$Non_Exist_Value; else convert_to_decimal $frag; frag=$Return_Value; fi    
 
+#statusOutput=$(cat /mnt/farm/scripts/sean7/Storj-1.txt)
+#echo "zpool"
 		### Fix for SCRUB lasting longer than 24 hours.
-		if [[ "$(echo "$statusOutput" | grep "scan" | grep "days")" ]]; then
-		#Errors_Loc=$(( $pool_length + 5 ))
-			scrubextra="$(echo "$statusOutput" | grep "scan" | awk '{print $6}')"
+		if [[ "$(echo "$statusOutput" | grep "scan" | grep "days")" ]]; then		# NOT SURE WHAT THIS DOES, WHY USING 'SCAN' LINE.
 
+#		if [[ "$(echo "$statusOutput" | grep "done, " | grep "days")" ]]; then		# TRUE IF 'DAYS' PRESENT
+
+			#Errors_Loc=$(( $pool_length + 5 ))
+
+#			scrubextra="$(echo "$statusOutput" | grep "scan" | awk '{print $6}')"	# THIS MAKES NO SENSE TO ME RIGHT NOW "Mon 24.1M/s"
+			scrubextra="$(echo "$statusOutput" | grep "scan" | awk '{print $6}')"
+#echo "scrubextra1="$scrubextra
+			# IF THIS WERE 'DONE, ' THEN THE RESULT IS 'DAYS'
+			
 			#Check if scrub in progress
-		#Errors_Loc=$(( $pool_length + 3 ))
 			if [ "$(echo "$statusOutput" | grep -w "scan" | awk '{print $4}')" = "progress" ]; then
 				scrubAge="In Progress"
-				scrubTime="$(echo "Est Comp: ")$(echo "$statusOutput" | grep "done, " | awk '{print $5}')"
-
+#				scrubTime="$(echo "Est Comp: <br>")$(echo "$statusOutput" | grep "done, " | awk '{print $5" "$6" "$7}')"
+				scrubTime="$(echo "Est Comp: <br>")$(echo "$statusOutput" | grep "done, " | awk '{print $5}')"
 				# Check if the SCRUB is completed or canceled.
-		#Errors_Loc=$(( $pool_length + 1 ))
+
 			elif [ "$(echo "$statusOutput" | grep "scan" | awk '{print $2}')" = "scrub" ] && [ "$(echo "$statusOutput" | grep "scan" | awk '{print $3}')" = "canceled" ]; then
 				scrubAge="Canceled"
-		#Errors_Loc=$(( $pool_length + 2 ))
+
 			elif [ "$(echo "$statusOutput" | grep "scan" | awk '{print $2}')" = "scrub" ]; then
-		#Errors_Loc=$(( $pool_length + 2 ))
 				scrubRepBytes="$(echo "$statusOutput" | grep "scan" | awk '{print $4}')"
 				scrubRepBytesfull=$scrubRepBytes
 				if [ "$(echo "$programver" | grep "TrueNAS")" ]; then
@@ -2053,6 +2708,13 @@ tempIFS=$IFS
 
 				scrubTimetemp="$(echo "$statusOutput" | grep "scan" | awk '{print $8}')"
 				scrubTime="$scrubextra days $scrubTimetemp"
+#				echo "scrubextra="$scrubextra
+
+### THE NEXT TWO LINES ARE FOR DRIVE_SMARTTEST TO DETERMINE IF IT SHOULD ISSUE A LONG TEST WHILE THE DRIVE IS RUNNING A SCRUB/RESILVER.
+#				echo "For scrub/resilver decision in drive_selftest script.  Or should this be in drive_selftest, hummmm."
+#				echo "scrubTimetemp="$scrubTimetemp
+#				echo "scrubTime="$scrubTime
+
 			elif [ "$(echo "$statusOutput" | grep "scan" | awk '{print $2}')" = "resilvered" ]; then
 				scrubRepBytes="$(echo "$statusOutput" | grep "scan" | awk '{print $3}')"
 				scrubRepBytesfull=$scrubRepBytes
@@ -2084,8 +2746,10 @@ tempIFS=$IFS
 				scrubAge="In Progress"
 				scrubTime="$(echo "Est Comp: ")$(echo "$statusOutput" | grep "done, " | awk '{print $5}')"
 				# Check if the SCRUB is completed or canceled.
+
 			elif [ "$(echo "$statusOutput" | grep "scan" | awk '{print $2}')" = "scrub" ] && [ "$(echo "$statusOutput" | grep "scan" | awk '{print $3}')" = "canceled" ]; then
 				scrubAge="Canceled"
+
 			elif [ "$(echo "$statusOutput" | grep "scan" | awk '{print $2}')" = "scrub" ]; then
 				scrubRepBytes="$(echo "$statusOutput" | grep "scan" | awk '{print $4}')"
 				scrubRepBytesfull=$scrubRepBytes
@@ -2133,26 +2797,30 @@ tempIFS=$IFS
 				scrubAge="Never Scrubbed"
 			fi
 		fi
+#echo "scrubRepBytes="$scrubRepBytes
+#echo "scrubErrors="$scrubErrors
+#echo "scrubAge="$scrubAge
+#echo "scrubTime="$scrubTime
 
 		# Set row's background color; alternates between white and $altColor (light gray)
 		if [ $((poolNum % 2)) == 1 ]; then bgColor="#ffffff"; else bgColor="$altColor"; fi
 		poolNum=$((poolNum + 1))
 
 		# Set up conditions for warning or critical colors to be used in place of standard background colors
-		if [ "$status" != "ONLINE" ]; then statusColor="$warnColor"; logfile_critical=$logfile_critical"$(echo "$pool - ZFS Online Error<br>")"; else statusColor="$bgColor"; fi
-		if [ "$readErrors" != "0" ]; then readErrorsColor="$warnColor"; logfile_warning=$logfile_warning"$(echo "$pool - Scrub Read Errors<br>")"; else readErrorsColor="$bgColor"; fi
-		if [ "$writeErrors" != "0" ]; then writeErrorsColor="$warnColor"; logfile_warning=$logfile_warning"$(echo "$pool - Scrub Write Errors<br>")"; else writeErrorsColor="$bgColor"; fi
-		if [ "$cksumErrors" != "0" ]; then cksumErrorsColor="$warnColor"; logfile_warning=$logfile_warning"$(echo "$pool - Scrub Cksum Errors<br>")"; else cksumErrorsColor="$bgColor"; fi
-		if [ "$used" -ge "$PoolUsedWarn" ]; then usedColor="$warnColor"; logfile_warning=$logfile_warning"$(echo "$pool - ZFS Used<br>")"; else usedColor="$bgColor"; fi
-		if [ "$scrubRepBytes" != "$Non_Exist_Value" ] && [ "$scrubRepBytes" != "0" ] && ! [ "$(echo "$scrubRepBytesfull" | grep "Resilvered")" ]; then scrubRepBytesColor="$warnColor"; logfile_warning=$logfile_warning"$(echo "$pool - Scrub Rep Bytes<br>")"; else scrubRepBytesColor="$bgColor"; fi
-		if [ "$scrubErrors" != "$Non_Exist_Value" ] && [ "$scrubErrors" != "0" ]; then scrubErrorsColor="$warnColor"; logfile_critical=$logfile_critical"$(echo "$pool - Scrub Errors<br>")"; else scrubErrorsColor="$bgColor"; fi
-		if [ "$(echo "$scrubAge" | awk '{print int($1)}')" -ge "$ScrubAgeWarn" ]; then scrubAgeColor="$warnColor"; logfile_warning=$logfile_warning"$(echo "$pool - Scrub Age<br>")"; else scrubAgeColor="$bgColor"; fi
+		if [ "$status" != "ONLINE" ]; then statusColor="$warnColor"; logfile_critical=$logfile_critical"$(echo "Pool: $pool - ZFS Online Error<br>")"; else statusColor="$okColor"; fi
+		if [ "$readErrors" != "0" ]; then readErrorsColor="$warnColor"; logfile_warning=$logfile_warning"$(echo "Pool: $pool - Scrub Read Errors<br>")"; else readErrorsColor="$bgColor"; fi
+		if [ "$writeErrors" != "0" ]; then writeErrorsColor="$warnColor"; logfile_warning=$logfile_warning"$(echo "Pool: $pool - Scrub Write Errors<br>")"; else writeErrorsColor="$bgColor"; fi
+		if [ "$cksumErrors" != "0" ]; then cksumErrorsColor="$warnColor"; logfile_warning=$logfile_warning"$(echo "Pool: $pool - Scrub Cksum Errors<br>")"; else cksumErrorsColor="$bgColor"; fi
+		if [ "$used" -ge "$PoolUsedWarn" ]; then usedColor="$warnColor"; logfile_warning=$logfile_warning"$(echo "Pool: $pool - ZFS Used<br>")"; else usedColor="$bgColor"; fi
+		if [ "$scrubRepBytes" != "$Non_Exist_Value" ] && [ "$scrubRepBytes" != "0" ] && ! [ "$(echo "$scrubRepBytesfull" | grep "Resilvered")" ]; then scrubRepBytesColor="$warnColor"; logfile_warning=$logfile_warning"$(echo "Pool: $pool - Scrub Rep Bytes<br>")"; else scrubRepBytesColor="$bgColor"; fi
+		if [ "$scrubErrors" != "$Non_Exist_Value" ] && [ "$scrubErrors" != "0" ]; then scrubErrorsColor="$warnColor"; logfile_critical=$logfile_critical"$(echo "Pool: $pool - Scrub Errors<br>")"; else scrubErrorsColor="$bgColor"; fi
+		if [ "$(echo "$scrubAge" | awk '{print int($1)}')" -ge "$ScrubAgeWarn" ]; then scrubAgeColor="$warnColor"; logfile_warning=$logfile_warning"$(echo "Pool: $pool - Scrub Age<br>")"; else scrubAgeColor="$bgColor"; fi
 		if [ "$scrubAge" == "In Progress" ]; then scrubAgeColor="$blueColor"; fi
 		if [ "$frag" != "$Non_Exist_Value" ]; then
-			if [ "$frag" -ge "$ZpoolFragWarn" ]; then fragColor="$warnColor"; logfile_warning=$logfile_warning"$(echo "$pool - Fragmentation above Threshold - $frag%<br>")"; else fragColor="$bgColor"; fi
+			if [ "$frag" -ge "$ZpoolFragWarn" ]; then fragColor="$warnColor"; logfile_warning=$logfile_warning"$(echo "Pool: $pool - Fragmentation above Threshold - $frag%<br>")"; else fragColor="$bgColor"; fi
 			frag=" "$frag"%"
 		fi
-
+#if [[ $scrub_errors -ne 0 ]]; then logfile_warning=$logfile_warning"$(echo "Drive $drive<br>")"; fi		# DRIVE VALUE DOES NOT REPRESENT THIS FAILURE.
 		if [[ $Pool_Capacity_Type == "zfs" ]]; then
 			pool_size=$zfs_pool_size
 			pool_free=$zfs_pool_avail
@@ -2161,7 +2829,7 @@ tempIFS=$IFS
 			used=$pool_used" ("$used"%)"  
 		fi
 
-if [[ $testfilepath == "" ]]; then	#Bypass for Test Data FOR NOW, until I can work out the smartdata5 file.
+		if [[ $testfilepath == "" ]]; then	#Bypass for Test Data FOR NOW, until I can work out the smartdata5 file.
 ################################################################################################################################
 # Zpool Total Data Written
 
@@ -2170,86 +2838,79 @@ drive_name_partition=""
 zpool_TDW=0
 zpool_TDR=0
 smartdata5=""
-
-					###### FREEBSD VERSION OF THIS SECTION
-				if [ $softver != "Linux" ]; then
-					drives_in_gptid=$(zpool status "$pool" | grep "gptid" | awk '{print $1}')  # HDD and SSD
-					if [[ $(zpool status "$pool" | grep "nvd") ]]; then
-						drives_in_gptid=$drives_in_gptid$(zpool status "$pool" | grep "nvd" | awk '{print $1}' | cut -d " " -f1 | cut -d "p" -f1)  # NVM
-					fi
-					if [[ $(zpool status "$pool" | grep -v "data" | grep " da") ]]; then
-						drive_da=$(zpool status "$pool" | grep -v "data" | grep " da0" | awk '{print $1}' | cut -d " " -f1 | cut -d "p" -f1)  # daX
-						drive_da=$(glabel status | tail -n +2 | grep " $drive_da" | awk '{print $1}')
-						drives_in_gptid=$drives_in_gptid$drive_da
-					fi
-					zpool_list=$(zpool status -v "$pool")
-# How to recover ada3p2 ????
-					echo $zpool_list | awk '{print $1 $2}' >> /tmp/pool_to_drive.txt
-					for longgptid in $drives_in_gptid; do
-						drive_name=$(glabel status | tail -n +2 | grep "$longgptid" | awk '{print $3}' | cut -d '/' -f2 | cut -d 'p' -f1)
-						echo $drive_name >> /tmp/pool_to_drive.txt
-						if [[ $Partition_Check == "true" ]]; then
-							sgdisk -v /dev/${drive_name}
-							partition_results=$?
-							echo "partition_results="$partition_results" Drive="$drive_name
-							if [[ $partition_results == 0 ]]; then
-								echo "sgdisk: Normal program execution for drive ${drive_name}"
-							elif [[ $partition_results == 2 ]]; then
-								logfile_warning=$logfile_warning"$(echo "sgdisk: ($drive_name) - ERROR: 2 - An error occurred while reading the partition table.<br>")"
-							elif [[ $partition_results == 3 ]]; then
-								logfile_warning=$logfile_warning"$(echo "sgdisk: ($drive_name) - ERROR: 3 - Non-GPT disk detected and no -g option, but operation requires a write action.<br>")"
-							elif [[ $partition_results == 4 ]]; then
-								logfile_warning=$logfile_warning"$(echo "sgdisk: ($drive_name) - ERROR: 4 - An error prevented saving changes.<br>")"
-							elif [[ $partition_results == 5 ]]; then
-								logfile_warning=$logfile_warning"$(echo "sgdisk: ($drive_name) - ERROR: 5 - An error occurred while reading standard input.<br>")"
-							elif [[ $partition_results == 8 ]]; then
-								logfile_warning=$logfile_warning"$(echo "sgdisk: ($drive_name) - ERROR: 8 - Disk replication operation (-R) failed.<br>")"
-							else
-								logfile_warning=$logfile_warning"$(echo "sgdisk: ($drive_name) - ARG! - My bananas are not ripe.  Yes, something went wrong, but what.<br>")"
-								echo "sgdisk: ARG! - My bananas are not ripe."
-							fi
-						fi > /dev/null 2<&1	# We want to not echo this to the email/screen
-						if [[ "$drive_name" == *"nvd"* ]]; then	drive_name="nvme"$(echo ${drive_name} | cut -d'd' -f2); fi
-						get_tdr
-						get_tdw
-					done
-				else
-					#### LINUX VERSION OF THIS SECTION
-                     			drives_in_gptid=$(lsblk -o +PARTUUID,NAME,LABEL | grep -w "$pool" | awk -F" " '{print $7}')
-
-					zpool_list=$(zpool status -v "$pool")
-					echo $zpool_list | awk '{print $1 $2}' >> /tmp/pool_to_drive.txt
-					for longgptid in $drives_in_gptid; do
-						drive_name=$(lsblk -o +PARTUUID,NAME,LABEL | grep -w "$longgptid" | awk -F" " '{print $8}' | cut -d'p' -f1)
-						echo $drive_name >> /tmp/pool_to_drive.txt
-						virtual_drive_test="$(echo ${smartdata5} | grep -i "virtual")"
-
-						if [[ $Partition_Check == "true" ]]; then
-							sgdisk -v /dev/${drive_name}
-							partition_results=$?
-							echo "partition_results="$partition_results" Drive="$drive_name
-							if [[ $partition_results == 0 ]]; then
-								echo "sgdisk: Normal program execution ${drive_name}"
-							elif [[ $partition_results == 2 ]]; then
-								logfile_warning=$logfile_warning"$(echo "sgdisk: ($drive_name) - ERROR: 2 - An error occurred while reading the partition table.<br>")"
-							elif [[ $partition_results == 3 ]]; then
-								logfile_warning=$logfile_warning"$(echo "sgdisk: ($drive_name) - ERROR: 3 - Non-GPT disk detected and no -g option, but operation requires a write action.<br>")"
-							elif [[ $partition_results == 4 ]]; then
-								logfile_warning=$logfile_warning"$(echo "sgdisk: ($drive_name) - ERROR: 4 - An error prevented saving changes.<br>")"
-							elif [[ $partition_results == 5 ]]; then
-								logfile_warning=$logfile_warning"$(echo "sgdisk: ($drive_name) - ERROR: 5 - An error occurred while reading standard input.<br>")"
-							elif [[ $partition_results == 8 ]]; then
-								logfile_warning=$logfile_warning"$(echo "sgdisk: ($drive_name) - ERROR: 8 - Disk replication operation (-R) failed.<br>")"
-							else
-								logfile_warning=$logfile_warning"$(echo "sgdisk: ($drive_name) - ARG! - My bananas are not ripe.  Yes, something went wrong, but what.<br>")"
-								echo "sgdisk: ARG! - My bananas are not ripe."
-							fi
-						fi > /dev/null 2<&1	# We want to not echo this to the email/screen
-
-						get_tdr
-						get_tdw
-					done
+			###### FREEBSD VERSION OF THIS SECTION
+			if [ $softver != "Linux" ]; then
+				drives_in_gptid=$(zpool status "$pool" | grep "gptid" | awk '{print $1}')  # HDD and SSD
+				if [[ $(zpool status "$pool" | grep "nvd") ]]; then
+					drives_in_gptid=$drives_in_gptid$(zpool status "$pool" | grep "nvd" | awk '{print $1}' | cut -d " " -f1 | cut -d "p" -f1)  # NVM
 				fi
+				if [[ $(zpool status "$pool" | grep -v "data" | grep " da") ]]; then
+					drive_da=$(zpool status "$pool" | grep -v "data" | grep " da0" | awk '{print $1}' | cut -d " " -f1 | cut -d "p" -f1)  # daX
+					drive_da=$(glabel status | tail -n +2 | grep " $drive_da" | awk '{print $1}')
+					drives_in_gptid=$drives_in_gptid$drive_da
+				fi
+				zpool_list=$(zpool status -v "$pool")
+				for longgptid in $drives_in_gptid; do
+					drive_name=$(glabel status | tail -n +2 | grep "$longgptid" | awk '{print $3}' | cut -d '/' -f2 | cut -d 'p' -f1)
+					if [[ $Partition_Check == "true" ]]; then
+						sgdisk -v /dev/${drive_name}
+						partition_results=$?
+						echo "partition_results="$partition_results" Drive="$drive_name
+						if [[ $partition_results == 0 ]]; then
+							echo "sgdisk: Normal program execution for drive ${drive_name}"
+						elif [[ $partition_results == 2 ]]; then
+							logfile_warning=$logfile_warning"$(echo "sgdisk: ($drive_name) - ERROR: 2 - An error occurred while reading the partition table.<br>")"
+						elif [[ $partition_results == 3 ]]; then
+							logfile_warning=$logfile_warning"$(echo "sgdisk: ($drive_name) - ERROR: 3 - Non-GPT disk detected and no -g option, but operation requires a write action.<br>")"
+						elif [[ $partition_results == 4 ]]; then
+							logfile_warning=$logfile_warning"$(echo "sgdisk: ($drive_name) - ERROR: 4 - An error prevented saving changes.<br>")"
+						elif [[ $partition_results == 5 ]]; then
+							logfile_warning=$logfile_warning"$(echo "sgdisk: ($drive_name) - ERROR: 5 - An error occurred while reading standard input.<br>")"
+						elif [[ $partition_results == 8 ]]; then
+							logfile_warning=$logfile_warning"$(echo "sgdisk: ($drive_name) - ERROR: 8 - Disk replication operation (-R) failed.<br>")"
+						else
+							logfile_warning=$logfile_warning"$(echo "sgdisk: ($drive_name) - ARG! - My bananas are not ripe.  Yes, something went wrong, but what.<br>")"
+							echo "sgdisk: ARG! - My bananas are not ripe."
+						fi
+					fi > /dev/null 2<&1	# We want to not echo this to the email/screen
+					if [[ "$drive_name" == *"nvd"* ]]; then	drive_name="nvme"$(echo ${drive_name} | cut -d'd' -f2); fi
+					get_tdr
+					get_tdw
+				done
+			else
+				#### LINUX VERSION OF THIS SECTION
+           		drives_in_gptid=$(lsblk -o +PARTUUID,NAME,LABEL | grep -P "(^|[^-*&$!])\b$pool\b" | awk -F" " '{print $7}')
+				zpool_list=$(zpool status -v "$pool")
+#				echo $zpool_list | awk '{print $1 $2}' >> /tmp/pool_to_drive.txt
+				for longgptid in $drives_in_gptid; do
+					drive_name=$(lsblk -o +PARTUUID,NAME,LABEL | grep -w "$longgptid" | awk -F" " '{print $8}')
+#					echo $drive_name >> /tmp/pool_to_drive.txt
+					virtual_drive_test="$(echo ${smartdata5} | grep -i "virtual")"
+						if [[ $Partition_Check == "true" ]]; then
+						sgdisk -v /dev/${drive_name}
+						partition_results=$?
+						echo "partition_results="$partition_results" Drive="$drive_name
+						if [[ $partition_results == 0 ]]; then
+							echo "sgdisk: Normal program execution ${drive_name}"
+						elif [[ $partition_results == 2 ]]; then
+							logfile_warning=$logfile_warning"$(echo "sgdisk: ($drive_name) - ERROR: 2 - An error occurred while reading the partition table.<br>")"
+						elif [[ $partition_results == 3 ]]; then
+							logfile_warning=$logfile_warning"$(echo "sgdisk: ($drive_name) - ERROR: 3 - Non-GPT disk detected and no -g option, but operation requires a write action.<br>")"
+						elif [[ $partition_results == 4 ]]; then
+							logfile_warning=$logfile_warning"$(echo "sgdisk: ($drive_name) - ERROR: 4 - An error prevented saving changes.<br>")"
+						elif [[ $partition_results == 5 ]]; then
+							logfile_warning=$logfile_warning"$(echo "sgdisk: ($drive_name) - ERROR: 5 - An error occurred while reading standard input.<br>")"
+						elif [[ $partition_results == 8 ]]; then
+							logfile_warning=$logfile_warning"$(echo "sgdisk: ($drive_name) - ERROR: 8 - Disk replication operation (-R) failed.<br>")"
+						else
+							logfile_warning=$logfile_warning"$(echo "sgdisk: ($drive_name) - ARG! - My bananas are not ripe.  Yes, something went wrong, but what.<br>")"
+							echo "sgdisk: ARG! - My bananas are not ripe."
+						fi
+					fi > /dev/null 2<&1	# We want to not echo this to the email/screen
+					get_tdr
+					get_tdw
+				done
+			fi
 
 			if [[ $zpool_TDR != $Non_Exist_Value ]]; then
 				zpool_TD=$zpool_TDR
@@ -2293,37 +2954,35 @@ smartdata5=""
 		) >> "$logfile"
 		fi
 	done
-
-
-IFS=$tempIFS
-
+	IFS=$tempIFS
 
 	# End of zpool status table
-if [[ "$Monitor" == "false" ]]; then
-	echo "</table>" >> "$logfile"
+	if [[ "$Monitor" == "false" ]]; then
+		echo "</table>" >> "$logfile"
 
-	if [[ $Pool_Capacity_Type == "zfs" ]]; then
-		echo "<br><span style='color:gray;'>*Data obtained from zpool and zfs commands.</span>" >> "$logfile"
-	else
-		echo "<br><span style='color:gray;'>*Data obtained from zpool command. Capacities include Parity Data.</span>" >> "$logfile"
+		if [[ $Pool_Capacity_Type == "zfs" ]]; then
+			echo "<br><span style='color:gray;'>*Data obtained from zpool and zfs commands.</span>" >> "$logfile"
+		else
+			echo "<br><span style='color:gray;'>*Data obtained from zpool command. Capacities include Parity Data.</span>" >> "$logfile"
+		fi
 	fi
-fi
+
 	}
 
 ###### GET GET TDR/TDW ####
 # Input = drive_name
 
 get_tdr () {
+if [[ $Debug_Steps == "true" ]]; then echo "get_tdr"; fi
 	### TOTAL DATA READ - POOL ###
-#	echo "---R---"
-#	echo "drive_name="$drive_name
 	ssdtdw=0
 	ssdtdr=0
 	ssdblocksize=""
 	ID242=""
-
-	smartdata5="$(smartctl -x --json=u /dev/"$drive_name")"	# The first time it is loaded.
-
+	
+	if [[ $smartdata5 == "" ]]; then
+		smartdata5="$(smartctl -x --json=u /dev/"$drive_name")"	# The first time it is loaded.
+	fi
 # Check Model Family (For Sandforce or Marvel Controller for ID241/242)
 	if [[ "$(echo "${smartdata5}" | jq -Mre '.model_family | values')" ]]; then
 		model_family="$(echo "${smartdata5}" | jq -Mre '.model_family | values')"
@@ -2340,53 +2999,63 @@ get_tdr () {
 	fi # > /dev/null 2<&1
 
 #echo "BLK SIZE"
+
+#echo "ssdtdr0="$ssdtdr
+
 # Check for LBAs First (
-	if [[ "$(echo "${smartdata5}" | jq -Mre '.ata_device_statistics.pages[].table[] | select(.name == "Logical Sectors Read") | .value | values')" ]]; then
-		ssdtdr="$(echo "${smartdata5}" | jq -Mre '.ata_device_statistics.pages[0].table[] | select(.name == "Logical Sectors Read") | .value | values')"
+	if [[ "$(echo "${smartdata5}" | jq -Mre '.ata_device_statistics.pages[]?.table[]? | select(.name == "Logical Sectors Read") | .value | values')" ]]; then
+		ssdtdr="$(echo "${smartdata5}" | jq -Mre '.ata_device_statistics.pages[]?.table[]? | select(.name == "Logical Sectors Read") | .value | values')"
 		ssdtdr="$((( $ssdtdr * 512 ) / 1000000 ))"   # Convert LBA into bytes
-echo "LBA1"
+#echo "LBA1"
+#echo "ssdtdr1="$ssdtdr
 # Check for LBAs Second (Not Duplicate of Above) If page 0 above fails, try no page ident
-	elif [[ "$(echo "${smartdata5}" | jq -Mre '.ata_device_statistics.pages[].table[] | select(.name == "Logical Sectors Read") | .value | values')" ]]; then
-		ssdtdr="$(echo "${smartdata5}" | jq -Mre '.ata_device_statistics.pages[].table[] | select(.name == "Logical Sectors Read") | .value | values')"
+	elif [[ "$(echo "${smartdata5}" | jq -Mre '.ata_device_statistics.pages[]?.table[]? | select(.name == "Logical Sectors Read") | .value | values')" ]]; then
+		ssdtdr="$(echo "${smartdata5}" | jq -Mre '.ata_device_statistics.pages[]?.table[]? | select(.name == "Logical Sectors Read") | .value | values')"
 		ssdtdr="$((( $ssdtdr * 512 ) / 1000000 ))"   # Convert LBA into bytes
-echo "LBA2"
+#echo "LBA2"
+#echo "ssdtdr2="$ssdtdr
 # Check for NVMe (data_units_read)
 	elif [[ "$(echo "${smartdata5}" | jq -Mre '.nvme_smart_health_information_log.data_units_read | values')" ]]; then
 		ssdtdr="$(echo "${smartdata5}" | jq -Mre '.nvme_smart_health_information_log.data_units_read | values')"
-echo "NVM1 = "$ssdtdr
+#echo "NVM1 = "$ssdtdr
 		ssdtdr="$((( $ssdtdr * 512000 ) / 1000000 ))"
-echo "NVM2 = "$ssdtdr
+#echo "NVM2 = "$ssdtdr
 # Check for SCSI (gigabytes_processed)
 	elif [[ "$(echo "${smartdata5}" | jq -Mre '.scsi_error_counter_log.read.gigabytes_processed | values')" ]]; then
+#echo "ssdtdr3="$ssdtdr
 		ssdtdr="$(echo "${smartdata5}" | jq -Mre '.scsi_error_counter_log.read.gigabytes_processed | values' | cut -d'.' -f1)"
+#echo "ssdtdr4="$ssdtdr
 		ssdtdr="$(( $ssdtdr * 1000 ))"
-echo "SCSI"
+#echo "SCSI"
 # Check for some SSDs (Total_Reads_GiB)
-	elif [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.name == "Total_Reads_GiB") | .raw.value | values')" ]]; then
-		ssdtdr="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.name == "Total_Reads_GiB") | .raw.value | values')"
+	elif [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.name == "Total_Reads_GiB") | .raw.value | values')" ]]; then
+		ssdtdr="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.name == "Total_Reads_GiB") | .raw.value | values')"
 		ssdtdr="$((( $ssdtdr * 1074 ) / 1000000 ))"
 
-echo "TRGiB="$ssdtdr
+#echo "TRGiB="$ssdtdr
 # Check for some SSDs (Total_Reads_32MiB)
-	elif [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.name == "Host_Reads_32MiB") | .raw.value | values')" ]]; then
-		ssdtdr="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.name == "Host_Reads_32MiB") | .raw.value | values')"
+	elif [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.name == "Host_Reads_32MiB") | .raw.value | values')" ]]; then
+		ssdtdr="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.name == "Host_Reads_32MiB") | .raw.value | values')"
 		ssdtdr="$((( $ssdtdr * 33554432 ) / 1000000 ))"
-echo "TR32MiB"
+#echo "TR32MiB"
 
 # Check for ID242 (Last Resort as this value does not appear standardized)
-	elif [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.id == 242) | .raw.value | values')" ]]; then
-			ssdtdr="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.id == 242) | .raw.value | values')"
+	elif [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.id == 242) | .raw.value | values')" ]]; then
+#echo "ssdtdr5="$ssdtdr
+			ssdtdr="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.id == 242) | .raw.value | values')"
+#echo "ssdtdr6="$ssdtdr
 		if [[ $model_family == *"SandForce"* ]]; then
+#echo "ssdtdr7="$ssdtdr
 			ssdtdr="$(( $ssdtdr * 1000 ))"		# Sandforce reports in GB
-echo "ID242-1="$ssdtdr
+#echo "ID242-1="$ssdtdr
 		else
 			ssdtdr="$((( $ssdtdr * 512 ) / 1000000 ))"
-echo "ID242-2="$ssdtdr
+#echo "ID242-2="$ssdtdr
 		fi
 	else
 	ssdtdr=1
-echo "ID242"
-	fi   > /dev/null 2<&1
+#echo "ID242"
+	fi   #> /dev/null 2<&1
 
 	### TOTAL DATA READ ###
 
@@ -2397,9 +3066,8 @@ zpool_TDR=$(( $zpool_TDR + $ssdtdr ))
 #############################################
 
 get_tdw () {
+if [[ $Debug_Steps == "true" ]]; then echo "get_tdw"; fi
 	### TOTAL DATA WRITTEN - POOL ###
-#	echo "---W---"
-#	echo "drive_name="$drive_name
 	ssdtdw=0
 	ssdtdr=0
 	ssdblocksize=""
@@ -2413,6 +3081,7 @@ get_tdw () {
 # 1KB * 1000 = bytes
 # 1MB * 1000000 = bytes
 # 1GB * 1000000000 = bytes
+
 #SSD - Sandforce=Lifetime Displayed in GB, Marvel=Lifetime Displayed as LBAs.
 
 	if [[ $smartdata5 == "" ]]; then
@@ -2434,13 +3103,13 @@ get_tdw () {
 	fi
 
 # Check for LBAs
-	if [[ "$(echo "${smartdata5}" | jq -Mre '.ata_device_statistics.pages[].table[] | select(.name == "Logical Sectors Written") | .value | values')" ]]; then
-		ssdtdw="$(echo "${smartdata5}" | jq -Mre '.ata_device_statistics.pages[0].table[] | select(.name == "Logical Sectors Written") | .value | values')"
+	if [[ "$(echo "${smartdata5}" | jq -Mre '.ata_device_statistics.pages[]?.table[]? | select(.name == "Logical Sectors Written") | .value | values')" ]]; then
+		ssdtdw="$(echo "${smartdata5}" | jq -Mre '.ata_device_statistics.pages[0].table[]? | select(.name == "Logical Sectors Written") | .value | values')"
 		ssdtdw="$((( $ssdtdw * 512 ) / 1000000 ))"   # Convert LBA into bytes
 
 # Check for LBAs slightly differently
-	elif [[ "$(echo "${smartdata5}" | jq -Mre '.ata_device_statistics.pages[].table[] | select(.name == "Logical Sectors Written") | .value | values')" ]]; then
-		ssdtdw="$(echo "${smartdata5}" | jq -Mre '.ata_device_statistics.pages[].table[] | select(.name == "Logical Sectors Written") | .value | values')"
+	elif [[ "$(echo "${smartdata5}" | jq -Mre '.ata_device_statistics.pages[]?.table[]? | select(.name == "Logical Sectors Written") | .value | values')" ]]; then
+		ssdtdw="$(echo "${smartdata5}" | jq -Mre '.ata_device_statistics.pages[].table[]? | select(.name == "Logical Sectors Written") | .value | values')"
 		ssdtdw="$((( $ssdtdw * 512 ) / 1000000 ))"   # Convert LBA into bytes
 
 # Check for NVMe (data_units_written)
@@ -2454,25 +3123,25 @@ get_tdw () {
 		ssdtdw="$(( $ssdtdw * 1000 ))"
 
 # Get Total Write GiB (Total_Writes_GiB)
-	elif [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.name == "Total_Writes_GiB") | .raw.value | values')" ]]; then
-		ssdtdw="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.name == "Total_Writes_GiB") | .raw.value | values')"
+	elif [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.name == "Total_Writes_GiB") | .raw.value | values')" ]]; then
+		ssdtdw="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.name == "Total_Writes_GiB") | .raw.value | values')"
 		ssdtdw="$((( $ssdtdw * 1074 ) / 1000000 ))"
 
 # Check for some SSDs (Total_Writes_32MiB)
-	elif [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.name == "Host_Writes_32MiB") | .raw.value | values')" ]]; then
-		ssdtdw="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.name == "Host_Writes_32MiB") | .raw.value | values')"
+	elif [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.name == "Host_Writes_32MiB") | .raw.value | values')" ]]; then
+		ssdtdw="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.name == "Host_Writes_32MiB") | .raw.value | values')"
 		ssdtdw="$((( $ssdtdw * 33554432 ) / 1000000 ))"
 
-	elif [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.id == 241) | .raw.value | values')" ]]; then
+	elif [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.id == 241) | .raw.value | values')" ]]; then
 		if [[ "$(echo "${smartdata5}" | grep -i "lba")" ]]; then
-			ssdtdw="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.id == 241) | .raw.value | values')"
+			ssdtdw="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.id == 241) | .raw.value | values')"
 			if [[ $model_family == *"SandForce"* ]]; then
 				ssdtdw="$(( $ssdtdw / 1000000000000 ))"		# Sandforce reports in GB
 			else
 				ssdtdw="$((( $ssdtdw * 512 ) / 1000000))"
 			fi
 		fi
-	fi > /dev/null 2<&1
+	fi #> /dev/null 2<&1
 
 # DEBUG
 #			ssdtdw=9223372036854775806
@@ -2483,7 +3152,7 @@ get_tdw () {
 ### RETURN THE DATA
 zpool_TDW=$(( $zpool_TDW + $ssdtdw ))
 #echo "zpool_TDW="$zpool_TDW
-virtual_drive_test="$(echo $smartdata5 | grep -i "virtual")"
+virtual_drive_test="$(echo $smartdata5 | grep -i -q "virtual")"
 
 	}
 #############################################
@@ -2492,7 +3161,7 @@ virtual_drive_test="$(echo $smartdata5 | grep -i "virtual")"
 
 # Return zpool_TDR, zpool_TDW
 format_zpool_td () {
-
+if [[ $Debug_Steps == "true" ]]; then echo "format_zpool_td"; fi
 ##### CALCULATE TOTAL DATA WRITTEN ##########
 	# Display in TiB Written or GiB Written
 
@@ -2576,6 +3245,7 @@ tdwbytes=$zpool_TD
 # Examine the $Ignore_Drives_List variable and remove any matches from the $drive variable.
 
 process_ignore_drives () {
+# This causes the script to fail and introduce a fake drive, why?  if [[ $Debug_Steps == "true" ]]; then echo "process_ignore_drives"; fi
 	targument="$(smartctl -i /dev/"${drive}" | grep "Serial Number:" | awk '{print $3}')";
 	s="0"
 	IFS=',' read -ra ADDR <<< "$Ignore_Drives_List"
@@ -2583,6 +3253,7 @@ process_ignore_drives () {
 		if [[ $i == $targument ]]; then s="1"; continue; fi
 	done
 	if [[ $s == "0" ]]; then printf "%s " "${drive}"; fi
+
 	}
 
 ########## GET SMART HARD DRIVES ##########
@@ -2590,14 +3261,14 @@ process_ignore_drives () {
 # The output is smartdrives sorted however we desire.
 
 get_smartHDD_listings () {
-
+if [[ $Debug_Steps == "true" ]]; then echo "get_smartHDD_listings"; fi
 	if [ $softver != "Linux" ]; then
 		smartdrives=$(for drive in $(sysctl -n kern.disks); do
-		if [ "$(smartctl -i /dev/"${drive}" | grep "SMART support is:.\s*Enabled")" ] && ! [ "$(smartctl -i /dev/"${drive}" | grep "Solid State Device")" ]; then process_ignore_drives; fi
+			if [ "$(smartctl -i /dev/"${drive}" | grep "SMART support is:.\s*Enabled")" ] && ! [ "$(smartctl -i /dev/"${drive}" | grep "Solid State Device")" ]; then process_ignore_drives; fi
 		done | awk '{for (i=NF; i!=0 ; i--) print $i }' | tr ' ' '\n' | sort | tr '\n' ' ')
 	else
 		smartdrives=$(for drive in $(fdisk -l | grep "Disk /dev/sd" | cut -c 11-15 | cut -d ":" -f1 | tr '\n' ' '); do
-		if [ "$(smartctl -i /dev/"${drive}" | grep "SMART support is:.\s*Enabled")" ] && ! [ "$(smartctl -i /dev/"${drive}" | grep "Solid State Device")" ]; then process_ignore_drives; fi
+			if [ "$(smartctl -i /dev/"${drive}" | grep "SMART support is:.\s*Enabled")" ] && ! [ "$(smartctl -i /dev/"${drive}" | grep "Solid State Device")" ]; then process_ignore_drives; fi
 		done | awk '{for (i=NF; i!=0 ; i--) print $i }' | tr ' ' '\n' | sort | tr '\n' ' ')
 	fi > /dev/null 2<&1
 
@@ -2611,13 +3282,14 @@ get_smartHDD_listings () {
 		smartdrives=$sort_list
 
 	# Call Sort Routine with the drive string.
-	if [[ "$smartdrives" != "" ]]; then
-		if [[ "$Multipath" != "off" ]]; then	# 'off' means skip the remove_duplicate code
-			duplicate_list=$smartdrives
-			remove_duplicate		# Remove duplicate serial numbers for MultiPath
-			smartdrives=$duplicate_list
-		fi
-	fi
+### DUPLICATE DRIVES ARE REMOVED IN DRIVE_SELFTEST SCRIPT AUTOMATICALLY
+#	if [[ "$smartdrives" != "" ]]; then
+#		if [[ "$Multipath" != "off" ]]; then	# 'off' means skip the remove_duplicate code
+#			duplicate_list=$smartdrives
+#			remove_duplicate		# Remove duplicate serial numbers for MultiPath
+#			smartdrives=$duplicate_list
+#		fi
+#	fi
 	}
 
 ########## GET SMART SOLID DISK DRIVES ##########
@@ -2625,7 +3297,7 @@ get_smartHDD_listings () {
 # The output is smartdrivesSSD sorted however we desire.
 
 get_smartSSD_listings () {
-
+if [[ $Debug_Steps == "true" ]]; then echo "get_smartSSD_listings"; fi
 	if [ $softver != "Linux" ]; then
 		smartdrivesSSD=$(for drive in $(sysctl -n kern.disks); do
 			if [ "$(smartctl -i /dev/"${drive}" | grep "SMART support is:.\s*Enabled")" ] && [ "$(smartctl -i /dev/"${drive}" | grep "Solid State Device")" ]; then process_ignore_drives; fi
@@ -2646,13 +3318,15 @@ get_smartSSD_listings () {
 		smartdrivesSSD=$sort_list
 
 	# Call Sort Routine with the drive string.
-	if [[ "$smartdrivesSSD" != "" ]]; then
-		if [[ "$Multipath" != "off" ]]; then
-			duplicate_list=$smartdrivesSSD
-			remove_duplicate		# Remove duplicate serial numbers
-			smartdrivesSSD=$duplicate_list
-		fi
-	fi
+### DUPLICATE DRIVES ARE REMOVED IN DRIVE_SELFTEST SCRIPT AUTOMATICALLY
+#	if [[ "$smartdrivesSSD" != "" ]]; then
+#		if [[ "$Multipath" != "off" ]]; then
+#			duplicate_list=$smartdrivesSSD
+#			remove_duplicate		# Remove duplicate serial numbers
+#			smartdrivesSSD=$duplicate_list
+#		fi
+#	fi
+
 	}
 
 ########## GET NVMe DRIVES ##########
@@ -2660,45 +3334,48 @@ get_smartSSD_listings () {
 # The output is smartdrivesNVM sorted however we desire.
 
 get_smartNVM_listings () {
-
+if [[ $Debug_Steps == "true" ]]; then echo "get_smartNVM_listings"; fi
 	if [ $softver != "Linux" ]; then
 		smartdrivesNVM=$(for drive in $(sysctl -n kern.disks); do
 			if [ "$(smartctl -i /dev/"${drive}" | grep "NVM")" ]; then process_ignore_drives; fi
 		done | awk '{for (i=NF; i!=0 ; i--) print $i }' | tr ' ' '\n' | sort | tr '\n' ' ')
 		### Convert nvdx to nvmexx in smartdrivesNVM ###
 	else
-	smartdrivesNVM=$(for drive in $(fdisk -l | grep "Disk /dev/nvm" | cut -d ':' -f 1 | cut -d '/' -f 3 | tr '\n' ' '); do
-		if [ "$(smartctl -i /dev/"${drive}" | grep "NVM")" ]; then process_ignore_drives; fi
-		done | awk '{for (i=NF; i!=0 ; i--) print $i }' | tr ' ' '\n' | sort | tr '\n' ' ')
+		smartdrivesNVM=$(fdisk -l | grep "Disk /dev/nvm" | cut -d ':' -f 1 | cut -d '/' -f 3 | tr '\n' ' ')
+		for drive in $smartdrivesNVM; do
+			if [ "$(smartctl -i /dev/"${drive}" | grep "NVM")" ]; then process_ignore_drives; fi
+		done | awk '{for (i=NF; i!=0 ; i--) print $i }' | tr ' ' '\n' | sort | tr '\n' ' '
+			### Convert nvdx to nvmexx in smartdrivesNVM ###
+		fi > /dev/null 2<&1
+
+# smartdrivesNVM=""
+	if [[ "$smartdrivesNVM" != "" ]]; then	# Skip all this if there are no NVMe drives.
 		### Convert nvdx to nvmexx in smartdrivesNVM ###
-	fi > /dev/null 2<&1
+		smartdrivesNVM=$( echo "$smartdrivesNVM" | sed 's/nvd/nvme/g' )
 
-	### Convert nvdx to nvmexx in smartdrivesNVM ###
-	smartdrivesNVM=$( echo "$smartdrivesNVM" | sed 's/nvd/nvme/g' )
+		### Convert nvme0n1 to nvme0, or nvme34n1 to nvme34 to make compatible with Smartmontools 7.4
+		### Maybe this can go away with version 7.5?
+		for smartdrivesnvme in $smartdrivesNVM; do
+			nvme_drive=$nvme_drive$(echo "nvme"$(echo $smartdrivesnvme | sed -r 's#^nvme##' | cut -d 'n' -f 1)" ")
+		done
+		smartdrivesNVM=$nvme_drive
 
-	### Convert nvme0n1 to nvme0, or nvme34n1 to nvme34 to make compatible with Smartmontools 7.4
-	### Maybe this can go away with version 7.5?
-	for smartdrivesnvme in $smartdrivesNVM; do
-		nvme_drive=$nvme_drive$(echo "nvme"$(echo $smartdrivesnvme | sed -r 's#^nvme##' | cut -d 'n' -f 1)" ")
-	done
-	smartdrivesNVM=$nvme_drive
+		# Sort Drive Idents
+			sort_list=$smartdrivesNVM
+			if [ $softver != "Linux" ]; then
+				sort_drives
+			else
+				sort_drives_scale
+			fi
+			smartdrivesNVM=$sort_list
 
-	# Sort Drive Idents
-		sort_list=$smartdrivesNVM
-		if [ $softver != "Linux" ]; then
-			sort_drives
-		else
-			sort_drives_scale
-		fi
-		smartdrivesNVM=$sort_list
-
-	# Call Sort Routine with the drive string.
-	if [[ "$smartdrivesNVM" != "" ]]; then
-		if [[ "$Multipath" != "off" ]]; then
-			duplicate_list=$smartdrivesNVM
-			remove_duplicate		# Remove duplicate serial numbers
-			smartdrivesNVM=$duplicate_list
-		fi
+		# Call Sort Routine with the drive string.
+### DUPLICATE DRIVES ARE REMOVED IN DRIVE_SELFTEST SCRIPT AUTOMATICALLY
+#		if [[ "$Multipath" != "off" ]]; then
+#			duplicate_list=$smartdrivesNVM
+#			remove_duplicate		# Remove duplicate serial numbers
+#			smartdrivesNVM=$duplicate_list
+#		fi
 	fi
 	}
 
@@ -2706,7 +3383,7 @@ get_smartNVM_listings () {
 # Get listing of the OTHER-SMART devices and put into $non-smartdrives variable
 
 get_smartOther_listings () {
-
+if [[ $Debug_Steps == "true" ]]; then echo "get_smartOther_listings"; fi
 	### Get the non-SSD listing - MUST support SMART
 	# variable nonsmartdrives
 
@@ -2730,34 +3407,36 @@ get_smartOther_listings () {
 		nonsmartdrives=$sort_list
 
 	# Call Sort Routine with the drive string.
-	if [[ "$nonsmartdrives" != "" ]]; then
-		if [[ "$Multipath" != "false" ]]; then
-			duplicate_list=$nonsmartdrives
-			remove_duplicate		# Remove duplicate serial numbers
-			nonsmartdrives=$duplicate_list
-		fi
-	fi
+### DUPLICATE DRIVES ARE REMOVED IN DRIVE_SELFTEST SCRIPT AUTOMATICALLY
+#	if [[ "$nonsmartdrives" != "" ]]; then
+#		if [[ "$Multipath" != "false" ]]; then
+#			duplicate_list=$nonsmartdrives
+#			remove_duplicate		# Remove duplicate serial numbers
+#			nonsmartdrives=$duplicate_list
+#		fi
+#	fi
 	}
 
 
 ########## SAVE JSON DATA ##########
 # Rename function to "save_json_data"
 get_json_data () {
-
+if [[ $Debug_Steps == "true" ]]; then echo "get_json_data"; fi
 	# Save drive JSON data if -dump command used
 	# Uses $drive parameter.
 
 	if [[ "$drive" != "cd0" ]]; then
-		if [[ "$dump_all" != "0" ]]; then
+		if [[ "$dump_all" != "0" ]]; then	# Routine -dump
 			# Pull a fresh JSON listing
 			tempjson="$(smartctl -x --json=u /dev/${drive})"
-			serial1="$(echo "${tempjson}" | jq -Mre '.serial_number | values')"
+			serial1="$(echo "${tempjson}" | jq -Mre '.serial_number | values' | tr -d ' ')"
 			rpm="$(echo "${tempjson}" | jq -Mre '.rotation_rate | values')"
 			if [[ "$rpm" == "0" ]]; then drivetype="SSD"; else drivetype="HDD"; fi
 			if [[ "$(echo $tempjson | grep -i "nvm")" ]]; then drivetype="NVM"; fi
 			echo "$tempjson" > "/tmp/${tempfilepath}${drivetype}_${drive}_${serial1}.json"
 		fi
 	fi
+
 	}
 
 ########## GET DRIVE DATA ##########
@@ -2765,6 +3444,7 @@ get_json_data () {
 # $1 = HDD/SSD/NVM, $smartdrives* must have drive ident data as well.
 
 get_drive_data () {
+if [[ $Debug_Steps == "true" ]]; then echo "get_drive_data"; fi
 
 # File /tmp/json_errors.txt is used to write what data did not come from a json file.
 
@@ -2784,8 +3464,10 @@ get_drive_data () {
 			for i in $(seq 0 $smartdriveswc); do
 				if [[ "${smartdrives[$i]}" == "${drive}" ]]; then
 					if [[ $Develop == "true" ]]; then echo "We have a match"; fi
-					smartdata5="$(cat ${testfilenamesHDD[$i]})"
+
+					smartdata5="$(cat "${testfilenamesHDD[$i]}")"
 					echo "/dev/$drive -- ${testfilenamesHDD[i]}"
+
 					break
 				fi
 			done
@@ -2797,7 +3479,7 @@ get_drive_data () {
 			for i in $(seq 0 $smartdriveswc); do
 				if [[ "${smartdrivesSSD[$i]}" == "${drive}" ]]; then
 						if [[ $Develop == "true" ]]; then echo "We have a match"; fi
-					smartdata5="$(cat ${testfilenamesSSD[$i]})"
+					smartdata5="$(cat "${testfilenamesSSD[$i]}")"
 					echo "/dev/$drive -- ${testfilenamesSSD[i]}"
 					break
 				fi
@@ -2811,7 +3493,7 @@ get_drive_data () {
 			for i in $(seq 0 $smartdriveswc); do
 				if [[ "${smartdrivesNVM[$i]}" == "${drive}" ]]; then
 						if [[ $Develop == "true" ]]; then echo "We have a match"; fi
-					smartdata5="$(cat ${testfilenamesNVM[$i]})"
+					smartdata5="$(cat "${testfilenamesNVM[$i]}")"
 					echo "/dev/$drive -- ${testfilenamesNVM[i]}"
 					break
 				fi
@@ -2827,12 +3509,13 @@ get_drive_data () {
 			for i in $(seq 0 $smartdriveswc); do
 				if [[ "${smartdrivesNVM[$i]}" == "${drive}" ]]; then
 						if [[ $Develop == "true" ]]; then echo "We have a match"; fi
-					smartdata5="$(cat ${testfilenamesNVM[$i]})"
+					smartdata5="$(cat "${testfilenamesNVM[$i]}")"
 					echo "/dev/$drive -- ${testfilenamesNVM[i]}"
 					break
 				fi
 			done
 		fi
+
 ###############################################################################################################
 		if [[ "$testfile2" != "" ]]; then
 			smartdata="$(cat "$testfile2")"
@@ -2840,6 +3523,7 @@ get_drive_data () {
 			smartdata=""
 		fi
 	else	# Else let's read the Real Drive Data
+
 		if [[ $Develop == "true" ]]; then echo "Looking at Real Drive Data, Not Simulated"; fi
 		# Get drive data for json processing
 		smartdata5="$(smartctl -x --json=u /dev/"$drive")"
@@ -2850,32 +3534,33 @@ get_drive_data () {
 			if [[ "$(smartctl -d sat -x --json=u /dev/"$drive" | grep -i "serial_number")" ]]; then  # Is this SCSI to ATA Translation
 				smartdata5="$(smartctl -d sat -x --json=u /dev/"$drive")"	# Yes, then reload the newer SMART data
 				smartdata="$(smartctl -d sat -a --json=u /dev/"$drive")"
-
-#echo "get_drive_data: Drive is in SCSI to ATA translation mode "$drive
-#
-#			else
-#echo "get_drive_data: Drive was SCSI, but not in translation mode "$drive
-#
 			fi
-#		else
-#
-#echo "get_drive_data: Drive not SCSI "$drive
-
 		fi
 	fi
 
 # Get Serial Number
 	if [[ "$(echo "${smartdata5}" | jq -Mre '.serial_number | values')" ]]; then
-		serial="$(echo "${smartdata5}" | jq -Mre '.serial_number | values')"
+		serial="$(echo "${smartdata5}" | jq -Mre '.serial_number | values' | tr -d ' ')"
 	else
 		if [[ "$(echo "${smartdata5}" | grep -i "vmware")" ]]; then serial="VMWare"; fi
 		json_error_log=$json_error_log"\n$(echo $drive" .serial_number not in json")" > /dev/null 2<&1
 	fi > /dev/null 2<&1
 
 # Check for SMR Drive Model
-if [[ $SMR_Enable == "true" ]]; then	# Enable SMR Operations if "true".
-	check_for_smr
-fi
+	if [[ $SMR_Enable == "true" ]]; then	# Enable SMR Operations if "true".
+		if [[ $SMR_New_Drive_Det_Count -gt 0 ]]; then					# 0=Disable
+			if test -e "$statistical_data_file"; then
+				# Check all drive serial numbers against the $statistical_data_file to see if the serial number has been listed.
+				drive_count_record=$(wc -w <<< $(cat "$statistical_data_file" | grep -i $drive))
+				if ! [[ $drive_count_record -le $SMR_New_Drive_Det_Count ]]; then
+					SMR_Ignore_Alarm="true"
+				fi
+			else
+				SMR_Ignore_Alarm="true"
+			fi
+		fi
+		check_for_smr
+	fi
 
 # Get Model Number
 	if [[ "$(echo "${smartdata5}" | jq -Mre '.model_name | values')" ]]; then modelnumber="$(echo "${smartdata5}" | jq -Mre '.model_name | values')";
@@ -2926,8 +3611,8 @@ fi
 
 # Check if invalid json temp value - If yes then check ID 194 on json data.
 	if [[ $temp < 1 ]]; then
-		if [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.id == 194) | .raw.value | values')" ]]; then
-			temp="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.id == 194) | .raw.value | values')"
+		if [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.id == 194) | .raw.value | values')" ]]; then
+			temp="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.id == 194) | .raw.value | values')"
 # If Temp is still not there, look at the raw -x data and hope it shows up.
 		else	json_error_log=$json_error_log$'\n'"$(echo $1" "$serial" .temperature.current not in json")"
 			if [[ "$(smartctl -x /dev/"$drive" | grep "Current Temperature:" | awk '{print $3}' | cut -d '/' -f2)" != "?" ]]; then
@@ -2945,8 +3630,8 @@ fi
 	elif [[ "$(echo "${smartdata5}" | jq -Mre '.scsi_environmental_reports.temperature_1.minimum_since_power_on | values')" ]]; then
 		temp_min="$(echo "${smartdata5}" | jq -Mre '.scsi_environmental_reports.temperature_1.minimum_since_power_on | values')"
 
-	elif [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.id == 194) | .raw.string | values')" ]]; then
-		tempstring="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.id == 194) | .raw.string | values')"
+	elif [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.id == 194) | .raw.string | values')" ]]; then
+		tempstring="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.id == 194) | .raw.string | values')"
 		temp_min=$(echo "${tempstring}" | awk '{print $3}' | cut -d '/' -f1)
 		temp_max=$(echo "${tempstring}" | awk '{print $3}' | cut -d '/' -f2 | tr -d ')')
 	else
@@ -2966,7 +3651,7 @@ fi
 		temp_max=$Non_Exist_Value
 		if [[ $1 == "HDD" ]]; then json_error_log=$json_error_log$'\n'"$(echo $1" "$serial" .temperature.power_cycle_max not in json")"; fi > /dev/null 2<&1
 	fi
-
+	
 	### SETUP FOR NO VALUE OBTAINED
 	if [[ $TempDisplaytemp != "" ]]; then TempDisplay=$TempDisplaytemp; fi
 	TempDisplaymin=$TempDisplay
@@ -2976,19 +3661,24 @@ fi
 	if ! [[ $temp_min =~ $re ]]; then temp_min=$Non_Exist_Value; TempDisplaymin=""; fi
 	if ! [[ $temp_max =~ $re ]]; then temp_max=$Non_Exist_Value; TempDisplaymax=""; fi
 
-# Get Power On Hours
-#	if [[ "$(echo "${smartdata5}" | jq -Mre '.power_on_time.hours | values')" ]]; then
-#		onHours="$(echo "${smartdata5}" | jq -Mre '.power_on_time.hours | values')"
-#logfile_caution=$logfile_caution"$(printf "Drive "$serial" actual Power On Hours = "$onHours"<br>")" > /dev/null 2<&1
-#	else json_error_log=$json_error_log$'\n'"$(echo $1" "$serial" .power_on_time.hours not in json")"; fi > /dev/null 2<&1
-#
-#	# Setup for a Zero Hour Report, Yes in case someone has a zero hour value, the division will fail.
-#	if [[ $onHours == "" ]]; then onHours=0; fi
-#	if [[ $onHours == "0" ]]; then onHours=1; json_error_log=$json_error_log$'\n'"$(echo $1" "$serial" .power_on_time.hours = 0")"; logfile_caution=$logfile_caution"$(printf "Drive "$serial" actual Power On Hours = 0, added 1 hour so the script doesn't fail, if this persists it may be a script failure or unrecognized drive.<br>")"; fi > /dev/null 2<&1
 
+# Get NVMe Sensor 1 and Sensor 2 Temperatures if they exist, can only use smartctl right now as I don't have an NVMe drive
+# in my SCALE system which report Sensor 1[0] and Sensor 2[1], only Current Temperature.
+	
+	if [[ "$(echo "${smartdata5}" | jq -Mre '.nvme_smart_health_information_log.temperature_sensors[0]')" != null ]]; then
+		temp_sensor_0="$(echo "${smartdata5}" | jq -Mre '.nvme_smart_health_information_log.temperature_sensors[0]')"
+	else
+		temp_sensor_0=0
+	fi
+	if [[ "$(echo "${smartdata5}" | jq -Mre '.nvme_smart_health_information_log.temperature_sensors[1]')" != null ]]; then
+		temp_sensor_1="$(echo "${smartdata5}" | jq -Mre '.nvme_smart_health_information_log.temperature_sensors[1]')"
+	else
+		temp_sensor_1=0
+	fi
+	
 # Get Start Stop Count
-	if [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.id == 4) | .raw.value | values')" ]]; then
-		startStop="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.id == 4) | .raw.value | values')"; fi > /dev/null 2<&1
+	if [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.id == 4) | .raw.value | values')" ]]; then
+		startStop="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.id == 4) | .raw.value | values')"; fi > /dev/null 2<&1
 	if [[ $startStop == "" ]] && [[ $1 == "HDD" ]]; then
 		startStop="$(echo "${smartdata5}" | grep -i "Accumulated start-stop cycles" | cut -d ':' -f 3 | tr -d ' ",')"			
 			json_error_log=$json_error_log$'\n'"$(echo $1" "$serial" Accumulated start-stop cycles not in json")"; fi > /dev/null 2<&1
@@ -2997,8 +3687,8 @@ fi
 			json_error_log=$json_error_log$'\n'"$(echo $1" "$serial" accumulated_start_stop_cycles not in json")"; fi > /dev/null 2<&1
 
 # Get Load Cycle Count
-	if [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.id == 193) | .raw.value | values')" ]]; then
-		loadCycle="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.id == 193) | .raw.value | values')"; fi  > /dev/null 2<&1
+	if [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.id == 193) | .raw.value | values')" ]]; then
+		loadCycle="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.id == 193) | .raw.value | values')"; fi  > /dev/null 2<&1
 	if [[ $loadCycle == "" ]] && [[ $1 == "HDD" ]]; then json_error_log=$json_error_log$'\n'"$(echo $1" "$serial" .id == 193 Load_Cycle_Count not in json")"; fi > /dev/null 2<&1
 	if [[ $loadCycle == "" ]] && [[ $1 == "HDD" ]]; then
 		loadCycle="$(echo "${smartdata5}" | jq -Mre '.scsi_start_stop_cycle_counter.accumulated_load_unload_cycles | values')"			
@@ -3008,34 +3698,32 @@ fi
 			json_error_log=$json_error_log$'\n'"$(echo $1" "$serial" load-unload cycles: not in json")"; fi > /dev/null 2<&1
 
 # Get Spin Retry Count
-	if [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.id == 10) | .raw.value | values')" ]]; then
-		spinRetry="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.id == 10) | .raw.value | values')"; fi  > /dev/null 2<&1
+	if [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.id == 10) | .raw.value | values')" ]]; then
+		spinRetry="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.id == 10) | .raw.value | values')"; fi  > /dev/null 2<&1
 	if [[ $spinRetry == "" ]] && [[ $1 == "HDD" ]]; then json_error_log=$json_error_log$'\n'"$(echo $1" "$serial" .id == 10 Spin_Retry_Count not in json")"; fi > /dev/null 2<&1
 
 # Get Reallocated Sectors Count
-	if [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.id == 5) | .raw.value | values')" ]]; then
-		reAlloc="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.id == 5) | .raw.value | values')"; fi  > /dev/null 2<&1
+	if [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.id == 5) | .raw.value | values')" ]]; then
+		reAlloc="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.id == 5) | .raw.value | values')"; fi  > /dev/null 2<&1
 	if [[ $reAlloc == "" ]]; then json_error_log=$json_error_log$'\n'"$(echo $1" "$serial" .id == 5 Reallocated_Sector_Ct not in json")"; fi > /dev/null 2<&1
 
 # Get Reallocated Sector Events Count
-	if [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.id == 196) | .raw.value | values')" ]]; then
-		reAllocEvent="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.id == 196) | .raw.value | values')"; fi > /dev/null 2<&1
+	if [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.id == 196) | .raw.value | values')" ]]; then
+		reAllocEvent="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.id == 196) | .raw.value | values')"; fi > /dev/null 2<&1
 	if [[ $reAllocEvent == "" ]]; then json_error_log=$json_error_log$'\n'"$(echo $1" "$serial" .id == 196 Reallocated_Event_Count not in json")"; fi > /dev/null 2<&1
 
 	if [[ "$(echo "${smartdata5}" | jq -Mre '.scsi_grown_defect_list | values')" ]]; then
 		reAllocEvent="$(echo "${smartdata5}" | jq -Mre '.scsi_grown_defect_list | values')"; fi > /dev/null 2<&1
 	if [[ $reAllocEvent == "" ]]; then json_error_log=$json_error_log$'\n'"$(echo $1" "$serial" .scsi_grown_defect_list not in json")"; fi > /dev/null 2<&1
 
-
-
 # Get Current Pending Sectors Count
-	if [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.id == 197) | .raw.value | values')" ]]; then
-		pending="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.id == 197) | .raw.value | values')"; fi > /dev/null 2<&1
+	if [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.id == 197) | .raw.value | values')" ]]; then
+		pending="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.id == 197) | .raw.value | values')"; fi > /dev/null 2<&1
 	if [[ $pending == "" ]]; then json_error_log=$json_error_log$'\n'"$(echo $1" "$serial" .id == 197 Current_Pending_Sector not in json")"; fi > /dev/null 2<&1
 
 # Get Offline Uncorrectable Errors
-	if [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.id == 198) | .raw.value | values')" ]]; then
-		offlineUnc="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.id == 198) | .raw.value | values')"; fi > /dev/null 2<&1
+	if [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.id == 198) | .raw.value | values')" ]]; then
+		offlineUnc="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.id == 198) | .raw.value | values')"; fi > /dev/null 2<&1
 	if [[ $offlineUnc == "" ]]; then json_error_log=$json_error_log$'\n'"$(echo $1" "$serial" .id == 198 Offline_Uncorrectable not in json")"; fi > /dev/null 2<&1
 
 	if [[ "$(echo "${smartdata5}" | jq -Mre '.scsi_error_counter_log.write.total_uncorrected_errors | values')" ]]; then
@@ -3044,27 +3732,27 @@ fi
 		offlineUnc=$((( $offlineUnc1 + $offlineUnc2 ))); fi > /dev/null 2<&1
 
 # Get UDMA CRC Errors
-	if [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.id == 199) | .raw.value | values')" ]]; then
-		crcErrors="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.id == 199) | .raw.value | values')"; fi > /dev/null 2<&1
+	if [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.id == 199) | .raw.value | values')" ]]; then
+		crcErrors="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.id == 199) | .raw.value | values')"; fi > /dev/null 2<&1
 	if [[ $crcErrors == "" ]]; then json_error_log=$json_error_log$'\n'"$(echo $1" "$serial" .id == 199 UDMA_CRC_Error_Count not in json")"; fi > /dev/null 2<&1
 
 # Get Read Error Rate
-	if [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.id == 1) | .raw.value | values')" ]]; then
-		rawReadErrorRate="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.id == 1) | .raw.value | values')"; fi > /dev/null 2<&1
+	if [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.id == 1) | .raw.value | values')" ]]; then
+		rawReadErrorRate="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.id == 1) | .raw.value | values')"; fi > /dev/null 2<&1
 	if [[ $rawReadErrorRate == "" ]] && [[ $1 == "HDD" ]]; then json_error_log=$json_error_log$'\n'"$(echo $1" "$serial" .id == 1 Raw_Read_Error_Rate not in json")"; fi > /dev/null 2<&1
 
 # Get Seek Error Rate
-	if [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.id == 7) | .raw.value | values')" ]]; then
-		seekErrorHealth="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.id == 7) | .raw.value | values')"; fi > /dev/null 2<&1
+	if [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.id == 7) | .raw.value | values')" ]]; then
+		seekErrorHealth="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.id == 7) | .raw.value | values')"; fi > /dev/null 2<&1
 	if [[ $seekErrorHealth == "" ]] && [[ $1 == "HDD" ]]; then json_error_log=$json_error_log$'\n'"$(echo $1" "$serial" .id == 7 Seek_Error_Rate not in json")"; fi > /dev/null 2<&1
 
 # Get MultiZone Error Rate
 	if [[ $rotation -gt 1 ]]; then	# Pass HDD Only, Ignore SSD & NVMe drives not on these drives, yet.
 
-		if [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.id == 200) | .raw.value | values')" ]]; then
-			multiZone="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.id == 200) | .raw.value | values')"; fi > /dev/null 2<&1
+		if [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.id == 200) | .raw.value | values')" ]]; then
+			multiZone="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.id == 200) | .raw.value | values')"; fi > /dev/null 2<&1
 
-		if [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.id == 200) | .name | values')" == "Pressure_Limit" ]]; then multiZone=""; fi > /dev/null 2<&1
+		if [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.id == 200) | .name | values')" == "Pressure_Limit" ]]; then multiZone=""; fi > /dev/null 2<&1
 	
 		if [[ $multiZone == "" ]]; then
 			if [[ "$(echo "${smartdata5}" | grep "Multi_Zone_Error_Rate")" ]]; then
@@ -3078,11 +3766,11 @@ fi
 	lastTestHours=""
 	he2="$(echo "${smartdata5}" | grep -i "helium" | awk '{print $2}' | tr -d '",' | head -1)"
 	if [[ "$he2" != "" ]]; then
-		Helium="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.name == "'${he2}'") | .raw.value | values')"
+		Helium="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.name == "'${he2}'") | .raw.value | values')"
 		if [[ $Helium -gt 100 ]]; then
-			Helium="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.name == "'${he2}'") | .value | values')"
+			Helium="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.name == "'${he2}'") | .value | values')"
 		fi
-		heliumthresh="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.name == "'${he2}'") | .thresh | values')"
+		heliumthresh="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.name == "'${he2}'") | .thresh | values')"
 		# Normalize Helium to 100.
 		if [[ $heliumthresh > 50 ]]; then
 			Helium=$(( 100 - $Helium ))  # Helium is now Normalized where "100" is good.
@@ -3101,23 +3789,23 @@ ID241=""
 		ssdblocksize="$(echo "${smartdata5}" | jq -Mre '.logical_block_size | values' | cut -d'.' -f1)"
 	fi > /dev/null 2<&1
 
-	if [[ "$(echo "${smartdata5}" | jq -Mre '.ata_device_statistics.pages[].table[] | select(.name == "Logical Sectors Written") | .value | values')" ]]; then
-		ssdtdw="$(echo "${smartdata5}" | jq -Mre '.ata_device_statistics.pages[0].table[] | select(.name == "Logical Sectors Written") | .value | values' | cut -d'.' -f1)"
+	if [[ "$(echo "${smartdata5}" | jq -Mre '.ata_device_statistics.pages[].table[]? | select(.name == "Logical Sectors Written") | .value | values')" ]]; then
+		ssdtdw="$(echo "${smartdata5}" | jq -Mre '.ata_device_statistics.pages[0].table[]? | select(.name == "Logical Sectors Written") | .value | values' | cut -d'.' -f1)"
 	fi > /dev/null 2<&1
 
 	if [[ $ssdtdw == "" ]]; then	# If page 0 above fails, try no page ident
-		if [[ "$(echo "${smartdata5}" | jq -Mre '.ata_device_statistics.pages[].table[] | select(.name == "Logical Sectors Written") | .value | values')" ]]; then
-			ssdtdw="$(echo "${smartdata5}" | jq -Mre '.ata_device_statistics.pages[].table[] | select(.name == "Logical Sectors Written") | .value | values' | cut -d'.' -f1)"
+		if [[ "$(echo "${smartdata5}" | jq -Mre '.ata_device_statistics.pages[].table[]? | select(.name == "Logical Sectors Written") | .value | values')" ]]; then
+			ssdtdw="$(echo "${smartdata5}" | jq -Mre '.ata_device_statistics.pages[].table[]? | select(.name == "Logical Sectors Written") | .value | values' | cut -d'.' -f1)"
 		fi > /dev/null 2<&1
 	fi
 
 	if [[ $ssdtdw == "" ]]; then
 		
-		if [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.name == "Total_Writes_GiB") | .raw.value | values')" ]]; then
-			ID241="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.name == "Total_Writes_GiB") | .raw.value | values' | cut -d'.' -f1)"
+		if [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.name == "Total_Writes_GiB") | .raw.value | values')" ]]; then
+			ID241="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.name == "Total_Writes_GiB") | .raw.value | values' | cut -d'.' -f1)"
 
-		elif [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.id == 241) | .raw.value | values')" ]]; then
-			ssdtdw="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.id == 241) | .raw.value | values' | cut -d'.' -f1)"
+		elif [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.id == 241) | .raw.value | values')" ]]; then
+			ssdtdw="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.id == 241) | .raw.value | values' | cut -d'.' -f1)"
 		fi > /dev/null 2<&1
 	fi
 
@@ -3125,51 +3813,46 @@ ID241=""
 	ssdtdr=""
 	drive_name=$drive
 	get_tdr
-#	tdr=$zpool_TDR
 	zpool_TD=$zpool_TDR
 	format_zpool_td
 	tdr=$tdw
 
+#smartdata5="$(cat /mnt/farm2/scripts/sean_nvme/SSD_23.json)"
 # Get Wear Level
 	wearLevelThreshold=""
 	wearLevel=""
 
-	if [[ "$(echo "${smartdata5}" | jq -Mre '.ata_device_statistics.pages[].table[] | select(.name == "Percentage Used Endurance Indicator") | .value | values')" ]]; then
-		wearLevel="$(echo "${smartdata5}" | jq -Mre '.ata_device_statistics.pages[].table[] | select(.name == "Percentage Used Endurance Indicator") | .value | values')"
+# Get Percentage Usage First if it exists.  This is out #1 priority value regardless of any other value.
+	if [[ "$(echo "${smartdata5}" | jq -Mre '.ata_device_statistics.pages[]?.table[]? | select(.name == "Percentage Used Endurance Indicator") | .value | values')" ]]; then
+		wearLevel="$(echo "${smartdata5}" | jq -Mre '.ata_device_statistics.pages[]?.table[]? | select(.name == "Percentage Used Endurance Indicator") | .value | values')"
 		wearLevelThreshold=100
+#echo "wearlevel 1:"$wearLevel"  Thresh:"$wearLevelThreshold"   Drive:"$drive
 		if [[ $wearLevel -gt 100 ]]; then wearLevel=""; fi
-	fi > /dev/null 2<&1
 
-	if [[ $wearLevel == "" ]]; then
-	if [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.id == 231) | .value | values')" ]]; then
-		wearLevel="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.id == 231) | .value | values')"
-		wearLevelThreshold="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.id == 231) | .thresh | values')"
+	elif [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.id == 231) | .value | values')" ]]; then
+		wearLevel="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.id == 231) | .value | values')"
+		wearLevelThreshold="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.id == 231) | .thresh | values')"
+#echo "wearlevel 2:"$wearLevel"  Thresh:"$wearLevelThreshold"   Drive:"$drive
+	elif [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.name == "Percent_Lifetime_Remain") | .value | values')" ]]; then
+		wearLevel="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.name == "Percent_Lifetime_Remain") | .value | values')"
+		wearLevelThreshold="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.name == "Percent_Lifetime_Remain") | .thresh | values')"
+#echo "wearlevel 3:"$wearLevel"  Thresh:"$wearLevelThreshold"   Drive:"$drive
+	elif [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.name == "Media_Wearout_Indicator") | .value | values')" ]]; then
+		wearLevel="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.name == "Media_Wearout_Indicator") | .value | values')"
+		wearLevelThreshold="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.name == "Media_Wearout_Indicator") | .thresh | values')"
+#echo "wearlevel 4:"$wearLevel"  Thresh:"$wearLevelThreshold"   Drive:"$drive
+	elif [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.name == "Wear_Leveling_Count") | .value | values')" ]]; then
+		wearLevel="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.name == "Wear_Leveling_Count") | .value | values')"
+		wearLevelThreshold="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.name == "Wear_Leveling_Count") | .thresh | values')"
+#echo "wearlevel 5:"$wearLevel"  Thresh:"$wearLevelThreshold"   Drive:"$drive
+#	fi #> /dev/null 2<&1
 
-	elif [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.name == "Percent_Lifetime_Remain") | .value | values')" ]]; then
-		wearLevel="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.name == "Percent_Lifetime_Remain") | .value | values')"
-		wearLevelThreshold="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.name == "Percent_Lifetime_Remain") | .thresh | values')"
-
-	elif [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.name == "Media_Wearout_Indicator") | .value | values')" ]]; then
-		wearLevel="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.name == "Media_Wearout_Indicator") | .value | values')"
-		wearLevelThreshold="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.name == "Media_Wearout_Indicator") | .thresh | values')"
-
-	elif [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.name == "Wear_Leveling_Count") | .value | values')" ]]; then
-		wearLevel="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.name == "Wear_Leveling_Count") | .value | values')"
-		wearLevelThreshold="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.name == "Wear_Leveling_Count") | .thresh | values')"
-
-	fi > /dev/null 2<&1
-
-	if [[ $wearLevel == "" ]] && [[ $1 != "HDD" ]]; then
+	elif [[ $wearLevel == "" ]] && [[ $1 != "HDD" ]]; then
 		if [[ "$(echo ${smartdata5} | grep -i "wear")" ]] || [[ "$(echo ${smartdata5} | grep -i "life")" ]]; then
 			json_error_log=$json_error_log$'\n'"$(echo $1" "$serial" .id == 231 SSD_Life_Left not properly decoded")";
+#echo "wearlevel 6:"$wearLevel"  Thresh:"$wearLevelThreshold"   Drive:"$drive
 		fi
-	fi > /dev/null 2<&1
-	fi > /dev/null 2<&1
-
-# Get Normalized Wear Level for Custom Drive Selection
-	if [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.name == "Wear_Leveling_Count") | .value | values')" ]]; then
-		wearLevelNormalized="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.name == "Wear_Leveling_Count") | .value | values')"
-	fi > /dev/null 2<&1
+	fi #> /dev/null 2<&1
 
 # Adjust wearLevel for negative values.
 	if [[ $wearLevelThreshold != "" ]] && [[ $wearLevel != "" ]]; then
@@ -3177,6 +3860,12 @@ ID241=""
 		wearLevel=$((100 - $wearLevel))
 		fi
 	fi
+	
+# Get Normalized Wear Level for use in Custom Drive Selection if needed
+	if [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.name == "Wear_Leveling_Count") | .value | values')" ]]; then
+		wearLevelNormalized="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.name == "Wear_Leveling_Count") | .value | values')"
+	fi > /dev/null 2<&1
+#echo "wearlevel 7:"$wearLevel"  Thresh:"$wearLevelThreshold"   Drive:"$drive
 
 # Check SSD/NVMe Wear Level - THIS WORKS for NVMe Where 100 = 100
 
@@ -3189,7 +3878,7 @@ ID241=""
 		wearLevel="$(echo "${smartdata5}" | jq -Mre '.nvme_smart_health_information_log.available_spare | values')"
 	fi > /dev/null 2<&1
 	fi
-
+#echo "wearlevel 8:"$wearLevel"  Thresh:"$wearLevelThreshold"   Drive:"$drive
 # WORKS FOR SCSI Where 0 = 100
 	if [[ "$(echo "${smartdata5}" | jq -Mre '.scsi_percentage_used_endurance_indicator | values')" ]]; then
 		wearLevel=$((100 - "$(echo "${smartdata5}" | jq -Mre '.scsi_percentage_used_endurance_indicator | values')"))
@@ -3242,24 +3931,21 @@ ID241=""
 # Currently do not use.
 	if [[ "$(echo "${smartdata5}" | jq -Mre '.logical_block_size | values')" ]]; then
 		ssdblocksize="$(echo "${smartdata5}" | jq -Mre '.logical_block_size | values' | cut -d'.' -f1)"		# Don't need block size yet.
-	#	echo "Getting ssdblocksize="$ssdblocksize
 	fi #> /dev/null 2<&1
 
 # Normalize from Bytes to MB
 
 # Check for LBAs
-	if [[ "$(echo "${smartdata5}" | jq -Mre '.ata_device_statistics.pages[].table[] | select(.name == "Logical Sectors Written") | .value | values')" ]]; then
-		tdw="$(echo "${smartdata5}" | jq -Mre '.ata_device_statistics.pages[0].table[] | select(.name == "Logical Sectors Written") | .value | values' | cut -d'.' -f1)"
+	if [[ "$(echo "${smartdata5}" | jq -Mre '.ata_device_statistics.pages[].table[]? | select(.name == "Logical Sectors Written") | .value | values')" ]]; then
+		tdw="$(echo "${smartdata5}" | jq -Mre '.ata_device_statistics.pages[0].table[]? | select(.name == "Logical Sectors Written") | .value | values' | cut -d'.' -f1)"
 		echo "Convert LBA 1 tdw="$tdw
 		ssdtdw="$((( $tdw * 512 ) / 1000000 ))"   # Convert LBA into bytes, now MB
 
-
 # Check for LBAs slightly differently
-	elif [[ "$(echo "${smartdata5}" | jq -Mre '.ata_device_statistics.pages[].table[] | select(.name == "Logical Sectors Written") | .value | values')" ]]; then
-		tdw="$(echo "${smartdata5}" | jq -Mre '.ata_device_statistics.pages[].table[] | select(.name == "Logical Sectors Written") | .value | values' | cut -d'.' -f1)"
+	elif [[ "$(echo "${smartdata5}" | jq -Mre '.ata_device_statistics.pages[].table[]? | select(.name == "Logical Sectors Written") | .value | values')" ]]; then
+		tdw="$(echo "${smartdata5}" | jq -Mre '.ata_device_statistics.pages[].table[]? | select(.name == "Logical Sectors Written") | .value | values' | cut -d'.' -f1)"
 		echo "Convert LBA 2 tdw="$tdw
 		ssdtdw="$((( $tdw * 512 ) / 1000000 ))"   # Convert LBA into bytes, now MB
-
 
 # Check for NVMe (data_units_written)
 	elif [[ "$(echo "${smartdata5}" | jq -Mre '.nvme_smart_health_information_log.data_units_written | values')" ]]; then
@@ -3267,31 +3953,27 @@ ID241=""
 		echo "Convert Data Units tdw="$tdw
 		ssdtdw="$((($tdw * 512000) / 1000000))"	# Convert to bytes, now MB
 
-
 # Get SCSI (gigabytes_processed)
 	elif [[ "$(echo "${smartdata5}" | jq -Mre '.scsi_error_counter_log.write.gigabytes_processed | values')" ]]; then
 		tdw="$(echo "${smartdata5}" | jq -Mre '.scsi_error_counter_log.write.gigabytes_processed | values' | cut -d'.' -f1)"
 		echo "Convert SCSI tdw="$tdw
 		ssdtdw="$(( $tdw * 1000 ))"	# Default is GB, * 1000 to make MB
 
-
 # Get Total Write GiB (Total_Writes_GiB)
-	elif [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.name == "Total_Writes_GiB") | .raw.value | values')" ]]; then
-		tdw="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.name == "Total_Writes_GiB") | .raw.value | values' | cut -d'.' -f1)"
+	elif [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.name == "Total_Writes_GiB") | .raw.value | values')" ]]; then
+		tdw="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.name == "Total_Writes_GiB") | .raw.value | values' | cut -d'.' -f1)"
 		echo "Convert Total Write GiB tdw="$tdw
 		ssdtdw="$((( $tdw * 1074 ) / 1000000 ))"  # Convert to bytes, now MB
 
-
 # Check for some SSDs (Total_Writes_32MiB)
-	elif [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.name == "Host_Writes_32MiB") | .raw.value | values')" ]]; then
-		tdw="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.name == "Host_Writes_32MiB") | .raw.value | values' | cut -d'.' -f1)"
+	elif [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.name == "Host_Writes_32MiB") | .raw.value | values')" ]]; then
+		tdw="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.name == "Host_Writes_32MiB") | .raw.value | values' | cut -d'.' -f1)"
 		echo "Convert Total Writes 32 MiB tdw="$tdw
 		ssdtdw="$((( $tdw * 33554432 ) / 1000000 ))"		# Convert to bytes, now MB
 
-
-	elif [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.id == 241) | .raw.value | values')" ]]; then
+	elif [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.id == 241) | .raw.value | values')" ]]; then
 		if [[ "$(echo "${smartdata5}" | grep -i "lba")" ]]; then
-			tdw="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[] | select(.id == 241) | .raw.value | values' | cut -d'.' -f1)"
+			tdw="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.id == 241) | .raw.value | values' | cut -d'.' -f1)"
 			if [[ $model_family == *"SandForce"* ]]; then
 		echo "Convert SandForce tdw="$tdw
 				ssdtdw="$(( $tdw * 1000 ))"		# Sandforce reports in GB, now MB
@@ -3334,10 +4016,8 @@ ID241=""
 
 		if [[ "$(echo "$smartdata" | grep "Multi_Zone_Error_Rate" | awk '{print $10}')" ]]; then
 			multiZone="$(echo "$smartdata" | grep "Multi_Zone_Error_Rate" | awk '{print $10 + 0}')"; fi
-
-		# May not need anymore because of step above...	if [[ "$(echo "$smartdata" | grep "Reallocated_Event_Count" | awk '{print $10}')" ]]; then
-		#	reAllocEvent="$(echo "$smartdata" | grep "Reallocated_Event_Count" | awk '{print $10}')"; fi
 	fi
+
 
 	if [[ $crcErrors == "" ]]; then
 		if [[ "$(echo "$smartdata" | grep "Interface CRC Errors" | awk '{print $4}')" ]]; then
@@ -3347,6 +4027,8 @@ ID241=""
 	if [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_data.self_test.status.remaining_percent | values')" ]]; then
 		smarttesting="$(echo "${smartdata5}" | jq -Mre '.ata_smart_data.self_test.status.remaining_percent | values')"
 	fi
+	
+	### ADD CHECKING THE SECOND LINE FOR TEST PASS/FAIL FOR THE FOLLOWING LASTTESTSTATUSPASS VARIABLE
 
 	lastTestStatusPass="true"  # Setup default, a failure can change it.
 
@@ -3355,18 +4037,28 @@ ID241=""
 		lastTestType="$(echo "${smartdata5}" | jq -Mre '.ata_smart_self_test_log.extended.table[0].type.string | values')"
 		lastTestStatus="$(echo "${smartdata5}" | jq -Mre '.ata_smart_self_test_log.extended.table[0].status.string | values')"
 		lastTestStatusPass="$(echo "${smartdata5}" | jq -Mre '.ata_smart_self_test_log.extended.table[0].status.passed | values')"
-
+		if [[ $lastTestStatusPass == "true" ]]; then		# If the last test passed, check the previous test as well.
+			lastTestStatusPass="$(echo "${smartdata5}" | jq -Mre '.ata_smart_self_test_log.extended.table[1].status.passed | values')"
+#			echo "Checking Previous Test Pass"
+		fi
+		
 	elif [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_self_test_log.standard.table | values')" ]]; then
 		lastTestHours="$(echo "${smartdata5}" | jq -Mre '.ata_smart_self_test_log.standard.table[0].lifetime_hours | values')"
 		lastTestType="$(echo "${smartdata5}" | jq -Mre '.ata_smart_self_test_log.standard.table[0].type.string | values')"
 		lastTestStatus="$(echo "${smartdata5}" | jq -Mre '.ata_smart_self_test_log.standard.table[0].status.string | values')"
 		lastTestStatusPass="$(echo "${smartdata5}" | jq -Mre '.ata_smart_self_test_log.standard.table[0].status.passed | values')"
+		if [[ $lastTestStatusPass == "true" ]]; then		# If the last test passed, check the previous test as well.
+			lastTestStatusPass="$(echo "${smartdata5}" | jq -Mre '.ata_smart_self_test_log.standard.table[1].status.passed | values')"
+		fi
 
 	elif [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_selective_self_test_log.table | values')" ]]; then
 		lastTestHours="$(echo "${smartdata5}" | jq -Mre '.ata_smart_selective_self_test_log.table[0].lifetime_hours | values')"
 		lastTestType="$(echo "${smartdata5}" | jq -Mre '.ata_smart_selective_self_test_log.table[0].status.string | values')"
 		lastTestStatus="$(echo "${smartdata5}" | jq -Mre '.ata_smart_selective_self_test_log.table[0].status.string | values')"     
 		lastTestStatusPass="$(echo "${smartdata5}" | jq -Mre '.ata_smart_selective_self_test_log.table[0].status.passed | values')"
+		if [[ $lastTestStatusPass == "true" ]]; then		# If the last test passed, check the previous test as well.
+			lastTestStatusPass="$(echo "${smartdata5}" | jq -Mre '.ata_smart_selective_self_test_log.table[1].status.passed | values')"
+		fi
 
 # New NVMe to hopefully capture testing % in progress
 	elif [[ "$(echo "${smartdata5}" | jq -Mre '.nvme_self_test_log | values')" ]]; then
@@ -3381,13 +4073,21 @@ ID241=""
 		lastTestStatusPass="$(echo "${smartdata5}" | jq -Mre '.nvme_self_test_log.table[0].self_test_result.value | values')"
 		if [[ $lastTestStatusPass == 0 ]]; then lastTestStatusPass="true"; fi
 
+		if [[ $lastTestStatusPass == "true" ]]; then		# If the last test passed, check the previous test as well.
+			lastTestStatusPass="$(echo "${smartdata5}" | jq -Mre '.nvme_self_test_log.table[1].self_test_result.value | values')"
+			if [[ $lastTestStatusPass == 0 ]]; then lastTestStatusPass="true"; fi
+		fi
+
 	elif [[ "$(echo "${smartdata5}" | jq -Mre '.nvme_self_test_log.table | values')" ]]; then
 		lastTestHours="$(echo "${smartdata5}" | jq -Mre '.nvme_self_test_log.table[0].power_on_hours | values')"
 		lastTestType="$(echo "${smartdata5}" | jq -Mre '.nvme_self_test_log.table[0].self_test_code.string | values')"
 		lastTestStatus="$(echo "${smartdata5}" | jq -Mre '.nvme_self_test_log.table[0].self_test_result.string | values')"
 		lastTestStatusPass="$(echo "${smartdata5}" | jq -Mre '.nvme_self_test_log.table[0].self_test_result.value | values')"
 		if [[ $lastTestStatusPass == 0 ]]; then lastTestStatusPass="true"; fi
-
+		if [[ $lastTestStatusPass == "true" ]]; then		# If the last test passed, check the previous test as well.
+			lastTestStatusPass="$(echo "${smartdata5}" | jq -Mre '.nvme_self_test_log.table[1].self_test_result.value | values')"
+			if [[ $lastTestStatusPass == 0 ]]; then lastTestStatusPass="true"; fi
+		fi
 
 ################ REMOVE THIS SECTION WHEN SMARTMONTOOLS 7.4 IS INCORPORATED INTO TRUENAS ########################
 
@@ -3400,8 +4100,16 @@ ID241=""
 				if [[ "$temptest" == "" ]]; then
 					lastTestStatusPass="false"
 				else
-					lastTestStatusPass="true"
+			#		lastTestStatusPass="true"
+					lastTestStatus="$(nvmecontrol logpage -p 0x06 ${drive} | grep -m 1 "1]" | cut -d ' ' -f5-10)"
+					temptest="$(echo $lastTestStatus | grep "without")"
+					if [[ "$temptest" == "" ]]; then
+						lastTestStatusPass="false"
+					else
+						lastTestStatusPass="true"
+					fi
 				fi
+			
 				LTH_HEX="0x$(nvmecontrol logpage -p 0x06 ${drive} -x | cut -d " " -f 4 | head -1)xFF"
 				lastTestHours=$(printf "%d\n" $LTH_HEX)
 			fi > /dev/null 2<&1
@@ -3424,10 +4132,18 @@ ID241=""
 				if [[ $lastTestStatus == 0 ]]; then
 					lastTestStatus="Completed without error"
 					lastTestStatusPass="true"
+					if [[ "$(nvme self-test-log --output-format=json /dev/${drive} | grep -m 2 "Self test result" | tail -n1 | cut -d ':' -f2 | cut -d ',' -f1 | xargs)" != 0 ]]; then
+						lastTestStatusPass="false"
+					fi
+					
 				else
 					lastTestStatus="Failure or Abort"
 					lastTestStatusPass="false"
 				fi
+				
+				
+				
+				
 # Get Last Self Test Hours
 				lastTestHours="$(nvme self-test-log --output-format=json /dev/${drive} | grep -m 1 "Power on hours" | cut -d ':' -f2 | cut -d ',' -f1)"
 			fi > /dev/null 2<&1
@@ -3435,6 +4151,7 @@ ID241=""
 
 ####################################################### NVME SMARTMONTOOLS ALTERNATE END OF CODE #################################################
 	fi
+
 	if [[ $lastTestStatus == "" ]]; then
 		if [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_data.self_test.status.string | values')" ]]; then
 			lastTestStatus="$(echo "${smartdata5}" | jq -Mre '.ata_smart_data.self_test.status.string | values')"
@@ -3471,9 +4188,6 @@ ID241=""
 	# Setup for a Zero Hour Report, Yes in case someone has a zero hour value, the division will fail.
 	if [[ $onHours == "" ]]; then onHours=0; fi
 	if [[ $onHours == "0" ]]; then onHours=1; json_error_log=$json_error_log$'\n'"$(echo $1" "$serial" .power_on_time.hours = 0")"; logfile_caution=$logfile_caution"$(printf "Drive "$serial" actual Power On Hours = 0, added 1 hour so the script doesn't fail, if this persists it may be a script failure or unrecognized drive.<br>")"; fi > /dev/null 2<&1
-
-
-
 
 # Adjust for a drive that does report a passed SMART Test but not the hour.
 	if [[ $lastTestHours == "0" ]] && [[ $lastTestStatusPass == "true" ]]; then
@@ -3598,7 +4312,6 @@ ID241=""
 	if [[ "$multiZone" != "" ]] && [[ "$multiZone" != "0" ]]; then convert_to_decimal $multiZone; multiZone=$Return_Value; fi
 	if [[ "$mediaErrors" != "" ]] && [[ "$mediaErrors" != "0" ]] && [[ "$mediaErrors" != "$Non_Exist_Value" ]]; then convert_to_decimal $mediaErrors; mediaErrors=$Return_Value; fi
 
-
 	if [[ "$wearLevel" != "" ]] && [[ "$wearLevel" != "0" ]]; then convert_to_decimal $wearLevel; wearLevel=$Return_Value; fi
 	if [[ "$tdw" != "" ]] && [[ "$tdw" != "0" ]] && [[ "$tdw" != "$Non_Exist_Value" ]]; then convert_to_decimal $tdw; tdw=$Return_Value; fi
 
@@ -3635,24 +4348,31 @@ if [[ "$reAlloc" != "" ]] && [[ "$reAlloc" != "0" ]]; then convert_to_decimal $r
 			temp_max="43"
 		fi
 	fi
+	# Grab partition data too
 
-		# Save data for -dump routine
-		if [[ "$dump_all" != "0" ]]; then
-			get_json_data
-			if [[ "$dump_all" == "4" ]]; then	# Dump '-dump emailextra'
-			"$(echo "$smartdata" > /tmp/${tempfilepath}${drive}_${serial}_a.txt)" 2> /dev/null
-			"$(smartctl -x /dev/"$drive" > /tmp/${tempfilepath}${drive}_${serial}_x.txt)" 2> /dev/null
-			fi
+	if [[ $Partition_Backup == "true" ]] && [[ $1 != "NVM" ]]; then
+		if ! [[ "$(find /usr/ -name "sgdisk")" ]]; then
+			echo "sgdisk not found" >> "$logfile_caution"
+		else		
+		sgdisk -b="/tmp/${tempfilepath}_${drive}_${serial}.partition" /dev/${drive} > /dev/null 2<&1
 		fi
+	fi
+
+	get_json_data		# Save data for -dump routine
+	if [[ "$dump_all" == "4" ]]; then	# Dump '-dump emailextra | emailall'
+		"$(echo "$smartdata" > /tmp/${tempfilepath}${drive}_$"{serial}"_a.txt)" 2> /dev/null
+		"$(smartctl -x /dev/"$drive" > /tmp/${tempfilepath}${drive}_$"{serial}"_x.txt)" 2> /dev/null
+	fi
 
 # Add a line return between drives
 	json_error_log=$json_error_log$'\n'
 
 	}
 
+# Check if power on time is present, if not, run smart short selftest or set power_on_time equal to last test run.
+# I DON'T THINK WE DO IT ALL, WE ARE CHECKING THE TIME, RUNNING A TEST IF NEEDED, BUT WERE IS THE SECOND CHECK AFTER THE SMART TEST IS RUN?
+Check_power_on_time ()
 
-Check_power_on_time ()		# Check if power on time is present, if not, run smart short selftest or set power_on_time equal to last test run.
-# I DONT THINK WE DO IT ALL, WE ARE CHECKING THE TIME, RUNNING A TEST IF NEEDED, BUT WERE IS THE SECOND CHECK AFTER THE SMART TEST IS RUN?
 	{
 	# Check every drive.
 	for drive in ${smartdrives[@]}; do
@@ -3698,13 +4418,14 @@ Check_power_on_time ()		# Check if power on time is present, if not, run smart s
 		sleep 120
 		echo "Continuing"
 	fi
+
 	}
 
 ########## GENERATE TABLE ##########
 # Call function with generate_table "HDD|SSD|NVM"
 
 generate_table () {
-
+if [[ $Debug_Steps == "true" ]]; then echo "generate_table"; fi
 if [[ "$Monitor" == "true" ]]; then return; fi
 
 	detail_level="$1"
@@ -3742,7 +4463,7 @@ if [[ "$Monitor" == "true" ]]; then return; fi
 	if [[ "$1" == "HDD" ]] && [[ "$HDD_Total_Data_Written" == "true" ]]; then  ((Columns=Columns+1)); fi;
 	if [[ "$1" == "HDD" ]] && [[ "$HDD_Last_Test_Age" == "true" ]]; then ((Columns=Columns+1)); fi;
 	if [[ "$1" == "HDD" ]] && [[ "$HDD_Last_Test_Type" == "true" ]]; then ((Columns=Columns+1)); fi;
-	if [[ "$1" == "HDD" ]] && [[ "$HDD_TDW_Month" == "true" ]]; then ((Columns=Columns+1)); fi;
+	if [[ "$1" == "HDD" ]] && [[ "$HDD_Total_Data_Written_Month" == "true" ]]; then ((Columns=Columns+1)); fi;
 
 	# Count for SSD
 	if [[ "$1" == "SSD" ]] && [[ "$SSD_Device_ID" == "true" ]]; then ((Columns=Columns+1)); fi;
@@ -3764,7 +4485,7 @@ if [[ "$Monitor" == "true" ]]; then return; fi
 	if [[ "$1" == "SSD" ]] && [[ "$SSD_Total_Data_Written" == "true" ]]; then  ((Columns=Columns+1)); fi;
 	if [[ "$1" == "SSD" ]] && [[ "$SSD_Last_Test_Age" == "true" ]]; then ((Columns=Columns+1)); fi;
 	if [[ "$1" == "SSD" ]] && [[ "$SSD_Last_Test_Type" == "true" ]]; then ((Columns=Columns+1)); fi;
-	if [[ "$1" == "SSD" ]] && [[ "$SSD_TDW_Month" == "true" ]]; then ((Columns=Columns+1)); fi;
+	if [[ "$1" == "SSD" ]] && [[ "$SSD_Total_Data_Written_Month" == "true" ]]; then ((Columns=Columns+1)); fi;
 
 	# Count for NVMe
 	if [[ "$1" == "NVM" ]] && [[ "$NVM_Device_ID" == "true" ]]; then ((Columns=Columns+1)); fi;
@@ -3784,8 +4505,7 @@ if [[ "$Monitor" == "true" ]]; then return; fi
 	if [[ "$1" == "NVM" ]] && [[ "$NVM_Last_Test_Age" == "true" ]]; then ((Columns=Columns+1)); fi;
 	if [[ "$1" == "NVM" ]] && [[ "$NVM_Last_Test_Type" == "true" ]]; then ((Columns=Columns+1)); fi;
 	if [[ "$1" == "NVM" ]] && [[ "$NVM_Total_Data_Written" == "true" ]]; then ((Columns=Columns+1)); fi;
-	if [[ "$1" == "NVM" ]] && [[ "$NVM_TDW_Month" == "true" ]]; then ((Columns=Columns+1)); fi;
-
+	if [[ "$1" == "NVM" ]] && [[ "$NVM_Total_Data_Written_Month" == "true" ]]; then ((Columns=Columns+1)); fi;
 
 	(
 		# Write HTML table headers to log file
@@ -3885,21 +4605,21 @@ if [[ "$Monitor" == "true" ]]; then return; fi
 		if [[ "$1" == "SSD" ]] && [[ "$SSD_Total_Data_Written" == "true" ]]; then echo "  <th style=\"text-align:center; width:100px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$SSD_Total_Data_Written_Title"</th>"; fi
 		if [[ "$1" == "NVM" ]] && [[ "$NVM_Total_Data_Written" == "true" ]]; then echo "  <th style=\"text-align:center; width:100px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$NVM_Total_Data_Written_Title"</th>"; fi
 
-		if [[ "$1" == "HDD" ]] && [[ "$HDD_TDW_Month" == "true" ]]; then echo "  <th style=\"text-align:center; width:100px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$HDD_TDW_Month_Title"</th>"; fi
-		if [[ "$1" == "SSD" ]] && [[ "$SSD_TDW_Month" == "true" ]]; then echo "  <th style=\"text-align:center; width:100px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$SSD_TDW_Month_Title"</th>"; fi
-		if [[ "$1" == "NVM" ]] && [[ "$NVM_TDW_Month" == "true" ]]; then echo "  <th style=\"text-align:center; width:100px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$NVM_TDW_Month_Title"</th>"; fi
+		if [[ "$1" == "HDD" ]] && [[ "$HDD_Total_Data_Written_Month" == "true" ]]; then echo "  <th style=\"text-align:center; width:100px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$HDD_Total_Data_Written_Month_Title"</th>"; fi
+		if [[ "$1" == "SSD" ]] && [[ "$SSD_Total_Data_Written_Month" == "true" ]]; then echo "  <th style=\"text-align:center; width:100px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$SSD_Total_Data_Written_Month_Title"</th>"; fi
+		if [[ "$1" == "NVM" ]] && [[ "$NVM_Total_Data_Written_Month" == "true" ]]; then echo "  <th style=\"text-align:center; width:100px; height:60px; border:1px solid black; border-collapse:collapse; font-family:courier;\">"$NVM_Total_Data_Written_Month_Title"</th>"; fi
 
 		echo "</tr>"
 
-
 	) >> "$logfile"
+
 	}
 
 ########## WRITE TABLE ##########
 # Call function with end_table "HDD|SSD|NVM"
 
 write_table () {
-
+if [[ $Debug_Steps == "true" ]]; then echo "write_table"; fi
 if [[ "$Monitor" == "true" ]]; then return; fi
 
 	(
@@ -3946,7 +4666,9 @@ if [[ "$Monitor" == "true" ]]; then return; fi
 # DRIVE TEMPERATURE - CHART
 		if [[ "$1" == "HDD" ]] && [[ "$HDD_Drive_Temp" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s$TempDisplay</td>\n" "$tempColor" "$temp"; fi
 		if [[ "$1" == "SSD" ]] && [[ "$SSD_Drive_Temp" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s$TempDisplay</td>\n" "$tempColor" "$temp"; fi
-		if [[ "$1" == "NVM" ]] && [[ "$NVM_Drive_Temp" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s$TempDisplay</td>\n" "$tempColor" "$temp"; fi
+		if [[ "$1" == "NVM" ]] && [[ "$NVM_Drive_Temp" == "true" ]]; then
+			if [[ $temp_sensor_0 -ne 0 ]]; then TempDisplay=$TempDisplay"<br>"$temp_sensor_0"/"$temp_sensor_1; fi
+			printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s$TempDisplay</td>\n" "$tempColor" "$temp"; fi
 
 # DRIVE TEMPERATURE MIN - CHART
 		if [[ "$1" == "HDD" ]] && [[ "$HDD_Drive_Temp_Min" == "true" ]]; then printf "<td style=\"text-align:center; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s$TempDisplaymin</td>\n" "$temp_min"; fi
@@ -4063,9 +4785,9 @@ if [[ "$onTimeColor" == "$yellowColor" ]]; then onTime=$onTime" from Last Test H
 
 
 # TOTAL DATA WRITTEN CURRENT MONTH or LAST 30 DAYS?
-		if [[ "$1" == "HDD" ]] && [[ "$HDD_TDW_Month" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$bgColor" "$tdr_num / $tdw_num"; fi
-		if [[ "$1" == "SSD" ]] && [[ "$SSD_TDW_Month" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$bgColor" "$tdr_num / $tdw_num"; fi
-		if [[ "$1" == "NVM" ]] && [[ "$NVM_TDW_Month" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$bgColor" "$tdr_num / $tdw_num"; fi
+		if [[ "$1" == "HDD" ]] && [[ "$HDD_Total_Data_Written_Month" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$bgColor" "$tdr_num / $tdw_num"; fi
+		if [[ "$1" == "SSD" ]] && [[ "$SSD_Total_Data_Written_Month" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$bgColor" "$tdr_num / $tdw_num"; fi
+		if [[ "$1" == "NVM" ]] && [[ "$NVM_Total_Data_Written_Month" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$bgColor" "$tdr_num / $tdw_num"; fi
 
 
 		echo "</tr>"
@@ -4076,7 +4798,7 @@ if [[ "$onTimeColor" == "$yellowColor" ]]; then onTime=$onTime" from Last Test H
 ########## END THE TABLE ##########
 
 end_table () {
-
+if [[ $Debug_Steps == "true" ]]; then echo "end_tablet"; fi
 if [[ "$Monitor" == "true" ]]; then return; fi
 
 	(
@@ -4099,7 +4821,7 @@ if [[ "$Monitor" == "true" ]]; then return; fi
 # Detailed Report Section (monospace text)
 
 detailed_report () {
-
+if [[ $Debug_Steps == "true" ]]; then echo "detailed_report"; fi
 # Need to add three variables
 #Enable_Messages="true"		# This will enable the Warning/Caution type messages. Default="true".
 #Enable_Zpool_Messages="true"	# This will list all 'zpool -v status' and identify drives by gptid to drive ident.  Default="true".
@@ -4114,53 +4836,72 @@ detailed_report () {
 		) >> "$logfile"
 
 		if test -e "$Config_File_Name"; then
-			echo "<b>External Configuration File in use dtd:$config_version_date </b>" >> "$logfile"
+			echo "<b>1) External Configuration File (Present) dtd:$config_version_date </b>" >> "$logfile"
 		else
-			echo "<b>No External Configuration File Exists</b>" >> "$logfile"
+			echo "<b>1) External Configuration File (Not Present)</b>" >> "$logfile"
 		fi
 
-		if [[ "$dump_all" == "3" ]]; then
+
+		if [[ "$dump_all" == "3" ]] || [[ "$dump_all" == "4" ]]; then
 			echo "<b><span style='color:darkred;'>YOU have requested '-dump email' and thus an email was sent to Joe Schmuck for analysis.<br>He will try to contact you on the sending email address.  If this is an invalid<br>email address then please send a followup email to joeschmuck2023@hotmail.com<br>Your personal information will not be shared.</span></b><br>" >> "$logfile"
 		fi
 
-		if [[ $TrueNASConfigEmailEnable == "true" ]]; then echo "<b>TrueNAS Configuration File Emailed every: $TrueNASConfigEmailDay</b>" >> "$logfile"; fi
-		if [[ $MRConfigEmailEnable == "true" ]]; then echo "<b>Multi Report Configuration File Emailed every: $MRConfigEmailDay</b>" >> "$logfile"; fi
+
 		if [[ $SDF_DataRecordEnable == "true" ]]; then
+			if [[ $statistical_data_file_created == "1" ]]; then echo "<b>-- Statistical Data File Created.</b><br>" >> "$logfile"; fi
 			if [[ "$(echo $statistical_data_file | grep "/tmp/")" ]]; then
-				echo "<b><span style='color:darkred;'>The Statistical Data File is located in the /tmp directory and is not permanent.<br>Recommend changing to a proper dataset.</span></b>" >> "$logfile"
-			fi
-
-			if [[ $statistical_data_file_created == "1" ]]; then echo "Statistical Data File Created.<br>" >> "$logfile"; fi
-
-			if [[ $SDF_DataEmail == "true" ]]; then
-				(
-				echo "<b>Statistical Log Sent on: $SDF_DataEmailDay"
-				echo "Statistical Export Log Located: $statistical_data_file</b>"				
-				) >> "$logfile"
+				echo "<b><span style='color:darkred;'>2) The Statistical Data File is located in the /tmp directory and is not permanent.<br>Recommend changing to a proper dataset.</span></b>" >> "$logfile"
 			else
-				echo "<b>Statistical Export Log Located at:</b> $statistical_data_file" >> "$logfile"
+				echo "<b>2) Statistical Data Log (Present) @ ($statistical_data_file)</b>" >> "$logfile"
 			fi
 		fi
-		echo "<b>Multipath set to: $Multipath</b>" >> "$logfile"
-		if [[ $SMR_Enable == "true" ]]; then echo "<b>SMR Checking Enabled</b>"; else echo "<b>SMR Checking Disabled</b>"; fi >> "$logfile"
+		echo " "  >> "$logfile"
+		echo "<b>Attachments:</b>" >> "$logfile"
+		if [[ $TrueNASConfigEmailEnable == "true" ]]; then echo "<b>1) TrueNAS Configuration File ($TrueNASConfigEmailDay) - (Enabled)</b>" >> "$logfile"; else echo "<b>1) TrueNAS Configuration File ($TrueNASConfigEmailDay) - (Disabled)</b>" >> "$logfile"; fi
+		if [[ $MRConfigEmailEnable == "true" ]]; then echo "<b>2) Multi Report Configuration File ($MRConfigEmailDay) - (Enabled)</b>" >> "$logfile"; else echo "<b>2) Multi Report Configuration File ($MRConfigEmailDay) - (Disabled)</b>" >> "$logfile"; fi
+		if [[ $SDF_DataEmail == "true" ]]; then echo "<b>3) Statistical Log ($SDF_DataEmailDay) - (Enabled)</b>" >> "$logfile"; else echo "<b>3) Statistical Log ($SDF_DataEmailDay) - (Disabled)</b>" >> "$logfile"; fi
 
+		if [[ $Partition_Backup == "true" ]]; then echo "<b>4) HDD/SSD Partition Backup ($TrueNASConfigEmailDay) - (Enabled)</b>" >> "$logfile"; else echo "<b>4) HDD/SSD Partition Backup ($TrueNASConfigEmailDay) - (Disabled)</b>" >> "$logfile"; fi
+
+		if [[ $dump_type != "" ]]; then echo "<b>5) Dump Files ($dump_type)</b>" >> "$logfile"; fi
+		echo " " >> "$logfile"
+		echo "<b>Checks/Tests:</b>" >> "$logfile"
+		if [[ $SMR_Enable == "true" ]]; then
+			if echo "$logfile_warning" | grep -q "SMR"; then echo "<b>1) SMR Checking - (Enabled) - WARNING</b>" >> "$logfile"; else echo "<b>1) SMR Checking - (Enabled) - No Errors Detected</b>" >> "$logfile"; fi
+		else
+			echo "<b>1) SMR Checking - (Disabled)</b>" >> "$logfile"
+		fi
 		if [[ $partition_results -gt 0 ]]; then
-			echo "<b>Partition Check was run, Possible Errors Detected</b>" >> "$logfile"
+			echo "<b>2) Partition Check - (Enabled) - Possible Errors Detected</b>" >> "$logfile"
 		elif [[ $partition_results -eq 0 ]]; then
-			echo "<b>Partition Check was run, No Errors</b>" >> "$logfile"
-		else echo "<b>Parition Check was not run</b>" >> "$logfile"
+			echo "<b>2) Partition Check - (Enabled) - No Errors Detected</b>" >> "$logfile"
+		else echo "<b>2) Partition Check - (Disabled)</b>" >> "$logfile"
 		fi
 
 		if [[ $spencer_error == "true" ]]; then
-			echo "<b>Spencer was run, Possible Errors Detected</b><br>" >> "$logfile"
+			echo "<b>3) Spencer - (Enabled) - Possible Errors Detected</b><br>" >> "$logfile"
 		elif [[ $spencer_error == "false" ]]; then
-			echo "<b>Spencer was run, No Errors</b><br>" >> "$logfile"
-		else echo "<b>Spencer was not run</b><br>" >> "$logfile"
-		fi
+			echo "<b>3) Spencer - (Enabled) - No Errors</b>" >> "$logfile"
+		elif [[ $spencer_error == "notinstalled" ]]; then
+			echo "<b>3) Spencer - (Not Installed)</b>" >> "$logfile"
+		else
+			echo "<b>3) Spencer - (Disabled)</b>" >> "$logfile"
+		fi		
 
-		if [ -f "/tmp/selftestlog" ]; then	# If there is a selftestlog file, then we did some selftests
-			cat /tmp/selftestlog >> "$logfile"
-			echo "<br>" >> "$logfile"
+		if [[ $External_SMART_Testing == "true" ]]; then
+			echo "<b>4) S.M.A.R.T Testing External File - (Enabled)</b>" >> "$logfile"
+			if [ -f "/tmp/smartdrive_selftest_text.txt" ]; then
+				cat /tmp/smartdrive_selftest_text.txt >> "$logfile"
+				rm /tmp/smartdrive_selftest_text.txt				# Let's clean it up.
+			else
+				if [[ $No_External_File == "true" ]]; then
+					echo "   The external file was not present.<br>" >> "$logfile"
+				else
+					echo "   No '/tmp/smartdrive_selftest_text.txt' data file<br>" >> "$logfile"
+				fi
+			fi
+		else
+			echo "<b>4) S.M.A.R.T Testing External File - (Disabled)</b><br>" >> "$logfile"
 		fi
 
 	fi
@@ -4222,95 +4963,86 @@ detailed_report () {
 	) >> "$logfile"
 
 	if [[ $Monitor == "false" ]]; then
-
 		if [[ $DisableRAWdata != "true" ]]; then
 			### zpool status for each pool
 			(
 			IFS=$'\n'
 			for pool in $pools; do
+			#		drive_read_error_chk=0
+			#		drive_write_error_chk=0
+			#		drive_cksum_error_chk=0
+			this_disk_errors=""
 				###### FREEBSD VERSION OF THIS SECTION
-
 				if [ $softver != "Linux" ]; then
 					drives_in_gptid=$(zpool status "$pool" | grep "gptid" | awk '{print $1}')  # GPTID
+
 
 					if [[ $(zpool status "$pool" | grep "nvd") ]]; then
 						drives_in_gptid=$drives_in_gptid$(zpool status "$pool" | grep "nvd" | awk '{print $1}' | cut -d " " -f1)  # NVM + partition
 					fi
-
 
 					if [[ $(zpool status "$pool" | grep -v "data" | grep " da") ]]; then
 						drive_da=$(zpool status "$pool" | grep -v "data" | grep " da" | awk '{print $1}' | cut -d " " -f1 | cut -d "p" -f1)  # daX - partition
 						drive_da=$(glabel status | tail -n +2 | grep " $drive_da" | awk '{print $1}')
 						drives_in_gptid=$drives_in_gptid$'\n'$drive_da
 					fi
-	# WORKS DOWN TO HERE
+
 					if [[ $(zpool status "$pool" | grep -v "data" | grep " ada") ]]; then
 						drive_da=$(zpool status "$pool" | grep -v "data" | grep " ada" | awk '{print $1}' | cut -d " " -f1)  # adaX + partition
-#echo "drive_da1="$drive_da
-				drive_da=$(gpart list | grep -A 10 "$drive_da" | grep "rawuuid" | cut -d':' -f2 | cut -d' ' -f2)
-#echo "drive_da2="$drive_da
+						drive_da=$(gpart list | grep -A 10 "$drive_da" | grep "rawuuid" | cut -d':' -f2 | cut -d' ' -f2)
 						drives_in_gptid=$drives_in_gptid$'\n'$drive_da
-#echo "drives_in_gptid="$drives_in_gptid
 					fi
 
-				driveit=0
-	 			(
+					driveit=0
+	 				(
 					# Create a simple header and drop the output of zpool status -v
 					echo "<b>########## ZPool status report for ${pool} ##########</b>"
 					zpool status -v "$pool"
 					zpool_list=$(zpool status -v "$pool")
 					zpool_glabel=$(glabel status)
 					for longgptid in $drives_in_gptid; do
-#echo "L1="$longgptid
-		if [[ $(echo $zpool_list | grep "$longgptid") ]]; then   # gptid in glabel
-
+						if [[ $(echo $zpool_list | grep "$longgptid") ]]; then   # gptid in glabel
 							drive_ident=$(glabel status | tail -n +2 | grep "$longgptid" | awk '{print $1 " -> " $3}' | cut -d '/' -f2 | cut -d 'p' -f1)
 							drive_name=$(glabel status | tail -n +2 | grep "$longgptid" | awk '{print $3}' | cut -d '/' -f2 | cut -d 'p' -f1)
-#echo "Loop 1, In glabel drive_ident="$drive_ident
-#echo "drive_name="$drive_name
-		else   # Not in glabel
-			longgptid_temp=$(echo $longgptid | cut -d '/' -f2)
-			drive_name=$(gpart list | grep -B 7 "$longgptid_temp" | grep "Name" | awk '{print $3}' | cut -d "p" -f1)
-			drive_ident=$longgptid" -> "$drive_name
-#echo "Loop 2 Not in glabel, drive_ident="$drive_ident
-#echo "drive_name="$drive_name
-		fi
-							if [[ "$drive_name" == *"nvd"* ]]; then	drive_name="nvme"$(echo ${drive_name} | cut -d'd' -f2); fi
-							serial_temp=$(smartctl -a "/dev/"$drive_name --json=u | jq -Mre '.serial_number | values')
-							if [[ $serial_temp == "" ]]; then serial_temp=$Non_Exist_Value; fi
-							virtual_drive_test=$(smartctl -a "/dev/"$drive_name | grep -i "virtual")
-							if [[ $virtual_drive_test != "" ]]; then
-								drive_ident=$(echo $drive_ident | cut -d'/' -f2)
-								drive_ident="<b>Virtual Drive</b> "$drive_ident
-							fi
+						else   # Not in glabel
+							longgptid_temp=$(echo $longgptid | cut -d '/' -f2)
+							drive_name=$(gpart list | grep -B 7 "$longgptid_temp" | grep "Name" | awk '{print $3}' | cut -d "p" -f1)
+							drive_ident=$longgptid" -> "$drive_name
+						fi
+						if [[ "$drive_name" == *"nvd"* ]]; then	drive_name="nvme"$(echo ${drive_name} | cut -d'd' -f2); fi
+						serial_temp=$(smartctl -a "/dev/"$drive_name --json=u | jq -Mre '.serial_number | values' | tr -d ' ')
+						if [[ $serial_temp == "" ]]; then serial_temp=$Non_Exist_Value; fi
+						virtual_drive_test=$(smartctl -a "/dev/"$drive_name | grep -i "virtual")
+						if [[ $virtual_drive_test != "" ]]; then
+							drive_ident=$(echo $drive_ident | cut -d'/' -f2)
+							drive_ident="<b>Virtual Drive</b> "$drive_ident
+						fi
+# THIS DOES NOT WORK UNLESS THE DRIVES HAVE A VALID GPTID, SO 99% OF THE TIME.						
+						drive_read_error_chk=$(zpool status "$pool" | grep "$longgptid" | awk '{print $3}')  # READ ERRORS
+						if [[ $drive_read_error_chk == "" ]]; then drive_read_error_chk="0"; fi
+						drive_write_error_chk=$(zpool status "$pool" | grep "$longgptid" | awk '{print $4}')  # WRITE ERRORS
+						if [[ $drive_write_error_chk == "" ]]; then drive_write_error_chk="0"; fi
+						drive_cksum_error_chk=$(zpool status "$pool" | grep "$longgptid" | awk '{print $5}')  # CKSUM ERRORS
+						if [[ $drive_cksum_error_chk == "" ]]; then drive_cksum_error_chk="0"; fi
+
+						if [[ $drive_read_error_chk != "0" ]] || [[ $drive_write_error_chk != "0" ]] || [[ $drive_cksum_error_chk != "0" ]]; then this_disk_errors=" PROBLEM"; else this_disk_errors=""; fi						
 
 						if [[ $drive_ident != "" ]]; then
 							if [[ $driveit == "0" ]]; then echo "<br>Drives for this pool are listed in order:"; driveit="1"; fi
-							echo $drive_ident" -> S/N:"$serial_temp
+							echo $drive_ident" -> S/N:"$serial_temp" "$this_disk_errors
 						fi
 					done
 					echo "<br>"
-				) >> "$logfile"
+					) >> "$logfile"
 				fi
 
 				#### LINUX VERSION OF THIS SECTION
 				if [ $softver == "Linux" ]; then
-                     			drives_in_gptid=$(lsblk -o +PARTUUID,NAME,LABEL | grep -w "$pool" | awk -F" " '{print $7}' | grep "........-")
-
-			#		if [[ $(zpool status "$pool" | grep -w "special") ]]; then
-			#			drives_in_gptid=$drives_in_gptid$'\n'$(zpool status "$pool" | grep -A 1 "special" | tail -1 | awk '{print $1}')
-			#		fi
-
-			#		if [[ $(zpool status "$pool" | grep -w "cache") ]]; then
-			#			drives_in_gptid=$drives_in_gptid$'\n'$(zpool status "$pool" | grep -A 1 "cache" | tail -1 | awk '{print $1}')
-			#		fi
-
-			#		if [[ $(zpool status "$pool" | grep -w "spares") ]]; then
-			#			drives_in_gptid=$drives_in_gptid$'\n'$(zpool status "$pool" | grep -A 1 "spares" | tail -1 | awk '{print $1}')
-			#		fi
-
-				driveit=0
-	 			(
+    #      drives_in_gptid=$(lsblk -o +PARTUUID,NAME,LABEL | grep -w "$pool" | awk -F" " '{print $7}' | grep "........-")
+								
+					drives_in_gptid=$(lsblk -o +PARTUUID,NAME,LABEL | grep -P "(^|[^-*&$!])\b$pool\b" | awk -F" " '{print $7}' | grep "........-")			
+					driveit=0
+	 				(
 					# Create a simple header and drop the output of zpool status -v
 					echo "<b>########## ZPool status report for ${pool} ##########</b>"
 					zpool status -v "$pool"
@@ -4318,7 +5050,7 @@ detailed_report () {
 					for longgptid in $drives_in_gptid; do
 						drive_ident=$(lsblk -o +PARTUUID,NAME,LABEL | grep -w "$longgptid" | awk -F" " '{print $7 " -> " $8}')
 						drive_name=$(lsblk -o +PARTUUID,NAME,LABEL | grep -w "$longgptid" | awk -F" " '{print $8}')
-						serial_temp=$(smartctl -a "/dev/"$drive_name --json=u | jq -Mre '.serial_number | values')
+						serial_temp=$(smartctl -a "/dev/"$drive_name --json=u | jq -Mre '.serial_number | values' | tr -d ' ')
 
 						if [[ $serial_temp == "" ]]; then serial_temp=$Non_Exist_Value; fi
 						virtual_drive_test=$(smartctl -a "/dev/"$drive_name | grep -i "virtual")
@@ -4326,14 +5058,23 @@ detailed_report () {
 						   drive_ident="<b>Virtual Drive</b> "$drive_ident
 						fi
 
+# THIS DOES NOT WORK UNLESS THE DRIVES HAVE A VALID GPTID, SO 99% OF THE TIME.						
+						drive_read_error_chk=$(zpool status "$pool" | grep "$longgptid" | awk '{print $3}')  # READ ERRORS
+						if [[ $drive_read_error_chk == "" ]]; then drive_read_error_chk="0"; fi
+						drive_write_error_chk=$(zpool status "$pool" | grep "$longgptid" | awk '{print $4}')  # WRITE ERRORS
+						if [[ $drive_write_error_chk == "" ]]; then drive_write_error_chk="0"; fi
+						drive_cksum_error_chk=$(zpool status "$pool" | grep "$longgptid" | awk '{print $5}')  # CKSUM ERRORS
+						if [[ $drive_cksum_error_chk == "" ]]; then drive_cksum_error_chk="0"; fi
+						if [[ $drive_read_error_chk != "0" ]] || [[ $drive_write_error_chk != "0" ]] || [[ $drive_cksum_error_chk != "0" ]]; then this_disk_errors=" PROBLEM"; else this_disk_errors=""; fi	
+
 						if [[ $drive_ident != "" ]]; then
 							if [[ $driveit == "0" ]]; then echo "<br>Drives for this pool are listed below:"; driveit="1"; fi
-							echo $drive_ident" -> S/N:"$serial_temp
+							echo $drive_ident" -> S/N:"$serial_temp" "$this_disk_errors
 							drive_ident=""
 						fi
 					done
 					echo "<br>"
-				) >> "$logfile"
+					) >> "$logfile"
 				fi
 			done
 			)
@@ -4345,12 +5086,13 @@ detailed_report () {
 
 			for drive in $drives; do
 				if [[ $drive == "TEST" ]] ; then
+
 					testfileX="$( cat "${testfile}" )"
 					modelnumber="$(echo "${testfileX}" | jq -Mre '.model_name | values')"
-					serial="$(echo "${testfileX}" | jq -Mre '.serial_number | values')"
+					serial="$(echo "${testfileX}" | jq -Mre '.serial_number | values' | tr -d ' ')"
 
 					(
-						echo "<br><b>########## FULL TESTFILE -- SMART status report for drive ${drive} (${modelnumber}: ${serial}) ##########</b>" 
+						echo "<br><b>########## FULL TESTFILE -- SMART status report for drive ${drive} (${modelnumber}: ${serial}) ##########</b>"
 						echo "<br>Data not available in test mode"
 					) >> "$logfile"
 				else
@@ -4367,7 +5109,7 @@ detailed_report () {
 
 					modelnumber="$(echo "${smartdata5}" | jq -Mre '.model_name | values')"
 
-					serial="$(echo "${smartdata5}" | jq -Mre '.serial_number | values')"
+					serial="$(echo "${smartdata5}" | jq -Mre '.serial_number | values' | tr -d ' ')"
 
 					test_ata_error="$(smartctl -H -A -l error /dev/"$drive" | grep "ATA Error Count" | awk '{print $4}')" 
 
@@ -4470,7 +5212,8 @@ detailed_report () {
 # It will list all drives where Non-SMART is true and remove devices starting with "cd", for example "cd0"
 
 non_smart_report () {
-if [[ "$Monitor" == "true" ]]; then return; fi
+if [[ $Debug_Steps == "true" ]]; then echo "non_smart_report"; fi
+	if [[ "$Monitor" == "true" ]]; then return; fi
 
 	drives=$nonsmartdrives
 	if [ $ReportNonSMART == "true" ]; then 
@@ -4482,7 +5225,6 @@ if [[ "$Monitor" == "true" ]]; then return; fi
 				smartdata="$(smartctl -a /dev/"$drive")"
 				smartdata5="$(smartctl -x --json=u /dev/"$drive")"
 
-
 				if [[ "$(echo ${smartdata5} | grep -i "SCSI")" ]]; then	# First, is this SCSI interface.
 					if [[ "$(smartctl -d sat -x --json=u /dev/"$drive" | grep -i "serial_number")" ]]; then  # Is this SCSI to ATA Translation
 						smartdata5="$(smartctl -d sat -x --json=u /dev/"$drive")"	# Yes, then reload the newer SMART data
@@ -4490,7 +5232,7 @@ if [[ "$Monitor" == "true" ]]; then return; fi
 					fi
 				fi
 
-				serial="$(echo "${smartdata5}" | jq -Mre '.serial_number | values')"
+				serial="$(echo "${smartdata5}" | jq -Mre '.serial_number | values' | tr -d ' ')"
 				if [[ $serial == "" ]]; then
 					serial="$(echo "$smartdata" | grep "Serial Number" | awk '{print $3}')"
 				fi
@@ -4498,6 +5240,7 @@ if [[ "$Monitor" == "true" ]]; then return; fi
 				modelnumber="$(echo "${modelnumber}" | sed -e 's/\ *$//g')"
 				if [[ $serial == "" ]]; then serial="N/A"; fi
 				if [[ $modelnumber == "" ]]; then modelnumber="N/A"; fi
+
 				(
 					echo "<br>"
 					echo "<b>########## NON-SMART status report for ${drive} drive (${modelnumber} : ${serial}) ##########</b>"
@@ -4513,12 +5256,13 @@ if [[ "$Monitor" == "true" ]]; then return; fi
 			fi
 		done
 	fi
+
 	}
 
 ########## REMOVE UN-NEEDED JUNK AND FINALIZE EMAIL MESSAGE END ##########
 
 remove_junk_report () {
- 
+ if [[ $Debug_Steps == "true" ]]; then echo "remove_junk_report"; fi
 	### Remove some un-needed junk from the output
 	sed -i -e '/smartctl/d' "$logfile"
 	sed -i -e '/Copyright/d' "$logfile"
@@ -4526,10 +5270,27 @@ remove_junk_report () {
 	sed -i -e '/SMART Attributes Data/d' "$logfile"
 	sed -i -e '/Vendor Specific SMART/d' "$logfile"
 	sed -i -e '/SMART Error Log Version/d' "$logfile"
+
+	}
+	
+tar_attachments () {
+if [[ $Debug_Steps == "true" ]]; then echo "tar_attachments"; fi
+#### This will tar all -dump file attachments.  Not used for normal operations, only -dump operations.
+
+	# Read all the attachments and tar them.
+	# Input file is /tmp/attachment_files.txt
+	# Format is file $2 = path/name and $3 = file to be named, ignore $1.
+	
+	while read line; do
+		tar_file=$(echo "$line" | awk '{print $2}')
+		tar -rf "/tmp/dump.tar" $tar_file > /dev/null 2<&1
+	done < /tmp/attachment_files.txt
+	echo "create_attachment_file /tmp/dump.tar dump.tar" > /tmp/attachment_files.txt
+
 	}
 
 attach_files () {
-
+if [[ $Debug_Steps == "true" ]]; then echo "attach_files"; fi
 #### CAN THE REST OF THIS FUNCTION THIS BE MOVED INTO A SINGLE SECTION FOR ATTACHMENTS ?????   ######
 	doit="false"
 
@@ -4537,17 +5298,19 @@ attach_files () {
 		output_x=0
 		# Now attach all the attachments.
 		(
-		if [[ "$(echo $programver | grep -i "beta")" ]] || [[ $UpdateAvailable == "true" ]]; then echo "<b><span style='color:darkred;'>"; fi
+		if [[ "$(echo $programver | grep -i "beta")" ]] || [[ $UpdateAvailable == "true" ]] || [[ $UpdateDriveAvailable == "true" ]] || [[ $UpdateSendemailAvailable == "true" ]]; then echo "<b><span style='color:darkred;'>"; fi
 			echo $programver"<br>Report Run "$(date +%d-%b-%Y)" @ "$timestamp"<br>"
 			duration=$SECONDS
 			if [[ $duration -lt 60 ]]; then
-				echo "Execution Time: $(($duration % 60)) Seconds"
+				echo "Script Execution Time: $(($duration % 60)) Seconds"
 			else
-				echo "Execution Time: $(($duration / 60)) Minutes : $(($duration % 60)) Seconds"
+				echo "Script Execution Time: $(($duration / 60)) Minutes : $(($duration % 60)) Seconds"
 			fi
 			if [[ $UpdateAvailable == "true" ]]; then echo "<br>UPDATE AVAILABLE --> "$GitVersion; fi
-			if [[ $Messages != "" ]]; then echo "<br>Message from the Creator: "$Messages"<br>"; fi
-		if [[ "$(echo $programver | grep -i "beta")" ]] || [[ $UpdateAvailable == "true" ]]; then echo "</span></b>"; fi
+			if [[ $UpdateDriveAvailable == "true" ]]; then echo "<br>DRIVE_SELFTEST UPDATE AVAILABLE --> "$GitDriveVersion; fi
+			if [[ $UpdateSendemailAvailable == "true" ]]; then echo "<br>SENDEMAIL.PY UPDATE AVAILABLE --> "$GitSendemailVersion; fi
+			if [[ $Messages != "" ]]; then echo "<br>Message from Joe: "$Messages"<br>"; fi
+		if [[ "$(echo $programver | grep -i "beta")" ]] || [[ $UpdateAvailable == "true" ]] || [[ $UpdateDriveAvailable == "true" ]] || [[ $UpdateSendemailAvailable == "true" ]]; then echo "</span></b>"; fi
 		if [[ $TrueNASConfigEmailEncryption != "" ]] && [[ $Config_Encrypted == "true" ]]; then echo "<br>Attached zip file is encrypted."; fi
 		echo "<br><br>"
 		# Keyboard_Message comes from the '-dump email' command.
@@ -4558,17 +5321,218 @@ attach_files () {
 
 		output_html="$(cat $logfile_header)$(cat $logfile)"
 		output_x=1
-		(
+		
 		# Write MIME section header for file attachment (encoded with base64)
 		if [[ $output_html != "" ]]; then
-			echo "--${boundary}"
-			echo "Content-Type: text/html; charset=utf-8"
-			echo "Content-Transfer-Encoding: base64"
-			echo "Content-Disposition: attachment; filename=email_body.html"
-			base64 <<< $output_html
-		fi
-		) >> "$logfile"
+			echo $output_html > /tmp/output.html
+			if [[ "$truenas_sendmail_support" == "No" ]]; then
+#				(echo "create_attachment_file /tmp/output.html email_body.html" >> /tmp/attachment_files.txt)
+				sleep .1		# Do nothing
+			else
+				(
+				echo "--${boundary}"
+				echo "Content-Type: text/html; charset=utf-8"
+				echo "Content-Transfer-Encoding: base64"
+				echo "Content-Disposition: attachment; filename=email_body.html"
+				base64 "/tmp/output.html"
+				) >> "$logfile"
+			fi
+		fi	
+		doit="true"
+	fi
 
+	if [[ $Attach_Files1 == "true" ]]; then
+		if [[ $Attach_Multi_Report == "true" ]]; then
+			if test -e "/tmp/Old_multi_report_config.txt"; then
+				if [[ "$truenas_sendmail_support" == "No" ]]; then
+					(echo "create_attachment_file /tmp/Old_multi_report_config.txt Old_multi_report_config.txt" >> /tmp/attachment_files.txt)
+				else
+					(
+					# Write MIME section header for file attachment (encoded with base64)
+					echo "--${boundary}"
+					echo "Content-Type: text/html"
+					echo "Content-Transfer-Encoding: base64"
+					echo "Content-Disposition: attachment; filename=Old_multi_report_config.txt"
+					base64 "/tmp/Old_multi_report_config.txt"
+					rm /tmp/Old_multi_report_config.txt
+					) >> "$logfile"
+				fi
+			fi
+
+			if test -e "$Config_File_Name"; then
+				if [[ "$truenas_sendmail_support" == "No" ]]; then
+					(echo "create_attachment_file $Config_File_Name multi_report_config.txt" >> /tmp/attachment_files.txt)
+				else
+					(
+					# Write MIME section header for file attachment (encoded with base64)
+					echo "--${boundary}"
+					echo "Content-Type: text/html"
+					echo "Content-Transfer-Encoding: base64"
+					echo "Content-Disposition: attachment; filename=multi_report_config.txt"
+					base64 "$Config_File_Name"
+					) >> "$logfile"
+				fi
+			fi
+		fi
+
+		if [[ $Attach_Statistical_File == "true" ]]; then
+			if test -e $statistical_data_file; then
+				# Write MIME section header for file attachment (encoded with base64)
+				if [[ "$truenas_sendmail_support" == "No" ]]; then
+					(echo "create_attachment_file $statistical_data_file Statistical_Data.csv" >> /tmp/attachment_files.txt)
+				else
+					(
+					echo "--${boundary}"
+					echo "Content-Type: text/csv"
+					echo "Content-Transfer-Encoding: base64"
+					echo "Content-Disposition: attachment; filename=Statistical_Data.csv"
+					base64 "$statistical_data_file"
+					) >> "$logfile"
+				fi
+			fi
+		fi
+
+		if [[ $Attach_TrueNAS_Config == "true" ]]; then
+			if test -e /tmp/$Config_Name; then
+				if [[ "$truenas_sendmail_support" == "No" ]]; then
+					(echo "create_attachment_file /tmp/$Config_Name ${Config_Name}" >> /tmp/attachment_files.txt)
+				else
+					(
+					echo "--${boundary}"
+					echo "Content-Type: application/zip"
+					echo "Content-Transfer-Encoding: base64"
+					echo "Content-Disposition: attachment; filename=${Config_Name}"
+					base64 /tmp/$Config_Name
+					rm /tmp/$Config_Name
+					) >> "$logfile"
+				fi
+			fi
+		fi
+
+		if [[ $dump_all != "0" ]]; then
+			$(zpool list > /tmp/zpoollist.txt)
+			if test -e "/tmp/zpoollist.txt"; then
+				if [[ "$truenas_sendmail_support" == "No" ]]; then
+					(echo "create_attachment_file /tmp/zpoollist.txt zpoollist.txt" >> /tmp/attachment_files.txt)
+				else
+					(
+					echo "--${boundary}"
+					echo "Content-Type: text/html"
+					echo "Content-Transfer-Encoding: base64"
+					echo "Content-Disposition: attachment; filename=zpoollist.txt"
+					base64 "/tmp/zpoollist.txt"
+					rm /tmp/zpoollist.txt
+					) >> "$logfile"
+				fi
+			fi
+
+			$(zpool status -v > /tmp/zpoolstatus.txt)
+			if test -e "/tmp/zpoolstatus.txt"; then
+				if [[ "$truenas_sendmail_support" == "No" ]]; then
+					(echo "create_attachment_file /tmp/zpoolstatus.txt zpoolstatus.txt" >> /tmp/attachment_files.txt)
+				else
+					(
+					echo "--${boundary}"
+					echo "Content-Type: text/html"
+					echo "Content-Transfer-Encoding: base64"
+					echo "Content-Disposition: attachment; filename=zpoolstatus.txt"
+					base64 "/tmp/zpoolstatus.txt"
+					rm /tmp/zpoolstatus.txt
+					) >> "$logfile"
+				fi
+			fi
+
+			$(zfs list > /tmp/zfslist.txt)
+			if test -e "/tmp/zfslist.txt"; then
+				if [[ "$truenas_sendmail_support" == "No" ]]; then
+					(echo "create_attachment_file /tmp/zfslist.txt zfslist.txt" >> /tmp/attachment_files.txt)
+				else
+					(
+					echo "--${boundary}"
+					echo "Content-Type: text/html"
+					echo "Content-Transfer-Encoding: base64"
+					echo "Content-Disposition: attachment; filename=zfslist.txt"
+					base64 "/tmp/zfslist.txt"
+					rm /tmp/zfslist.txt
+					) >> "$logfile"
+				fi
+			fi
+			
+			if [[ $softver == "Linux" ]]; then
+				$(lsblk -o +PARTUUID,NAME,LABEL > /tmp/gptid.txt)
+			else
+				$(glabel status > /tmp/gptid.txt)
+			fi
+
+			if test -e "/tmp/gptid.txt"; then
+				if [[ "$truenas_sendmail_support" == "No" ]]; then
+					(echo "create_attachment_file /tmp/gptid.txt gptid.txt" >> /tmp/attachment_files.txt)
+				else
+					(
+					echo "--${boundary}"
+					echo "Content-Type: text/html"
+					echo "Content-Transfer-Encoding: base64"
+					echo "Content-Disposition: attachment; filename=gptid.txt"
+					base64 "/tmp/gptid.txt"
+					rm /tmp/gptid.txt
+					) >> "$logfile"
+				fi
+			fi
+
+			if [[ $json_error_log != "" ]]; then
+				if [[ "$truenas_sendmail_support" == "No" ]]; then
+					printf "%b" "$json_error_log" > /tmp/json_error_log.txt
+					(echo "create_attachment_file /tmp/json_error_log.txt json_error_log.txt" >> /tmp/attachment_files.txt)
+				else
+					(
+					echo "--${boundary}"
+					echo "Content-Type: text/plain"
+					echo "Content-Transfer-Encoding: base64"
+					echo "Content-Disposition: attachment; filename=json_error_log.txt"
+					base64 <<< $json_error_log
+					) >> "$logfile"
+				fi
+			fi
+##### THE NEXT LINE IS NOT LIKED BY 25.04 BUILD 14 JANUARY 2025
+			$(midclt call smart.test.results | jq > "/tmp/smart_results_all_drives_API.json")
+
+			if test -e "/tmp/smart_results_API.json"; then
+				if [[ "$truenas_sendmail_support" == "No" ]]; then
+					(echo "create_attachment_file /tmp/smart_results_API.json Smart_Results_All_Drives_API.json" >> /tmp/attachment_files.txt)
+				else
+					(
+					echo "--${boundary}"
+					echo "Content-Type: text/html"
+					echo "Content-Transfer-Encoding: base64"
+					echo "Content-Disposition: attachment; filename=Smart_Results_All_Drives_API.json"
+					base64 "/tmp/smart_results_all_drives_API.json"
+					rm "/tmp/smart_results_all_drives_API.json"
+					) >> "$logfile"
+				fi
+			fi
+
+		fi
+		
+	fi
+
+	if test -e "/tmp/spencer_report.txt"; then
+		
+		if [ $(grep -wic "New Error Messages" "/tmp/spencer_report.txt") -gt 0 ] || [ $(grep -wic "Previous" "/tmp/spencer_report.txt") -gt 0 ]; then
+			if [[ "$truenas_sendmail_support" == "No" ]]; then
+				(echo "create_attachment_file /tmp/spencer_report.txt spencer_report.txt" >> /tmp/attachment_files.txt)
+			else
+				(
+				echo "--${boundary}"
+				echo "Content-Type: text/html"
+				echo "Content-Transfer-Encoding: base64"
+				echo "Content-Disposition: attachment; filename=spencer_report.txt"
+				base64 "/tmp/spencer_report.txt"
+				) >> "$logfile"
+			fi
+		fi	
+	fi
+
+	if [[ "$dump_all" != "0" ]]; then
 		# Attach dump files first
 
 		for drive in $smartdrives; do
@@ -4583,136 +5547,32 @@ attach_files () {
 		for drive in $nonsmartdrives; do
 			dump_drive_data
 		done
-		doit="true"
+	else	# If we are just normally running, attach partition files if they exist.
+		for drive in $smartdrives; do
+			dump_drive_partition
+		done
+		for drive in $smartdrivesSSD; do
+			dump_drive_partition
+		done
+		
+	# NVMe Partitions not there yet. Keep here as a placeholder.
+	#	for drive in $smartdrivesNVM; do
+	#		dump_drive_partition
+	#	done
+		for drive in $nonsmartdrives; do
+			dump_drive_partition
+		done
 	fi
 
-	if [[ $Attach_Files1 == "true" ]]; then
-		(
-		if [[ $Attach_Multi_Report == "true" ]]; then
-			if test -e "/tmp/Old_multi_report_config.txt"; then
-				# Write MIME section header for file attachment (encoded with base64)
-				echo "--${boundary}"
-				echo "Content-Type: text/html"
-				echo "Content-Transfer-Encoding: base64"
-				echo "Content-Disposition: attachment; filename=Old_multi_report_config.txt"
-				base64 "/tmp/Old_multi_report_config.txt"
-				rm /tmp/Old_multi_report_config.txt
-			fi
-			if test -e "$Config_File_Name"; then
-				# Write MIME section header for file attachment (encoded with base64)
-				echo "--${boundary}"
-				echo "Content-Type: text/html"
-				echo "Content-Transfer-Encoding: base64"
-				echo "Content-Disposition: attachment; filename=multi_report_config.txt"
-				base64 "$Config_File_Name"
-			fi
-		fi
 
-		if [[ $Attach_Statistical_File == "true" ]]; then
-			if test -e $statistical_data_file; then
-				# Write MIME section header for file attachment (encoded with base64)
-				echo "--${boundary}"
-				echo "Content-Type: text/csv"
-				echo "Content-Transfer-Encoding: base64"
-				echo "Content-Disposition: attachment; filename=Statistical_Data.csv"
-				base64 "$statistical_data_file"
-			fi
-		fi
-
-		if [[ $Attach_TrueNAS_Config == "true" ]]; then
-			if test -e /tmp/$Config_Name; then
-				echo "--${boundary}"
-				echo "Content-Type: application/zip"
-				echo "Content-Transfer-Encoding: base64"
-				echo "Content-Disposition: attachment; filename=${Config_Name}"
-				base64 /tmp/$Config_Name
-				rm /tmp/$Config_Name
-			fi
-		fi
-
-		if [[ $dump_all != "0" ]]; then
-			$(zpool list > /tmp/zpoollist.txt)
-			if test -e "/tmp/zpoollist.txt"; then
-				echo "--${boundary}"
-				echo "Content-Type: text/html"
-				echo "Content-Transfer-Encoding: base64"
-				echo "Content-Disposition: attachment; filename=zpoollist.txt"
-				base64 "/tmp/zpoollist.txt"
-				rm /tmp/zpoollist.txt
-			fi
-
-			$(zpool status -v > /tmp/zpoolstatus.txt)
-			if test -e "/tmp/zpoolstatus.txt"; then
-				echo "--${boundary}"
-				echo "Content-Type: text/html"
-				echo "Content-Transfer-Encoding: base64"
-				echo "Content-Disposition: attachment; filename=zpoolstatus.txt"
-				base64 "/tmp/zpoolstatus.txt"
-				rm /tmp/zpoolstatus.txt
-			fi
-
-			$(zfs list > /tmp/zfslist.txt)
-			if test -e "/tmp/zfslist.txt"; then
-				echo "--${boundary}"
-				echo "Content-Type: text/html"
-				echo "Content-Transfer-Encoding: base64"
-				echo "Content-Disposition: attachment; filename=zfslist.txt"
-				base64 "/tmp/zfslist.txt"
-				rm /tmp/zfslist.txt
-			fi
-
-			if test -e "/tmp/pool_to_drive.txt"; then
-				echo "--${boundary}"
-				echo "Content-Type: text/html"
-				echo "Content-Transfer-Encoding: base64"
-				echo "Content-Disposition: attachment; filename=pool_to_drive.txt"
-				base64 "/tmp/pool_to_drive.txt"
-				rm /tmp/pool_to_drive.txt
-			fi
-
-			if [[ $softver == "Linux" ]]; then
-				$(lsblk -o +PARTUUID,NAME,LABEL > /tmp/gptid.txt)
-			else
-				$(glabel status > /tmp/gptid.txt)
-			fi
-
-			if test -e "/tmp/gptid.txt"; then
-				echo "--${boundary}"
-				echo "Content-Type: text/html"
-				echo "Content-Transfer-Encoding: base64"
-				echo "Content-Disposition: attachment; filename=gptid.txt"
-				base64 "/tmp/gptid.txt"
-				rm /tmp/gptid.txt
-			fi
-
-			if [[ $json_error_log != "" ]]; then
-				echo "--${boundary}"
-				echo "Content-Type: text/plain"
-				echo "Content-Transfer-Encoding: base64"
-				echo "Content-Disposition: attachment; filename=json_error_log.txt"
-				base64 <<< $json_error_log
-			fi
-		fi
-		) >> "$logfile"
-	fi
-
-	if test -e "/tmp/spencer_report.txt"; then
-		(
-		if [ $(grep -wic "New Error Messages" "/tmp/spencer_report.txt") -gt 0 ] || [ $(grep -wic "Previous" "/tmp/spencer_report.txt") -gt 0 ]; then
-			echo "--${boundary}"
-			echo "Content-Type: text/html"
-			echo "Content-Transfer-Encoding: base64"
-			echo "Content-Disposition: attachment; filename=spencer_report.txt"
-			base64 "/tmp/spencer_report.txt"
-		fi
-		) >> "$logfile"
-	fi
 	}
 
 ########## CRUNCH THE NUMBERS and FORMAT MESSAGES and COLORS ##########
 ##### Call with HDD|SSD|NVM ##############
 
 crunch_numbers () {
+if [[ $Debug_Steps == "true" ]]; then echo "crunch_numbers"; fi
+
 	detail_level=$1
 	### Lets adjust for all the Media Alarms, Temp Alarms, and Wear Level for the new Custom_Drives_List
 	# We need to change the values in the running script to use slight different variables
@@ -4809,7 +5669,7 @@ crunch_numbers () {
 	# numbers in this script.
 
 	# Make onHours a base 10 number and remove any commas
-	onHours=${onHours#0}    # DO I STILL NEED THIS - REDUNDANT?
+	onHours=${onHours#0}
 	onHours="${onHours//,}"
 
 	### Convert onHours to onTime
@@ -4833,20 +5693,11 @@ crunch_numbers () {
 
 	##### CALCULATE TOTAL DATA WRITTEN ##########
 	# Display in TiB Written or GiB Written
+	
+	tdwbytes=$ssdtdw
 
-#	if [[ "$1" == "NVM" ]] && [[ $tdw != "" ]]; then tdwbytes=$((( $tdw * 512000 ))); else tdwbytes=$((( $ssdblocksize * ssdtdw ))); fi
-#	if [[ $ID241 != "" ]]; then tdwbytes=$((( $ID241 * 1074000000 ))); fi
-
-tdwbytes=$ssdtdw
-
-	#if [[ $tdw != "" ]] && [[ "$1" != "NVM" ]]; then   # Assume SCSI Drive
-	#	tdwbytes1=$( echo $tdw | cut -d'.' -f 1)
-	#	tdwbytes2=$( echo $tdw | cut -d'.' -f 2)
-	#	tdw=$tdwbytes1$tdwbytes2
-	#	tdwbytes=$((( $tdw * 1000000)))
-	#fi
 	tdw_log=$tdwbytes
-tdr_log=$ssdtdr
+	tdr_log=$ssdtdr
 
 	if [[ $tdwbytes != "" ]]; then
 		if [[ $tdwbytes -ge 1000000000000000 ]]; then
@@ -4878,18 +5729,19 @@ tdr_log=$ssdtdr
 			tdwbytes1="$((( $tdwbytes / 10 )))"
 			tdwbytes2="$(echo $tdwbytes | rev | cut -c 1)"
 			tdw=$tdwbytes1"."$tdwbytes2" GB"
+
 		elif [[ $tdwbytes -ge 1 ]]; then
 	#		tdwbytes=$((( $tdwbytes / 10 )))
 	#		tdwbytes1="$((( $tdwbytes / 1 )))"
 	#		tdwbytes2="$(echo $tdwbytes | rev | cut -c 1)"
 	#		tdw=$tdwbytes1"."$tdwbytes2" MB"
 			tdw=$tdwbytes" MB"
+
 		elif [[ $tdwbytes != 0 ]]; then
 			tdw="<1 MB"
 		else
 			tdw=$Non_Exist_Value
 		fi
-#			tdw_num=$tdwbytes1"."$tdwbytes2
 	else
 		tdw=$Non_Exist_Value
 	fi
@@ -4900,11 +5752,10 @@ tdr_log=$ssdtdr
 
 # READ DATA FROM statisticaldatafile
 
-read_csv $TDW_Month
+read_csv $Total_Data_Written_Month
+
 	if [[ $tdw_read -lt 1 ]] ;then tdw_read=1; fi
 	tdwbytes=$((( $tdw_log - $tdw_read )))	# Find the difference
-#echo "drive="$drive" , serial="$serial" , tdw_read="$tdw_read" , twd_log="$tdw_log" , tdwbytes="$tdwbytes" , tdw="$tdw
-# Make it a real number to display
 	if [[ $tdwbytes != "" ]]; then
 		if [[ $tdwbytes -ge 1000000000000000 ]]; then
 			tdwbytes=$((( $tdwbytes / 10000000000000 )))
@@ -4952,6 +5803,7 @@ read_csv $TDW_Month
 	fi
 
 	if [[ $tdr_read -lt 1 ]] ;then tdr_read=1; fi
+
 	tdrbytes=$((( $tdr_log - $tdr_read )))	# Find the difference
 
 	if [[ $tdrbytes != "" ]]; then
@@ -4999,11 +5851,8 @@ read_csv $TDW_Month
 	else
 		tdr_num=$Non_Exist_Value
 	fi
-###################################################################################################
 
-	##### CUSTOM DRIVE HACK Section #####
 	# This will set the testAge value to 1 so it passes the math portion of the quality checks.
-
 	if [[ $testAgeOvrd == "1" ]]; then testAge=1; fi
 
 	### WARRANTY DATE
@@ -5314,7 +6163,7 @@ read_csv $TDW_Month
 	if [[ $mediaErrors == "" ]]; then mediaErrors="$Non_Exist_Value"; fi
 
 	########## SMR DRIVES ##########
-	if [[ $smr_present != "" ]]; then smrColor=$yellowColor; drive=$drive"<br>SMR"; fi
+	if [[ $smr_present != "" ]]; then smrColor=$yellowColor; drive=$drive"<br>SMR"; smr_present=""; fi
 
 	########## WRITE STATISTICAL DATA ##########
 	# Save Statistical Data before we make any changes to it.
@@ -5393,8 +6242,6 @@ read_csv $TDW_Month
 		fi
 	fi
 
-
-
 	if [[ $IgnoreMultiZone != "true" ]]; then if [[ $multiZone != "$Non_Exist_Value" ]]; then if [[ $multiZone -gt $MultiZoneWarnx ]]; then multiZoneColor=$warnColor; logfile_warning=$logfile_warning"$(printf "Drive: "$serial" - MultiZone Errors = "$multiZone"<br>")"; fi; fi; fi
 	if [[ $IgnoreUDMA != "true" ]]; then if [[ $crcErrors != "$Non_Exist_Value" ]]; then if [[ $crcErrors != "0" ]]; then logfile_critical=$logfile_critical"$(printf "Drive "$serial" CRC Errors "$crcErrors"<br>")";fi; fi; fi
 
@@ -5464,7 +6311,6 @@ if [[ $NVMelastTestHoursFake == "true" ]]; then testAge=$Non_Exist_Value; fi
 	fi
 
 	# This section will change the testAge value to the Non_Exist_Value for proper display in the chart.  Displaying a bogus "1" is misleading.
-
 	if [[ $testAgeOvrd == "1" ]]; then testAge=$Non_Exist_Value; fi
 
 	}
@@ -5476,7 +6322,7 @@ if [[ $NVMelastTestHoursFake == "true" ]]; then testAge=$Non_Exist_Value; fi
 ### Current updates incorporated to support version 2.1.x to 3.0.x
 
 update_config_file () {
-
+if [[ $Debug_Steps == "true" ]]; then echo "update_config_file"; fi
 		# Lets backup the current config file and send to the user.
 		if test -e "$Config_File_Name"; then
 			cp "$Config_File_Name" /tmp/Old_multi_report_config.txt
@@ -5489,14 +6335,14 @@ update_config_file () {
 		if [[ "$HDD_Total_Data_Written_Title" == "Total Data Written" ]]; then HDD_Total_Data_Written_Title="Total Data Read<br>/ Written"; fi
 		if [[ "$SSD_Total_Data_Written_Title" == "Total Data Written" ]]; then SSD_Total_Data_Written_Title="Total Data Read<br>/ Written"; fi
 		if [[ "$NVM_Total_Data_Written_Title" == "Total Data Written" ]]; then NVM_Total_Data_Written_Title="Total Data Read<br>/ Written"; fi
-		if [[ "$HDD_TDW_Month_Title" == "Total Data 30 Days" ]]; then HDD_TDW_Month_Title="Total 30 Days Read<br>/ Write"; fi
-		if [[ "$SSD_TDW_Month_Title" == "Total Data 30 Days" ]]; then SSD_TDW_Month_Title="Total 30 Days Read<br>/ Write"; fi
-		if [[ "$NVM_TDW_Month_Title" == "Total Data 30 Days" ]]; then NVM_TDW_Month_Title="Total 30 Days Read<br>/ Write"; fi
+		if [[ "$HDD_Total_Data_Written_Month_Title" == "Total Data 30 Days" ]]; then HDD_Total_Data_Written_Month_Title="Total 30 Days Read<br>/ Write"; fi
+		if [[ "$SSD_Total_Data_Written_Month_Title" == "Total Data 30 Days" ]]; then SSD_Total_Data_Written_Month_Title="Total 30 Days Read<br>/ Write"; fi
+		if [[ "$NVM_Total_Data_Written_Month_Title" == "Total Data 30 Days" ]]; then NVM_Total_Data_Written_Month_Title="Total 30 Days Read<br>/ Write"; fi
 
 		# version 3.0
 		if [[ "$Ignore_Drives_List" == "none" ]]; then Ignore_Drives_List=""; fi
-		if [[ "$Multipath" == "true" ]]; then Multipath="normal"; fi
-		if [[ "$Multipath" == "false" ]]; then Multipath="off"; fi
+#		if [[ "$Multipath" == "true" ]]; then Multipath="normal"; fi
+#		if [[ "$Multipath" == "false" ]]; then Multipath="off"; fi
 
 		# Lets write the configuration file.
 		echo "#" $programver
@@ -5507,9 +6353,10 @@ update_config_file () {
 		echo "#"
 		echo "# The configuration file will override the default values coded into the script."
 		echo " "
-		echo "###### Email Address"
-		echo "### Enter your Email address to send the report to.  The from address does not need to be changed unless you experience"
-		echo "### an error sending the email.  Some email servers only use the email address associated with the email server."
+		echo "###### Email Address(s)"
+		echo '### Enter your Email address to send the report to.  To send to multiple email addresses separate those using a semicolon ";".'
+		echo "### The from address does not need to be changed unless you experience an error sending the email, however some email servers"
+		echo "### only use the email address associated with the email server so you may need to add your email address for the server in use."
 		echo " "
 		echo 'Email="'$Email'"		# Send normal emails to this address'
 		echo 'From="'$From'"			# From address (default works for many)'
@@ -5517,40 +6364,50 @@ update_config_file () {
 		echo "###### Alert Email Configuration"
 		echo "### You must use the '-m' switch"
 		echo 'AlertEmail="'$AlertEmail'"		# Alert email address used with the '-m' switch.'
-		echo 'AlertOnWarningTemp="'$AlertOnWarningTemp'"			# Send alert on Warning Temp. Default="true"'
-		echo 'AlertOnCriticalError="'$AlertOnCriticalError'"			# Send alert on Critical Error. Default="true"'
+		echo 'AlertOnWarningTemp="'$AlertOnWarningTemp'"			# Send alert on Warning Temp. Default  ="true"'
+		echo 'AlertOnCriticalError="'$AlertOnCriticalError'"			# Send alert on Critical Error. Default = "true"'
 		echo " "
 		echo "###### EMAIL ON ALARM ONLY"
 		echo 'Email_On_Alarm_Only="'$Email_On_Alarm_Only'"			# When true, an email will only be sent if an alarm condition exists.  Default = "false"'
 		echo 'Email_On_Alarm_Only_And_Attachments="'$Email_On_Alarm_Only_And_Attachments'"	# When "true", email attachments will be sent even when no alarm condition exists.  Default = "true"'
 		echo " "
-		echo "########## Script Update"
-		echo "### Ensure you understand these options."
-		echo 'CheckForUpdates="'$CheckForUpdates'"		# Will check GitHub for updates and include message in next email.'
-		echo 'AutomaticUpdate="'$AutomaticUpdate'"		# WARNING !!!  This option will automatically update the script if a newer version exists on GitHub.'
-		echo 'SMR_Enable="'$SMR_Enable'"		# Will enable SMR operations if set to "true".'
-		echo 'SMR_Update="'$SMR_Update'"		# Will automatically download Basil Hendroff smr-check.sh file from Github.'
-		echo 'SMR_Ignore_Alarm="'$SMR_Ignore_Alarm'"	# When "true" will not generate an alarm condition, however the Drive ID will still change the background color.'
+		echo "###### HDD/SSD/NVMe SMART Testing ######"
+		echo "### SMART Testing - SMART Testing is no longer an intergral part of Multi-Report and you must use an add_on script to perform the testing."
+		echo 'External_SMART_Testing="'$External_SMART_Testing'"			# When set to "true" it will check if External_Script_Name file is present and run it.'
+		echo 'External_Script_Name="'$External_Script_Name'"	# Default setting is "$SCRIPT_DIR/drive_selftest.txt"'
+		echo " "
+		echo "###### SCRIPT UPDATE -- Ensure you understand these options."
+		echo 'Check_For_Updates="'$Check_For_Updates'"			# Will check GitHub for updates and include message in next email.'
+		echo 'Automatic_Update="'$Automatic_Update'"			# WARNING !!!  This option will automatically update the script if a newer version exists on GitHub.'
+		echo " "
+		echo "###### Script Add-Ons"
+		echo 'SMR_Enable="'$SMR_Enable'"		# Will enable SMR operations if set to "true".  Default = "true"'
+		echo 'SMR_Update="'$SMR_Update'"		# Will automatically download Basil Hendroff smr-check.sh file from Github.  Default = "true'
+		echo 'SMR_Ignore_Alarm="'$SMR_Ignore_Alarm'"	# When "true" will not generate an alarm condition, however the Drive ID will still change the background color.  Default = "false"'
+		echo 'SMR_New_Drive_Det_Count='$SMR_New_Drive_Det_Count'	# The SMR script will check the statistical_data_file for how many times the drive serial number has been listed.  Default = 14'
+		echo '				# - If it is less than or equal to this value, then run the SMR script.  0=Disable (Run SMR Check every time).'
+		echo " "
+		echo '### PARTITION CHECK AND BACKUP'
+		echo 'Partition_Check="'$Partition_Check'"		# Run sgdisk on each drive. Default = "false", this will install gdisk/sgdisk on TrueNAS CORE if not present.'
+		echo '				#  -- It is "false" because you should choose to control what is installed or not.'
+		echo 'Partition_Backup="'$Partition_Backup'"		# Set to "true" to save each partition table with the TrueNAS configuration backup.'
+		echo '				# NOTE: You need sgdisk installed, run the Partition Check once to install on CORE.'
 		echo " "
 		echo "###### Spencer Integration"
 		echo "### Warning Levels are: None, Warning, Critical -- This only affects the Email Subject Line, if any errors are present, an attachment will occur."
-		echo 'spencer_new_warning_level="'$spencer_new_warning_level'"	# What to do if a "new" error occurs.'
-		echo 'spencer_existing_warning_level="'$spencer_existing_warning_level'"	# What to do for an existing error.'
-		echo 'spencer_enable="'$spencer_enable'"			# To call the Spencer.py script if "true" or "false" to not run the Spencer.py script.'
+		echo 'spencer_new_warning_level="'$spencer_new_warning_level'"			# What to do if a "new" error occurs.  Default = "Warning"'
+		echo 'spencer_existing_warning_level="'$spencer_existing_warning_level'"			# What to do for an existing error.  Default = "None"'
+		echo 'spencer_enable="'$spencer_enable'"					# To call the Spencer.py script if "true" or "false" to not run the Spencer.py script. Default = "true"'
 		echo 'spencer_script_name="'$spencer_script_name'"	# The default is "spencer.py" located in the default script directory.'
 		echo " "
-		echo "##### Multipath Enable/Disable"
-		echo "### When active this will (read below options):"
-		echo 'Multipath="'$Multipath'"		# "off" = No processing of serial numbers and is the default value.'
-		echo '			# "normal" = Automatically remove duplicate serial numbers.'
-		echo '			# "Exos2x" = Remove duplicate serial numbers ONLY IF the gptid matches.'
-		echo '			# "serial" = Sort by serial numbers.'
+		echo "###### GENERAL THRESHOLDS ######"
 		echo " "
-		echo "###### Zpool Status Summary Table Settings"
-		echo 'PoolUsedWarn='$PoolUsedWarn'		# Pool used percentage for CRITICAL color to be used.'
+		echo "### Zpool Status Summary Table Settings"
+		echo 'PoolUsedWarn='$PoolUsedWarn'		# Pool used percentage for CRITICAL color to be used.  Default = 80'
 		echo 'ScrubAgeWarn='$ScrubAgeWarn'		# Maximum age (in days) of last pool scrub before CRITICAL error (30 + 7 days for day of week). Default=37.'
+		echo "ZpoolFragWarn=$ZpoolFragWarn	# Percent of fragmentation before a Warning message occurs."
 		echo " "
-		echo "###### Temperature Settings"
+		echo "### Temperature Settings"
 		echo "HDDtempWarn=$HDDtempWarn		# HDD Drive temp (in C) when WARNING message will be used."
 		echo "HDDtempCrit=$HDDtempCrit		# HDD Drive temp (in C) when CRITICAL message will be used."
 		echo "SSDtempWarn=$SSDtempWarn		# SSD Drive temp (in C) when WARNING message will be used."
@@ -5559,49 +6416,12 @@ update_config_file () {
 		echo "NVMtempCrit=$NVMtempCrit		# NVM Drive temp (in C) when CRITICAL message will be used."
 		echo "			# --- NOTE: NVMe drives currently do not report Min/Max temperatures so this is a future feature."
 		echo " "
-		echo "###### Current Power Cycle Maximum Temperature Override"
+		echo "### Current Power Cycle Maximum Temperature Override"
 		echo 'HDD_Cur_Pwr_Max_Temp_Ovrd="'$HDD_Cur_Pwr_Max_Temp_Ovrd'"	# HDD Max Drive Temp Override. This value when "true" will not alarm on any Current Power Cycle Max Temperature Limit.'
 		echo 'SSD_Cur_Pwr_Max_Temp_Ovrd="'$SSD_Cur_Pwr_Max_Temp_Ovrd'"	# SSD Max Drive Temp Override. This value when "true" will not alarm on any Current Power Cycle Max Temperature Limit.'
 		echo 'NVM_Cur_Pwr_Max_Temp_Ovrd="'$NVM_Cur_Pwr_Max_Temp_Ovrd'"	# NVM Max Drive Temp Override. This value when "true" will not alarm on any Current Power Cycle Max Temperature Limit.'
 		echo " "
-		echo "##### SCSI Specific Settings"
-		echo 'Run_SMART_No_power_on_time="'$Run_SMART_No_power_on_time'"	# Some SCSI drives do not report power_on_time, yet they report SMART Self-test times. This option will force'
-		echo "					# a SMART Short Self-test, wait 2 minutes for the test to complete, and report the correct power_on_time."
-		echo "					# This is the same as using the '-scsismart' switch at the CLI."
-		echo " "
-		echo "###### SSD/NVMe Specific Settings"
-		echo "WearLevelCrit=$WearLevelCrit				# Wear Level Alarm Setpoint for WARNING message, 9% is the default."
-		echo 'NVM_Low_Power="'$NVM_Low_Power'"			# Set the NVMe power level to the minimum setting. This does not mean the NVMe will remain at this power level.'
-		echo 'NVM_Daily_Short_Selftest="'$NVM_Daily_Short_Selftest'"		# This will run a short test on all NVMe drives everyday of the week, IF smartmontools is not 7.4 or greater.'
-		echo 'NVM_Weekly_Long_Selftest="'$NVM_Weekly_Long_Selftest'"		# This will run a long test on all NVMe drives on Sunday and ignore the short test run if set, IF smartmontools is not 7.4 or greater.'
-		echo 'NVM_Weekly_Long_Selftest_Day="'$NVM_Weekly_Long_Selftest_Day'"	# Value must be "Sun, Mon, Tue, Wed, Thu, Fri, Sat".  Default is Sun.'
-		echo 'NVM_Smartmontools_74_Override="'$NVM_Smartmontools_74_Override'"	# Set to "enable" to override the check for smartmontools 7.4 and force the script to run the SMART tests. Default "disable".'
-		echo 'Wait_For_SMART_Short_Test="'$Wait_For_SMART_Short_Test'"	# Waits for the NVMe drive(s) to complete a Short Test.  Takes approx. 2 minutes total to complete.'
-		echo 'Wait_For_SMART_Long_Test="'$Wait_For_SMART_Long_Test'"		# Waits for the NVMe drive(s) to complete a Long Test.  Takes approx. 2.5 minutes per TB of capacity to complete.'
-		echo 'NVMe_Ignore_Invalid_Errors="'$NVMe_Ignore_Invalid_Errors'"	# Set to "enable" to ignore "Invalid Field in Command" messages.  Google this message to see if you are comfortable ignoring it.'
-		echo " "
-		echo "###### General Settings"
-		echo "### Output Formats"
-		echo 'PowerTimeFormat="'$PowerTimeFormat'"		# Format for power-on hours string, valid options are "ymdh", "ymd", "ym", "y", or "h" (year month day hour).'
-		echo 'TempDisplay="'$TempDisplay'"		# The format you desire the temperature to be displayed in. Common formats are: "*C", "^C", or "^c". Choose your own.'
-		echo 'Non_Exist_Value="'$Non_Exist_Value'"		# How do you desire non-existent data to be displayed.  The Default is "---", popular options are "N/A" or " ".'
-		echo 'Pool_Capacity_Type="'$Pool_Capacity_Type'"	# Select "zfs" or "zpool" for Zpool Status Report - Pool Size and Free Space capacities. "zfs" is default.'
-		echo 'Last_Test_Type_poh="'$Last_Test_Type_poh'"	# Include the Last Test Power On Hours.'
-		echo 'lastTestTypeHoursIdent="'$lastTestTypeHoursIdent'"	# Test to follow power on hours numbers.  Default = "hrs".'
-		echo " "
-		echo "###### Ignore Alarms"
-		echo 'IgnoreUDMA="'$IgnoreUDMA'"        # Set to "true" to ignore all UltraDMA CRC Errors for the summary alarm (Email Header) only, errors will still appear in the graphical chart. Default is false.'
-		echo 'IgnoreSeekError="'$IgnoreSeekError'"    # Set to "true" to ignore all Seek Error Rate/Health errors.  Default is true.'
-		echo 'IgnoreReadError="'$IgnoreReadError'"    # Set to "true" to ignore all Raw Read Error Rate/Health errors.  Default is true.'
-		echo 'IgnoreMultiZone="'$IgnoreMultiZone'"   # Set to "true" to ignore all MultiZone Errors. Default is false.'
-		echo 'DisableWarranty="'$DisableWarranty'"    # Set to "true to disable Email Subject line alerts for any expired warranty alert. The email body will still report the alert. Default is true.'
-		echo " "
-		echo "###### Disable or Activate Input/Output File Settings"
-		echo 'ReportNonSMART="'$ReportNonSMART'"	# Will force even non-SMART devices to be reported, "true" = normal operation to report non-SMART devices.'
-		echo 'DisableRAWdata="'$DisableRAWdata'"	# Set to "true" to remove the 'smartctl -a' data and non-smart data appended to the normal report.  Default is false.'
-		echo 'ATA_Auto_Enable="'$ATA_Auto_Enable'"	# Set to "true" to automatically update Log Error count to only display a log error when a new one occurs.'
-		echo " "
-		echo "###### Media Alarms"
+		echo "### Media Alarms"
 		echo "SectorsWarn=$SectorsWarn		# Number of sectors per drive to allow with errors before WARNING color/message will be used, this value should be less than SectorsCrit."
 		echo "SectorsCrit=$SectorsCrit		# Number of sectors per drive with errors before CRITICAL color/message will be used."
 		echo "ReAllocWarn=$ReAllocWarn		# Number of Reallocated sector events allowed.  Over this amount is an alarm condition."
@@ -5615,38 +6435,62 @@ update_config_file () {
 		echo "SeekErrorsWarn=$SeekErrorsWarn	# Number of seek errors to allow before WARNING color/message will be used, this value should be less than SeekErrorsCrit."
 		echo "SeekErrorsCrit=$SeekErrorsCrit	# Number of seek errors to allow before CRITICAL color/message will be used."
 		echo "NVM_Media_Errors=$NVM_Media_Errors	# Number of NVM Media Errors will cause a CRITICAL alarm.  Default is 1."
-		echo 'Partition_Check="'$Partition_Check'"	# Run sgdisk on each drive. Default = "false", this will install gdisk/sgdisk on TrueNAS CORE if not present.'
-		echo '			# Default is "false" becasue you should choose to control what is installed or not.'
+		echo "WearLevelCrit=$WearLevelCrit		# Wear Level Alarm Setpoint for WARNING message, 9% is the default."
+		echo "TestWarnAge=$TestWarnAge		# Maximum age (in days) of last SMART test before CRITICAL color/message will be used."
 		echo " "
-		echo "###### Time-Limited Error Recovery (TLER)"
+		echo "### NVMe Low Power / Invalid Errors"
+		echo 'NVM_Low_Power="'$NVM_Low_Power'"			# Set the NVMe power level to the minimum setting. This does not mean the NVMe will remain at this power level.'
+		echo 'NVMe_Ignore_Invalid_Errors="'$NVMe_Ignore_Invalid_Errors'"	# Set to "enable" to ignore "Invalid Field in Command" messages.  Google this message to see if you are comfortable ignoring it.'
+		echo " "
+		echo "### Time-Limited Error Recovery (TLER)"
 		echo 'SCT_Enable="'$SCT_Enable'"		# Set to "true" to send a command to enable SCT on your drives for user defined timeout.'
 		echo 'SCT_Warning_Level="'$SCT_Warning_Level'"	# Set to "all" will generate a Warning Message for all devices not reporting SCT enabled. "TLER" reports only drive which support TLER.'
 		echo '				# "TLER_No_Msg" will only report for TLER drives and not report a Warning Message if the drive can set TLER on.'
-		echo '###### Read/Write Timeout'
-		echo "SCT_Read_Timeout=$SCT_Read_Timeout	# Set to the read threshold. Default = 70 = 7.0 seconds."
-		echo "SCT_Write_Timeout=$SCT_Write_Timeout	# Set to the write threshold. Default = 70 = 7.0 seconds."
 		echo " "
-		echo "###### SMART Testing Alarm"
-		echo "TestWarnAge=$TestWarnAge		# Maximum age (in days) of last SMART test before CRITICAL color/message will be used."
+		echo "SCT_Read_Timeout=$SCT_Read_Timeout		# Set to the read threshold. Default = 70 = 7.0 seconds."
+		echo "SCT_Write_Timeout=$SCT_Write_Timeout		# Set to the write threshold. Default = 70 = 7.0 seconds."
 		echo " "
-		echo "###### Zpool Fragmentation Alarm"
-		echo "ZpoolFragWarn=$ZpoolFragWarn	# Percent of fragmentation before a Warning message occurs."
+		echo "##### SCSI Specific Settings"
+		echo 'Run_SMART_No_power_on_time="'$Run_SMART_No_power_on_time'"	# Some SCSI drives do not report power_on_time, yet they report SMART Self-test times. This option will force'
+		echo "					# a SMART Short Self-test, wait 2 minutes for the test to complete, and report the correct power_on_time."
+		echo "					# This is the same as using the '-scsismart' switch at the CLI."
 		echo " "
-		echo '######## Enable-Disable Text Portion ########'
-		echo 'Enable_Text_Section="'$Enable_Text_Section'"	# This will display the Text Section  below the CHART when = "true".  Default="true"'
+		echo "###### General Settings"
+		echo "### Output Formats"
+		echo 'PowerTimeFormat="'$PowerTimeFormat'"		# Format for power-on hours string, valid options are "ymdh", "ymd", "ym", "y", or "h" (year month day hour).'
+		echo 'TempDisplay="'$TempDisplay'"		# The format you desire the temperature to be displayed in. Common formats are: "*C", "^C", or "^c". Choose your own.'
+		echo 'Non_Exist_Value="'$Non_Exist_Value'"		# How do you desire non-existent data to be displayed.  The Default is "---", popular options are "N/A" or " ".'
+		echo 'Pool_Capacity_Type="'$Pool_Capacity_Type'"	# Select "zfs" or "zpool" for Zpool Status Report - Pool Size and Free Space capacities. "zfs" is default.'
+		echo 'Last_Test_Type_poh="'$Last_Test_Type_poh'"	# Include the Last Test Power On Hours.'
+		echo 'lastTestTypeHoursIdent="'$lastTestTypeHoursIdent'"	# Test to follow power on hours numbers.  Default = "hrs".'
 		echo " "
-		echo "## Text Output Selection"
+		echo "### Ignore Alarms"
+		echo 'IgnoreUDMA="'$IgnoreUDMA'"        # Set to "true" to ignore all UltraDMA CRC Errors for the summary alarm (Email Header) only, errors will still appear in the graphical chart. Default = "false"'
+		echo 'IgnoreSeekError="'$IgnoreSeekError'"    # Set to "true" to ignore all Seek Error Rate/Health errors.  Default is true.'
+		echo 'IgnoreReadError="'$IgnoreReadError'"    # Set to "true" to ignore all Raw Read Error Rate/Health errors.  Default is true.'
+		echo 'IgnoreMultiZone="'$IgnoreMultiZone'"   # Set to "true" to ignore all MultiZone Errors. Default is false.'
+		echo 'DisableWarranty="'$DisableWarranty'"    # Set to "true to disable Email Subject line alerts for any expired warranty alert. The email body will still report the alert. Default = "true"'
+		echo " "
+		echo '######## Enable-Disable Text Portion'
+		echo 'Enable_Text_Section="'$Enable_Text_Section'"	# This will display the Text Section  below the CHART when = "true".  Default = "true"'
+		echo " "
+		echo "### Disable or Activate Input/Output File Settings"
+		echo 'ReportNonSMART="'$ReportNonSMART'"	# Will force even non-SMART devices to be reported, "true" = normal operation to report non-SMART devices.'
+		echo 'DisableRAWdata="'$DisableRAWdata'"	# Set to "true" to remove the 'smartctl -a' data and non-smart data appended to the normal report.  Default = "false"'
+		echo 'ATA_Auto_Enable="'$ATA_Auto_Enable'"	# Set to "true" to automatically update Log Error count to only display a log error when a new one occurs.'
+		echo " "
+		echo "### Text Output Selection"
 		echo 'Enable_Messages="'$Enable_Messages'"		# This will enable the Warning/Caution type messages. Default="true".'
-		echo 'Enable_Zpool_Messages="'$Enable_Zpool_Messages'"	# This will list all 'zpool -v status' and identify drives by gptid to drive ident.  Default="true".'
-		echo 'Enable_SMART_Messages="'$Enable_SMART_Messages'"	# This will output SMART data if available.  Default="true".'
+		echo 'Enable_Zpool_Messages="'$Enable_Zpool_Messages'"	# This will list all 'zpool -v status' and identify drives by gptid to drive ident.  Default = "true".'
+		echo 'Enable_SMART_Messages="'$Enable_SMART_Messages'"	# This will output SMART data if available.  Default = "true".'
 		echo " "
-		echo "###### Total Data Written - 30 Day or Current Month"
-		echo 'TDW_Month="'$TDW_Month'"		# Options are: "month" for Current Month, or "30Days" for the rolling previous 30 days.'
+		echo "### Total Data Written - 30 Day or Current Month"
+		echo 'Total_Data_Written_Month="'$Total_Data_Written_Month'"		# Options are: "month" for Current Month, or "30Days" for the rolling previous 30 days.'
 		echo " "
 		echo "###### Statistical Data File (SDF)"
 		echo 'statistical_data_file="'$statistical_data_file'"	# Default location is where the script is located.'
 		echo 'SDF_DataRecordEnable="'$SDF_DataRecordEnable'"	# Set to "true" will save all drive data into a CSV file defined by "statistical_data_file" below.'
-		echo "SDF_DataPurgeDays=$SDF_DataPurgeDays		# Set to the number of day you wish to keep in the data.  Older data will be purged. Default is 730 days (2 years). 0=Disable."
+		echo "SDF_DataPurgeDays="$SDF_DataPurgeDays"		# Set to the number of day you wish to keep in the data.  Older data will be purged. Default is 730 days (2 years). 0=Disable."
 		echo 'SDF_DataEmail="'$SDF_DataEmail'"		# Set to "true" to have an attachment of the file emailed to you. Default is true.'
 		echo 'SDF_DataEmailDay="'$SDF_DataEmailDay'"		# Set to the day of the week the statistical report is emailed.  (All, Mon, Tue, Wed, Thu, Fri, Sat, Sun, Month)'
 		echo " "
@@ -5662,7 +6506,6 @@ update_config_file () {
 		echo 'MRConfigEmailDay="'$MRConfigEmailDay'"		# Set to the day of the week the multi_report_config.txt is emailed.  (All, Mon, Tue, Wed, Thu, Fri, Sat, Sun, Month, Never)'
 		echo " "
 		echo "###### REPORT CHART CONFIGURATION"
-		echo " "
 		echo "###### CUSTOM SUBJECT LINE"
 		echo "### The host name will precede the subject line message."
 		echo " "
@@ -5752,8 +6595,8 @@ update_config_file () {
 		echo 'HDD_Last_Test_Type_Title="'$HDD_Last_Test_Type_Title'"'
 		echo 'HDD_Total_Data_Written="'$HDD_Total_Data_Written'"'
 		echo 'HDD_Total_Data_Written_Title="'$HDD_Total_Data_Written_Title'"'
-		echo 'HDD_TDW_Month="'$HDD_TDW_Month'"'
-		echo 'HDD_TDW_Month_Title="'$HDD_TDW_Month_Title'"'
+		echo 'HDD_Total_Data_Written_Month="'$HDD_Total_Data_Written_Month'"'
+		echo 'HDD_Total_Data_Written_Month_Title="'$HDD_Total_Data_Written_Month_Title'"'
 		echo " "
 		echo "# For Solid State Drive Section"
 		echo 'SSD_Device_ID="'$SSD_Device_ID'"'
@@ -5794,8 +6637,8 @@ update_config_file () {
 		echo 'SSD_Last_Test_Type_Title="'$SSD_Last_Test_Type_Title'"'
 		echo 'SSD_Total_Data_Written="'$SSD_Total_Data_Written'"'
 		echo 'SSD_Total_Data_Written_Title="'$SSD_Total_Data_Written_Title'"'
-		echo 'SSD_TDW_Month="'$SSD_TDW_Month'"'
-		echo 'SSD_TDW_Month_Title="'$SSD_TDW_Month_Title'"'
+		echo 'SSD_Total_Data_Written_Month="'$SSD_Total_Data_Written_Month'"'
+		echo 'SSD_Total_Data_Written_Month_Title="'$SSD_Total_Data_Written_Month_Title'"'
 		echo " "
 		echo "# For NVMe Drive Section"
 		echo 'NVM_Device_ID="'$NVM_Device_ID'"'
@@ -5832,8 +6675,8 @@ update_config_file () {
 		echo 'NVM_Last_Test_Type_Title="'$NVM_Last_Test_Type_Title'"'
 		echo 'NVM_Total_Data_Written="'$NVM_Total_Data_Written'"'
 		echo 'NVM_Total_Data_Written_Title="'$NVM_Total_Data_Written_Title'"'
-		echo 'NVM_TDW_Month="'$NVM_TDW_Month'"'
-		echo 'NVM_TDW_Month_Title="'$NVM_TDW_Month_Title'"'
+		echo 'NVM_Total_Data_Written_Month="'$NVM_Total_Data_Written_Month'"'
+		echo 'NVM_Total_Data_Written_Month_Title="'$NVM_Total_Data_Written_Month_Title'"'
 		echo " "
 		echo "###### Drive Ignore List"
 		echo "# What does it do:"
@@ -5933,6 +6776,39 @@ update_config_file () {
 			echo 'yellowColor="#f1ffad"	# Hex code for pale yellow.'
 			echo 'pohColor="#ffffcc"	# Hex code for pale yellow.'
 		fi
+		echo " "
+		echo "###### THIS SECTION FOR DRIVE_SELFTEST SCRIPT ONLY"
+		echo "###### SCRIPT UPDATES ---- NOT OPERATIONAL YET"
+		echo 'Allow_Drive_Selftest_Script_Update="'$Allow_Drive_Selftest_Script_Update'"	# When set to "true" then the script will automatically update itself if a new update is present.'
+		echo " "
+		echo "###### HDD/SSD/NVMe SMART Testing"
+		echo "### SHORT SETTINGS"
+		echo "Short_Test_Mode=$Short_Test_Mode                           # 1 = Use Short_Drives_to_Test_Per_Day value, 2 = All Drives Tested (Ignores other options), 3 = No Drives Tested."
+		echo "Short_Time_Delay_Between_Drives=$Short_Time_Delay_Between_Drives           # Tests will have a XX second delay between the drives starting testing."
+		echo 'Short_SMART_Testing_Order="'$Short_SMART_Testing_Order'"         # Test order is for Test Mode 1 ONLY, select "Serial" or "DriveID" for sort order.  Default = "Serial"'
+		echo "Short_Drives_to_Test_Per_Day=$Short_Drives_to_Test_Per_Day              # For Test_Mode 1) How many drives to run each day minimum?"
+		echo 'Short_Drives_Test_Period="'$Short_Drives_Test_Period'"             # "Week" (7 days) or "Month" (28 days)'
+		echo 'Short_Drives_Tested_Days_of_the_Week="'$Short_Drives_Tested_Days_of_the_Week'"    # Days of the week to run, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat, 7=Sun.'
+		echo "Short_Drives_Test_Delay=$Short_Drives_Test_Delay					  # How long to delay when running Short tests, before exiting to controlling procedure.  Default is 130 second should allow."
+		echo "											  # Short tests to complete before continuing.  If using without Multi-Report, set this value to 1."
+		echo "### LONG SETTINGS"
+		echo "Long_Test_Mode=$Long_Test_Mode                            # 1 = Use Long_Drives_to_Test_Per_Day value, 2 = All Drives Tested (Ignores other options), 3 = No Drives Tested."
+		echo "Long_Time_Delay_Between_Drives=$Long_Time_Delay_Between_Drives            # Tests will have a XX second delay between the drives starting the next test."
+		echo 'Long_SMART_Testing_Order="'$Long_SMART_Testing_Order'"           # Test order is either "Serial" or "DriveID".  Default = "Serial"'
+		echo "Long_Drives_to_Test_Per_Day=$Long_Drives_to_Test_Per_Day               # For Test_Mode 1) How many drives to run each day minimum?"
+		echo 'Long_Drives_Test_Period="'$Long_Drives_Test_Period'"              # "Week" (7 days) or "Month" (28 days)'
+		echo 'Long_Drives_Tested_Days_of_the_Week="'$Long_Drives_Tested_Days_of_the_Week'"     # Days of the week to run, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat, 7=Sun.'
+		echo " "
+		echo "### REPORT"
+		echo "Drive_List_Length=$Drive_List_Length                        # This is how many drive IDs to list per line.  Default is 10."
+		echo 'Enable_Logging="'$Enable_Logging'"                       # This will create a text file named "drive_test_xx.txt". Run -clearlog'
+		echo 'LOG_DIR="'$SCRIPT_DIR/DS_Logs'"   			  # The default log directory is the script directory.'
+		echo " "
+		echo "### EXTERNAL CONFIGURATION FILE"
+		echo 'Use_multi_report_config_values="'$Use_multi_report_config_values'"	      # A "true" value here will use the $Config_File_Name file values to override the values defined below.'
+		echo '										      # This allows the values to be retained between versions.  A "false" will utilize the values below.'
+		echo " "
+				
 	) > "$Config_File_Name"
 	if [[ $MRChangedEmailSend == "true" ]]; then MR_Attach_Config="1"; fi
 	}
@@ -5942,6 +6818,7 @@ update_config_file () {
 # Update configuration file is retired now that the config file is automatically updated.
 
 generate_config_file () {
+if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file"; fi
 	SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 	Config_File_Name="$SCRIPT_DIR/multi_report_config.txt"
 	for (( z=1; z<=50; z++ )); do
@@ -5955,6 +6832,7 @@ generate_config_file () {
 		echo "      N)ew configuration file (creates a new clean external configuration file)"
 		echo "      A)dvanced configuration (must have a configuration file already present)"
 		echo "      S)pencer Integration (configure Spencer add-on)"
+		echo "      D)rive Self-test configuration (companion script)"
 		echo "      H)ow to use this configuration tool (general instructions)"
 		echo "      X) Exit"
 		echo " "
@@ -6010,11 +6888,12 @@ generate_config_file () {
 					echo "   K) Drive Errors (Ignore Drives, UDMA CRC, MultiZone,"
 					echo "            Reallocated Sectors, ATA Errors, Warranty Expiration)"
 					echo "   L) Subject Line Custom Settings"
-					echo "   M) Multipath Setting"
+#					echo "   M) Multipath Setting"
 					echo "   N) NVMe Custom Settings (Set Low Power State, SMART Test Options)"
-					echo "   O) SCSI Drive Settings (Obtain true Power On Hours)"
+#					echo "   O) (Not operational) SCSI Drive Settings (Obtain true Power On Hours)"
+#					echo "   R) Run HDD/SDD Short & Long SMART Tests from Multi-Report Script"
 					echo "   S) Custom Drive Configuration"
-					echo "   T) SMR Drive Options and GPT Partition Checking"
+					echo "   T) SMR Drive Options and GPT Partition Checking/Backup"
 					echo "   U) Update Script - Automatic or Manual Internet (Github) Updates"
 					echo "   W) Write Configuration File (Save your changes)"
 					echo "   X) Exit - Will not automatically save changes"
@@ -6023,7 +6902,7 @@ generate_config_file () {
 					echo -n "   Make your selection: "
 					read -s -n 1 Keyboard_var2
 					echo " "
-					shopt -s nocasematch
+#					shopt -s nocasematch
 					case $Keyboard_var2 in
 						# Advanced Configuration Level Start
 						A)
@@ -6045,7 +6924,7 @@ generate_config_file () {
 							echo -n "   Make your selection: "
 							read -s -n 1 Keyboard_var3
 							echo " "
-							shopt -s nocasematch
+#							shopt -s nocasematch
 							case $Keyboard_var3 in
 								A)
 									clear
@@ -6719,12 +7598,12 @@ generate_config_file () {
 							fi
 							echo "Set Value: ("$HDD_Total_Data_Written")"
 							echo " "
-							echo -n "Data Written (Month/30 Days) ("$HDD_TDW_Month") "
+							echo -n "Data Written (Month/30 Days) ("$HDD_Total_Data_Written_Month") "
 							read -s -n 1 Keyboard_yn
 							if [[ ! $Keyboard_yn == "" ]]; then
-								if [[ $Keyboard_yn == "t" ]]; then HDD_TDW_Month="true"; else HDD_TDW_Month="false"; fi
+								if [[ $Keyboard_yn == "t" ]]; then HDD_Total_Data_Written_Month="true"; else HDD_Total_Data_Written_Month="false"; fi
 							fi
-							echo "Set Value: ("$HDD_TDW_Month")"
+							echo "Set Value: ("$HDD_Total_Data_Written_Month")"
 							echo " "
 
 							echo " "
@@ -6956,13 +7835,13 @@ generate_config_file () {
 							echo "Set Value: ("$NVM_Drive_Temp_Max")"
 							echo " "
 
-							echo -n "Power State ("$NVM_Power_Level") "
-							read -s -n 1 Keyboard_yn
-							if [[ ! $Keyboard_yn == "" ]]; then
-								if [[ $Keyboard_yn == "t" ]]; then NVM_Power_Level="true"; else NVM_Power_Level="false"; fi
-							fi
-							echo "Set Value: ("$NVM_Power_Level")"
-							echo " "
+				#			echo -n "Power State ("$NVM_Power_Level") "
+				#			read -s -n 1 Keyboard_yn
+				#			if [[ ! $Keyboard_yn == "" ]]; then
+				#				if [[ $Keyboard_yn == "t" ]]; then NVM_Power_Level="true"; else NVM_Power_Level="false"; fi
+				#			fi
+				#			echo "Set Value: ("$NVM_Power_Level")"
+				#			echo " "
 
 							echo -n "Power On Hours ("$NVM_Power_On_Hours") "
 							read -s -n 1 Keyboard_yn
@@ -7809,26 +8688,7 @@ generate_config_file () {
 
 						M)
 							clear
-							echo "Multipath Configuration"
-							echo " "
-							echo "You will be able to select one of four Multipath options:"
-							echo " "
-							echo "'off' = No processing of serial numbers and is the default value."
-							echo "'normal' = Automatically remove duplicate serial numbers."
-							echo "'Exos2x' = Remove duplicate serial numbers ONLY IF the gptid matches."
-							echo "'serial' = Sort by serial numbers."
-							echo " "
-							echo "Multipath is currently: "$Multipath
-							echo " "
-							echo "Your options are: '1'=Off, '2'=Normal, '3'=Exos2x, or '4'=Serial"
-							read -s -n 1 Keyboard_yn
-							if [[ $Keyboard_yn == "1" ]]; then Multipath="off"; fi
-							if [[ $Keyboard_yn == "2" ]]; then Multipath="normal"; fi
-							if [[ $Keyboard_yn == "3" ]]; then Multipath="Exos2x"; fi
-							if [[ $Keyboard_yn == "4" ]]; then Multipath="serial"; fi
-							if [[ $Keyboard_yn != "1" && $Keyboard_yn != "2" && $Keyboard_yn != "3" && $Keyboard_yn != "4" ]]; then	echo "No change"; fi
-							echo " "
-							echo "Set Value: "$Multipath
+							echo "Built into Drive_Selftest script."
 							echo " "
 							echo "Press any key to continue"
 							read -s -n 1 key
@@ -7836,237 +8696,7 @@ generate_config_file () {
 
 						N)
 							clear
-							echo "NVMe Custom Selections - LOW POWER OPTION (CORE ONLY)"
-							echo " "
-							echo "NVMe support is lacking in both TrueNAS CORE 13.0-U6.1 and"
-							echo "TrueNAS SCALE 24.04.1  These settings will cope with the"
-							echo "discrepancies."
-							echo " "
-							echo "TrueNAS CORE (FreeBSD) does not adjust NVMe power to lower"
-							echo "levels as TrueNAS SCALE (Debian)."
-							echo "Under CORE the NVMe's will run at maximum power and you have"
-							echo "the option here to attempt to set it to it's lowest state."
-							echo " "
-							echo "The Rub: The NVMe can and will automatically switch to a"
-							echo "higher power state if the NVMe needs to, however it"
-							echo "will not automatically return to the lower state."
-							echo " "
-							echo "Current: "$NVM_Low_Power
-							echo " "
-							echo "Would you like to set the lowest power state (y/n)?"
-							read -s -n 1 Keyboard_yn
-							if [[ $Keyboard_yn == "y" || $Keyboard_yn == "n" ]]; then
-								if [[ $Keyboard_yn == "y" ]]; then
-									NVM_Low_Power="true"
-								else
-									NVM_Low_Power="false"
-								fi
-							fi
-							echo "Set Value: "$NVM_Low_Power
-							echo " "
-							echo "Press any key to continue"
-							read -s -n 1 key
-							clear
-							echo "NVMe Custom Selections - SMARTMONTOOLS Version 7.4"
-							echo " "
-							echo "Prior to smartmontools v7.4 the NVMe SMART tests were not"
-							echo "available on 'smartctl' and TrueNAS CORE 13.0-U6.1 currently"
-							echo "supports version 7.2.  TrueNAS SCALE (23.10.2) does support"
-							echo "version 7.4, however TrueNAS SCALE GUI does not allow the"
-							echo "option to configure running a S.M.A.R.T. test on NVMe drives."
-							echo " "
-							echo "If your version of TrueNAS does not have the option to"
-							echo "setup SMART tests for NVMe drives, Enable this feature."
-							echo " "
-							echo "This section compensates for these issues until they are"
-							echo "corrected in TrueNAS."
-							echo " "
-							echo "Run NVME SMART Test if smartmontools 7.4 is installed"
-							echo "Current: "$NVM_Smartmontools_74_Override
-							echo -n "('e' = enable, 'd' = disable, Any key to accept) "
-							read -s -n 1 Keyboard_yn
-							if [[ $Keyboard_yn == "e" || $Keyboard_yn == "d" ]]; then
-								if [[ $Keyboard_yn == "e" ]]; then
-									NVM_Smartmontools_74_Override="enable"
-								else
-									NVM_Smartmontools_74_Override="disable"
-								fi
-							fi
-							echo " "
-							echo "Set Value: "$NVM_Smartmontools_74_Override
-							echo " "
-							echo "Press any key to continue"
-							read -s -n 1 key 
-							clear
-							echo "NVMe Custom Selections - RUN SHORT TESTS DAILY"
-							echo " "
-							echo "NVMe SMART Short Daily Test"
-							echo "This will run a daily SMART Short test on all days except"
-							echo "the day the Long test is scheduled."
-							echo " "
-							echo "Run a SMART Short Daily Self-test"
-							echo "Current: "$NVM_Daily_Short_Selftest
-							echo -n "('t' = true, 'f' = false, Any key to accept) "
-							read -s -n 1 Keyboard_yn
-							if [[ $Keyboard_yn == "t" || $Keyboard_yn == "f" ]]; then
-								if [[ $Keyboard_yn == "t" ]]; then
-									NVM_Daily_Short_Selftest="true"
-								else
-									NVM_Daily_Short_Selftest="false"
-								fi
-							fi
-							echo " "
-							echo "Set Value: "$NVM_Daily_Short_Selftest
-							echo " "
-							echo "Press any key to continue"
-							read -s -n 1 key
-							clear
-							echo "NVMe Custom Selections - RUN LONG TESTS WEEKLY"
-							echo " "
-							echo "NVMe SMART Long Weekly Test"
-							echo "This will run a weekly SMART Long test on the one day of the"
-							echo "week that you schedule in the next question."
-							echo " "
-							echo "Run a SMART Long Weekly Self-test"
-							echo "Current: "$NVM_Weekly_Long_Selftest
-							echo -n "('t' = true, 'f' = false, Any key to accept) "
-							read -s -n 1 Keyboard_yn
-							if [[ $Keyboard_yn == "t" || $Keyboard_yn == "f" ]]; then
-								if [[ $Keyboard_yn == "t" ]]; then
-									NVM_Weekly_Long_Selftest="true"
-								else
-									NVM_Weekly_Long_Selftest="false"
-								fi
-							fi
-							echo " "
-							echo "Set Value: "$NVM_Weekly_Long_Selftest
-							echo " "
-							echo "Press any key to continue"
-							read -s -n 1 key 
-							clear
-							echo "NVMe Custom Selections - WHAT DAY TO RUN SMART LONG TESTS"
-							echo " "
-							echo "NVMe SMART Long Weekly Test Day"
-							echo " "
-							echo "Run a SMART Long Self-test on "$SMART_Weekly_Long_Selftest_Day
-							echo "A Short test will not be run on this day."
-							echo " "
-							echo "Current: "$NVM_Weekly_Long_Selftest_Day
-							echo " "
-							echo "What would you like to run a SMART Long Weekly Self-test on?"
-							echo -n "(Sun, Mon, Tue, Wed, Thu, Fri, Sat) "
-							read Keyboard_yn
-							if [[ $Keyboard_yn != "" ]]; then NVM_Weekly_Long_Selftest_Day=$Keyboard_yn; fi
-							echo " "
-							echo "Set Value: "$NVM_Weekly_Long_Selftest_Day
-							echo " "
-							echo "Press any key to continue"
-							read -s -n 1 key 
-							clear
-							echo "NVMe Custom Selections - WAIT FOR SHORT TEST TO COMPLETE"
-							echo " "
-							echo "Would you like to delay the script email until after"
-							echo "the SMART Short Self-test has completed.  This gives you the"
-							echo "benefit of having the most recent test in the Multi-Report"
-							echo "report."
-							echo " "
-							echo "This will poll the NVMe drive(s) to check if the test has"
-							echo "completed (pass or fail). All drives are run simotainiously."
-							echo " "
-							echo "NOTE: A Short test typically lasts about 2 minutes"
-							echo " "
-							echo "Wait For SMART Short Self-test to complete?"
-							echo "Current: "$Wait_For_SMART_Short_Test
-							echo -n "('t' = true, 'f' = false, Any key to accept) "
-							read -s -n 1 Keyboard_yn
-							if [[ $Keyboard_yn == "t" || $Keyboard_yn == "f" ]]; then
-								if [[ $Keyboard_yn == "t" ]]; then
-									Wait_For_SMART_Short_Test="true"
-								else
-									Wait_For_SMART_Short_Test="false"
-								fi
-							fi
-							echo " "
-							echo "Set Value: "$Wait_For_SMART_Short_Test
-							echo " "
-							echo "Press any key to continue"
-							read -s -n 1 key
-							clear
-							echo "NVMe Custom Selections - WAIT FOR LONG TEST TO COMPLETE"
-							echo " "
-							echo "Would you like to delay the script email until after"
-							echo "the SMART Long Self-test has completed.  This gives you the"
-							echo "benefit of having the most recent test in the Multi-Report"
-							echo "report."
-							echo " "
-							echo "This will poll the NVMe drive(s) to check if the test has"
-							echo "completed (pass or fail). All drives are run simotainiously."
-							echo " "
-							echo "NOTE: A Long test typically lasts about 2.5 minutes per TB of"
-							echo "      capacity.  This feature is disabled(false) by default."
-							echo " "
-							echo "Wait For SMART Long Self-test to complete?"
-							echo "Current: "$Wait_For_SMART_Long_Test
-							echo -n "('t' = true, 'f' = false, Any key to accept) "
-							read -s -n 1 Keyboard_yn
-							if [[ $Keyboard_yn == "t" || $Keyboard_yn == "f" ]]; then
-								if [[ $Keyboard_yn == "t" ]]; then
-									Wait_For_SMART_Long_Test="true"
-								else
-									Wait_For_SMART_Long_Test="false"
-								fi
-							fi
-							echo " "
-							echo "Set Value: "$Wait_For_SMART_Long_Test
-							echo " "
-							echo "Press any key to continue"
-							read -s -n 1 key
-
-						#	if [[ $Keyboard_yn == "t" ]]; then
-						#		clear
-						#		echo "NVMe Custom Selections"
-						#		echo " "
-						#		echo "Wait For SMART Self-test delay"
-						#		echo " "
-						#		echo "If you selected to Wait For SMART Self-test (previous question)"
-						#		echo "and do not want to wait for the Daily Short Self-test to complete,"
-						#		echo "enter '1' second.   Remember, this is not a delay for normal HDD/SSD,"
-						#		echo "this is for NVMe ONLY."
-						#		echo " "
-						#		echo "NVMe Short Self-test SECONDS to wait"
-						#		echo "Current: "$Wait_For_SMART_Short_Duration
-						#		echo -n "(1-82800) "
-						#		read Keyboard_yn
-						#		if [[ ! $Keyboard_yn == "" ]]; then
-						#			Wait_For_SMART_Short_Duration=$Keyboard_yn
-						#		fi
-						#		echo " "
-						#		echo "Set Value: "$Wait_For_SMART_Short_Duration
-						#		echo " "
-						#		echo "Press any key to continue"
-						#		read -s -n 1 key 
-						#		clear
-						#		echo "NVMe Custom Selections"
-						#		echo " "
-						#		echo "Wait for SMART Self-test delay"
-						#		echo " "
-						#		echo "If you selected to Wait For SMART Self-test and do not"
-						#		echo "want to wait for the Weekly Long Self-test to complete,"
-						#		echo "enter '1' second for the weekly below. Remember, this is"
-						#		echo "not a delay for normal HDD/SSD, this is NVMe ONLY."
-						#		echo " "
-						#		echo "NVMe Long Self-test SECONDS to wait"
-						#		echo "Current: "$Wait_For_SMART_Long_Duration
-						#		echo -n "(1-82800) "
-						#		read Keyboard_yn
-						#		if [[ ! $Keyboard_yn == "" ]]; then
-						#			Wait_For_SMART_Long_Duration=$Keyboard_yn
-						#		fi
-						#		echo " "
-						#		echo "Set Value: "$Wait_For_SMART_Long_Duration
-						#	fi							
-							echo " "
-							echo " "
+							echo "All NVMe testing options are now located in the drive_selftest.sh script."
 							echo " "
 							echo "End of NVMe section, Press any key to continue"
 							read -s -n 1 key 
@@ -8111,6 +8741,7 @@ generate_config_file () {
 							read -s -n 1 key
 
 						;;
+
 
 						S)
 							clear
@@ -8497,7 +9128,7 @@ generate_config_file () {
 
 						T)
 							clear
-							echo "SMR Drive Options and GPT Partition Checking"
+							echo "SMR DRIVE OPTIONS AND GPT PARTITION CHECKING/BACKUP"
 							echo " "
 							echo "Do you want to Enable SMR Drive Operations?"
 							echo "Current: "$SMR_Enable
@@ -8514,8 +9145,10 @@ generate_config_file () {
 								fi
 							fi
 							echo "Set Value: "$SMR_Enable
-							
+							sleep 2
 							if [[ $SMR_Enable == "true" ]]; then
+								clear
+								echo "DOWNLOAD SMR SCRIPT?"
 								echo " "
 								echo " "
 								echo "Do you want to download the SMR Script if it does not exist?"
@@ -8534,7 +9167,10 @@ generate_config_file () {
 								fi
 								echo "Set Value: "$SMR_Update
 							fi
-
+							sleep 2
+							clear
+							echo "IGNORE SMR ALARMS?"
+							echo " "
 							echo " "
 							echo "Do you want to Ignore SMR Alarm Notifications"
 							echo "When 'false' the Email Subject Line will denote a Warning,"
@@ -8556,12 +9192,46 @@ generate_config_file () {
 								fi
 							fi
 							echo "Set Value: "$SMR_Ignore_Alarm
+							sleep 2
 							echo " "
 							echo " "
-							echo "GPT Partition Checking"
+							clear
+							echo "SEND WARNING FOR NEW SMR DRIVES - DURATION OF RUNS"
+							echo " "
+							echo " "
+							echo "This setting will check to see if the drive serial number is listed"
+							echo "XX number of times and if it is greater than XX, the SMR Alarm"
+							echo "will be IGNORED (similar to SMR_Ignore_Alarm=true) however this"
+							echo "allows the Subject Line to generate a Warning message and after"
+							echo "exceeding XX runs of the script, the subject line will stop indicating"
+							echo "the warning message."
+							echo " "
+							echo "This feature is useful for when a new drive is added, if it is an SMR"
+							echo "drive then you will clearly have a warning message."
+							echo " "
+							echo "NOTE: This feature relies on the Statistical Data File being present."
+							echo "If you are not using the Statistical Data File, then this feature"
+							echo "will not function."
+							echo " "
+							echo "Current: "$SMR_New_Drive_Det_Count
+							echo " "
+							echo "Enter a numeric value of how many times the script can be run before"
+							echo "it ignores the SMR warning message, or Enter/Return to retain the"
+							echo "current value."
+							echo " "
+							read Keyboard_yn
+							if [[ $Keyboard_yn != "" ]]; then
+								SMR_New_Drive_Det_Count=$Keyboard_yn
+							fi
+							echo "Set Value: "$SMR_New_Drive_Det_Count
+							sleep 3
+							echo " "
+							clear							
+							echo "GPT PARTITION CHECKING"
+							echo " "
 							echo " "
 							echo "If enabled this will check all partitions to ensure there are no"
-							echo "catestrophic errors.  If you suspect GPT Partiton issues, you would"
+							echo "catastrophic errors.  If you suspect GPT Partition issues, you would"
 							echo "be smart to make sure all is good, do not depend on this script alone."
 							echo " "
 							echo "Do you want to Enable GPT Partition Checking?"
@@ -8579,6 +9249,30 @@ generate_config_file () {
 								fi
 							fi
 							echo "Set Value: "$Partition_Check
+							sleep 2
+							clear
+							echo "GPT PARTITION BACKUP"
+							echo " "
+							echo " "
+							echo "If enabled (true) then a backup of each partition table (HDD/SSD) will"
+							echo "be created and added as a file attachment that will be issued when the"
+							echo "TrueNAS Config file is attached (Monday is the default)"
+							echo " "
+							echo "Current: "$Partition_Backup
+							echo " "
+							echo "(true=yes/enable, false=no/disable)"
+							echo " "
+							echo "Enter 't', 'f', or Enter/Return to retain the current value."
+							read -s -n 1 Keyboard_yn
+							if [[ $Keyboard_yn == "t" || $Keyboard_yn == "f" ]]; then
+								if [[ $Keyboard_yn == "t" ]]; then
+									Partition_Backup="true"
+								else
+									Partition_Backup="false"
+								fi
+							fi
+							echo "Set Value: "$Partition_Backup
+							echo " "
 							echo " "
 							echo "Make sure you write your changes."
 							echo "Press any key to continue"
@@ -8605,7 +9299,7 @@ generate_config_file () {
 							echo "and if Github has an update on it, it will be downloaded"
 							echo "and installed immediately."
 							echo " "
-							if [[ $AutomaticUpdate != "true" ]]; then
+							if [[ $Automatic_Update != "true" ]]; then
 								echo "You are currently using Manual Updates (system default)."
 							else
 								echo "You are currently using Fully Automatic Updates."
@@ -8618,13 +9312,13 @@ generate_config_file () {
 								echo "Keeping the current setting"
 							elif [[ $Keyboard_yn == "a" ]]; then 
 								echo "You selected Fully Automatic Updates."
-								AutomaticUpdate="true"
+								Automatic_Update="true"
 							elif [[ $Keyboard_yn == "m" ]]; then
 								echo "You selected the safer Manual Updates."
-								AutomaticUpdate="false"
+								Automatic_Update="false"
 							fi
 							echo " "
-							echo "AutomaticUpdate ("$AutomaticUpdate")"
+							echo "Automatic_Update ("$Automatic_Update")"
 							echo " "
 							echo "Make sure you write your changes."
 							echo "Press any key to continue"
@@ -8665,15 +9359,15 @@ generate_config_file () {
 							echo "Do you want to display:"
 							echo "1 = Current Month"
 							echo "2 = Past Rolling 30 Days"
-							echo 'Current value: '$TDW_Month
+							echo 'Current value: '$Total_Data_Written_Month
 							read -s -n 1 Keyboard_yn
 							if [[ $Keyboard_yn == "y" ]]; then
-								TDW_Month="month"					
+								Total_Data_Written_Month="month"					
 							else
-								TDW_Month="30Days"
+								Total_Data_Written_Month="30Days"
 							fi
 							echo " "
-							echo "Set Value: "$TDW_Month
+							echo "Set Value: "$Total_Data_Written_Month
 							echo " "
 							echo -n "Press any key to continue"
 							read -s -n 1 key
@@ -8689,6 +9383,680 @@ generate_config_file () {
 					done
 					;;
 					# Advanced Configuration Level End
+					
+				D)
+					load_config
+					for (( v=1; v<=50; v++ )); do
+					clear
+					echo "            Drive Self-test (companion) Script Configuration"
+					echo " "
+					echo "   S)hort Test Setup"
+					echo "   L)ong Test Setup"
+					echo "   R)eports (Logging)"
+					echo "   A)utomatic Update"
+					echo "   E)nable Drive Self-test Script"
+					echo "   W)rite to configuration file  (NOTE: Any changes will be lost if you do not write the file NOW)"
+					echo "   X) Exit"
+					echo " "
+					echo -n "   Make your selection: "
+					read -s -n 1 Keyboard_loop2
+					echo " "
+					case $Keyboard_loop2 in
+						S)
+						for (( u=1; u<=50; u++ )); do
+						clear
+						echo "            Short SMART Test Setup"
+						echo " "
+						echo "These setting affect Short drive tests only."
+						echo " "
+						echo "   A) Short Test Mode" 
+						echo "   B) Short Time Delay Between Successive Test"
+						echo "   C) Short SMART Drive Testing Order"
+						echo "   D) Short Number of Drives to Test Per Day (Test Mode 1 Only)" 
+						echo "   E) Short Testing Period (Test Mode 1 Only)"
+						echo "   F) Short Authorized Days"
+						echo "   G) Short Time Delay to Allow Testing to Complete."
+						echo "   X) Exit - Return to previous menu"
+						echo " "
+						echo -n "   Make your selection: "
+						read -s -n 1 Keyboard_loop1
+						echo " "
+						case $Keyboard_loop1 in
+							A)	
+							clear
+							echo "            Short SMART Test Setup"
+							echo " "
+							echo "1) Test Mode 1 = Test various drives as defined by parameters"
+							echo "2) Test Mode 2 = Test ALL Drives"
+							echo "3) Test Mode 3 = Test NO Drives"
+							echo " "
+							echo "Current value:"$Short_Test_Mode
+							echo " "
+							echo -n "Enter your selection or press Return/Enter to remain the same: "
+							read -s -n 1 Keyboard_var3
+							echo " "
+							if [[ $Keyboard_var3 != "" ]]; then
+								Short_Test_Mode=$Keyboard_var3
+							fi
+							echo " "
+							echo "New Value: Test Mode "$Short_Test_Mode
+							echo " "
+							echo -n "Press Any Key to Continue"
+							read -s -n 1 Keyboard_var3
+							;;
+
+							B)	
+							clear
+							echo "            Short SMART Test Setup"
+							echo " "
+							echo "Time Delay Between Successive Test"
+							echo " "
+							echo "Enter the amount of time in SECONDS that you would like to"
+							echo "have a delay between starting up a drive self-test"
+							echo " "
+							echo "Current Value:"$Short_Time_Delay_Between_Drives
+							echo " "
+							echo -n "Enter your selection or press Return/Enter to remain the same: "
+							read Keyboard_var3
+							echo " "
+							if [[ $Keyboard_var3 != "" ]]; then
+								Short_Time_Delay_Between_Drives=$Keyboard_var3
+							fi
+							echo " "
+							echo "New Value: "$Short_Time_Delay_Between_Drives" seconds was set."
+							echo " "
+							echo -n "Press Any Key to Continue"
+							read -s -n 1 Keyboard_var3
+							;;
+								
+							C)	
+							clear
+							echo "            Short SMART Test Setup"
+							echo " "
+							echo "Testing Order (Test Mode 1 Only)"
+							echo " "
+							echo "There are two testing orders:"
+							echo "  A) 'Drive Name (ID)' (DriveID)"
+							echo "  B) 'Drive Serial Number' (Serial)"
+							echo " "
+							echo "Current Value: "$Short_SMART_Testing_Order
+							echo " "
+							echo -n "Enter your selection or press Return/Enter to remain the same: "
+							read -s -n 1 Keyboard_var3
+							echo " "
+							if [[ $Keyboard_var3 == "a" ]]; then
+								Short_SMART_Testing_Order="DriveID"
+							elif [[ $Keyboard_var3 == "b" ]]; then
+								Short_SMART_Testing_Order="Serial"
+							fi
+							echo " "
+							echo "New Value: "$Short_SMART_Testing_Order
+							echo " "
+							echo -n "Press Any Key to Continue"
+							read -s -n 1 Keyboard_var3
+							;;
+								
+							D)
+							clear
+							echo "            Short SMART Test Setup"
+							echo " "
+							echo "How many drives to test per day (Test Mode 1 Only)"
+							echo " "
+							echo "Enter the number of drives you wish to test in a given day."
+							echo " "
+							echo "Note: If you select too small of a value in order to test all"
+							echo "of the drives in the specific time period, the value will be"
+							echo "adjusted for you.  Leaving a value of '1' is perfectly acceptable."
+							echo " "
+							echo "Current Value:"$Short_Drives_to_Test_Per_Day
+							echo " "
+							echo -n "Enter your selection or press Return/Enter to remain the same: "
+							read Keyboard_var3
+							echo " "
+							if [[ $Keyboard_var3 != "" ]]; then
+								Short_Drives_to_Test_Per_Day=$Keyboard_var3
+							fi
+							echo " "
+							echo "New Value: "$Short_Drives_to_Test_Per_Day
+							echo " "
+							echo -n "Press Any Key to Continue"
+							read -s -n 1 Keyboard_var3
+							;;
+								
+							E)	
+							clear
+							echo "            Short SMART Test Setup"
+							echo " "
+							echo "Drive Testing Period (Test Mode 1 Only)"
+							echo " "
+							echo "There are two testing periods:"
+							echo "  A) 'Week' - Tests all the drives in a weeks period"
+							echo "  B) 'Month' - Tests all the drives in a months (28 day) period"
+							echo " "
+							echo "NOTE: There are three values which establish the Test Mode 1 periodicity"
+							echo "  Drives to Test Per Day, Drive testing Period, and Authiorized Test Days of the Week"
+							echo "  All three values are used to determine how many drive must be tested to complete"
+							echo "  the required allowed testing time."
+							echo " "
+							echo "Current Value: "$Short_Drives_Test_Period
+							echo " "
+							echo -n "Enter your selection or press Return/Enter to remain the same: "
+							read -s -n 1 Keyboard_var3
+							echo " "
+							if [[ $Keyboard_var3 == "a" ]]; then
+								Short_Drives_Test_Period="Week"
+							elif [[ $Keyboard_var3 == "b" ]]; then
+								Short_Drives_Test_Period="Month"
+							fi
+							echo " "
+							echo "New Value: "$Short_Drives_Test_Period
+							echo " "
+							echo -n "Press Any Key to Continue"
+							read -s -n 1 Keyboard_var3
+							;;
+							F)	
+							temp_authdays=$Short_Drives_Tested_Days_of_the_Week
+							for (( y=1; y<=50; y++ )); do
+								clear
+								echo "            Short SMART Test Setup"
+								echo " "
+								echo "Authorized Days of the Week to Test"
+								echo " "
+								echo "  1) Monday"
+								echo "  2) Tuesday"
+								echo "  3) Wednesday"
+								echo "  4) Thursday"
+								echo "  5) Friday"
+								echo "  6) Saturday"
+								echo "  7) Sunday"
+								echo " "
+								echo "  C) Clear (to clear the numbers)"
+								echo " "
+								echo "Current Value: "$temp_authdays
+								echo " "
+								echo "Select the days of the week you will allow a Short test to be run."
+								echo "NOTE: The order the values are listed in will not affect normal operation."
+								echo -n "Press Enter/Return to accept the values."
+								read -s -n 1 Keyboard_var3
+								echo " "
+								if [[ $Keyboard_var3 == "1" ]] && [[ $temp_authdays != *"1"* ]]; then
+									temp_authdays=$temp_authdays",1"
+								elif [[ $Keyboard_var3 == "2" ]] && [[ $temp_authdays != *"2"* ]]; then
+									temp_authdays=$temp_authdays",2"
+								elif [[ $Keyboard_var3 == "3" ]] && [[ $temp_authdays != *"3"* ]]; then
+									temp_authdays=$temp_authdays",3"
+								elif [[ $Keyboard_var3 == "4" ]] && [[ $temp_authdays != *"4"* ]]; then
+									temp_authdays=$temp_authdays",4"
+								elif [[ $Keyboard_var3 == "5" ]] && [[ $temp_authdays != *"5"* ]]; then
+									temp_authdays=$temp_authdays",5"
+								elif [[ $Keyboard_var3 == "6" ]] && [[ $temp_authdays != *"6"* ]]; then
+									temp_authdays=$temp_authdays",6"
+								elif [[ $Keyboard_var3 == "7" ]] && [[ $temp_authdays != *"7"* ]]; then
+									temp_authdays=$temp_authdays",7"
+								elif [[ $Keyboard_var3 == "c" ]]; then
+									temp_authdays=""
+								fi
+								if [[ $(echo $temp_authdays | cut -c1) == "," ]]; then
+									temp_authdays=$(echo $temp_authdays | sed 's/,//')
+								fi											
+								echo " "
+								echo "Temporary Value: "$temp_authdays
+								echo " "
+								if [[ $Keyboard_var3 == "" ]]; then
+									Short_Drives_Tested_Days_of_the_Week=$temp_authdays
+									y=100
+								fi
+							done
+							echo "New Value: "$Short_Drives_Tested_Days_of_the_Week
+							echo " "
+							echo -n "Press Any Key to Continue"
+							read -s -n 1 Keyboard_var3
+							;;
+
+							G)	
+							clear
+							echo "            Short SMART Test Setup"
+							echo " "
+							echo "Time Delay to Allow Testing to Complete"
+							echo " "
+							echo "This allows you to set a delay after all the SMART Self-tests"
+							echo "were commenced.  The intinsion is to allow all SHORT tests to"
+							echo "complete before returning control back to the Multi-Report script."
+							echo " "
+							echo "If using Multi-Report, recommend using a value of 130 seconds."
+							echo "If running Drive-Selftest alone, recommend using a value of 1 second."
+							echo " "
+							echo "NOTE: If no drives are being tested for the day, the time delay"
+							echo "      is ignored and no delay is experienced."
+							echo " "
+							echo "Enter the amount of time in SECONDS that you would like to"
+							echo "have a delay between starting up a drive self-test"
+							echo " "
+							echo "Current Value:"$Short_Drives_Test_Delay
+							echo " "
+							echo -n "Enter your selection or press Return/Enter to remain the same: "
+							read Keyboard_var3
+							echo " "
+							if [[ $Keyboard_var3 != "" ]]; then
+								Short_Drives_Test_Delay=$Keyboard_var3
+							fi
+							echo " "
+							echo "New Value: "$Short_Drives_Test_Delay" seconds was set."
+							echo " "
+							echo -n "Press Any Key to Continue"
+							read -s -n 1 Keyboard_var3
+							;;
+
+							X)
+							clear
+							echo "Returning to the previous menu..."
+							sleep 2
+							u=100
+							;;
+							
+							*)
+							;;
+
+						esac
+						done
+						;;
+
+						L)
+						for (( u=1; u<=50; u++ )); do
+						clear
+						echo "            Long SMART Test Setup"
+						echo " "
+						echo "These setting affect Long drive tests only."
+						echo " "
+						echo "   A) Long Test Mode" 
+						echo "   B) Long Time Delay Between Successive Test"
+						echo "   C) Long SMART Drive Testing Order"
+						echo "   D) Long Number of Drives to Test Per Day (Test Mode 1 Only)" 
+						echo "   E) Long Testing Period (Test Mode 1 Only)"
+						echo "   F) Long Authorized Days"
+						echo "   X) Exit - Return to previous menu"
+						echo " "
+						echo -n "   Make your selection: "
+						read -s -n 1 Keyboard_loop1
+						echo " "
+						case $Keyboard_loop1 in
+							A)	
+							clear
+							echo "            Long SMART Test Setup"
+							echo " "
+							echo "1) Test Mode 1 = Test various drives as defined by parameters"
+							echo "2) Test Mode 2 = Test ALL Drives"
+							echo "3) Test Mode 3 = Test NO Drives"
+							echo " "
+							echo "Current value:"$Long_Test_Mode
+							echo " "
+							echo -n "Enter your selection or press Return/Enter to remain the same: "
+							read -s -n 1 Keyboard_var3
+							echo " "
+							if [[ $Keyboard_var3 == "1" ]]; then
+								Long_Test_Mode=$Keyboard_var3
+							elif [[ $Keyboard_var3 == "2" ]]; then
+								Long_Test_Mode=$Keyboard_var3
+							elif [[ $Keyboard_var3 == "3" ]]; then
+								Long_Test_Mode=$Keyboard_var3
+							elif [[ $Keyboard_var3 == "" ]]; then
+								echo "No change"
+							else
+								echo "Invalid Entry"
+								sleep 1
+							fi
+							echo " "
+							echo "New Value: Test Mode "$Long_Test_Mode
+							echo " "
+							echo -n "Press Any Key to Continue"
+							read -s -n 1 Keyboard_var3
+							;;
+
+							B)	
+							clear
+							echo "            Long SMART Test Setup"
+							echo " "
+							echo "Time Delay Between Successive Test"
+							echo " "
+							echo "Enter the amount of time in SECONDS that you would like to"
+							echo "have a delay between starting up a drive self-test"
+							echo " "
+							echo "Current Value:"$Long_Time_Delay_Between_Drives
+							echo " "
+							echo -n "Enter your selection or press Return/Enter to remain the same: "
+							read Keyboard_var3
+							echo " "
+							if [[ $Keyboard_var3 != "" ]]; then
+								Long_Time_Delay_Between_Drives=$Keyboard_var3
+							fi
+							echo " "
+							echo "New Value: "$Long_Time_Delay_Between_Drives" seconds was set."
+							echo " "
+							echo -n "Press Any Key to Continue"
+							read -s -n 1 Keyboard_var3
+							;;
+								
+							C)	
+							clear
+							echo "            Long SMART Test Setup"
+							echo " "
+							echo "Testing Order (Test Mode 1 Only)"
+							echo " "
+							echo "There are two testing orders:"
+							echo "  A) 'Drive Name (ID)' (DriveID)"
+							echo "  B) 'Drive Serial Number' (Serial)"
+							echo " "
+							echo "Current Value: "$Long_SMART_Testing_Order
+							echo " "
+							echo -n "Enter your selection or press Return/Enter to remain the same: "
+							read -s -n 1 Keyboard_var3
+							echo " "
+							if [[ $Keyboard_var3 == "a" ]]; then
+								Long_SMART_Testing_Order="DriveID"
+							elif [[ $Keyboard_var3 == "b" ]]; then
+								Long_SMART_Testing_Order="Serial"
+							else
+								echo "Using curent setting."
+								sleep 1
+							fi
+							echo " "
+							echo "New Value: "$Long_SMART_Testing_Order
+							echo " "
+							echo -n "Press Any Key to Continue"
+							read -s -n 1 Keyboard_var3
+							;;
+								
+							D)
+							clear
+							echo "            Long SMART Test Setup"
+							echo " "
+							echo "How many drives to test per day (Test Mode 1 Only)"
+							echo " "
+							echo "Enter the number of drives you wish to test in a given day."
+							echo " "
+							echo "Note: If you select too small of a value in order to test all"
+							echo "of the drives in the specific time period, the value will be"
+							echo "adjusted for you.  Leaving a value of '1' is perfectly acceptable."
+							echo " "
+							echo "Current Value:"$Long_Drives_to_Test_Per_Day
+							echo " "
+							echo -n "Enter your selection or press Return/Enter to remain the same: "
+							read Keyboard_var3
+							echo " "
+							if [[ $Keyboard_var3 != "" ]]; then
+								Long_Drives_to_Test_Per_Day=$Keyboard_var3
+							fi
+							echo " "
+							echo "New Value: "$Long_Drives_to_Test_Per_Day
+							echo " "
+							echo -n "Press Any Key to Continue"
+							read -s -n 1 Keyboard_var3
+							;;
+								
+							E)	
+							clear
+							echo "            Long SMART Test Setup"
+							echo " "
+							echo "Drive Testing Period (Test Mode 1 Only)"
+							echo " "
+							echo "There are two testing periods:"
+							echo "  A) 'Week' - Tests all the drives in a weeks period"
+							echo "  B) 'Month' - Tests all the drives in a months (28 day) period"
+							echo " "
+							echo "NOTE: There are three values which establish the Test Mode 1 periodicity"
+							echo "  Drives to Test Per Day, Drive testing Period, and Authiorized Test Days of the Week"
+							echo "  All three values are used to determine how many drive must be tested to complete"
+							echo "  the required allowed testing time."
+							echo " "
+							echo "Current Value: "$Long_Drives_Test_Period
+							echo " "
+							echo -n "Enter your selection or press Return/Enter to remain the same: "
+							read -s -n 1 Keyboard_var3
+							echo " "
+							if [[ $Keyboard_var3 == "a" ]]; then
+								Long_Drives_Test_Period="Week"
+							elif [[ $Keyboard_var3 == "b" ]]; then
+								Long_Drives_Test_Period="Month"
+							else
+								echo "Using current setting."
+								sleep 1
+							fi
+							echo " "
+							echo "New Value: "$Long_Drives_Test_Period
+							echo " "
+							echo -n "Press Any Key to Continue"
+							read -s -n 1 Keyboard_var3
+							;;
+							F)	
+							temp_authdays=$Long_Drives_Tested_Days_of_the_Week
+							for (( y=1; y<=50; y++ )); do
+								clear
+								echo "            Long SMART Test Setup"
+								echo " "
+								echo "Authorized Days of the Week to Test"
+								echo " "
+								echo "  1) Monday"
+								echo "  2) Tuesday"
+								echo "  3) Wednesday"
+								echo "  4) Thursday"
+								echo "  5) Friday"
+								echo "  6) Saturday"
+								echo "  7) Sunday"
+								echo " "
+								echo "  C) Clear (to clear the numbers)"
+								echo " "
+								echo "Current Value: "$temp_authdays
+								echo " "
+								echo "Select the days of the week you will allow a Long test to be run."
+								echo "NOTE: The order the values are listed in will not affect normal operation."
+								echo -n "Press Enter/Return to accept the values."
+								read -s -n 1 Keyboard_var3
+								echo " "
+								if [[ $Keyboard_var3 == "1" ]] && [[ $temp_authdays != *"1"* ]]; then
+									temp_authdays=$temp_authdays",1"
+								elif [[ $Keyboard_var3 == "2" ]] && [[ $temp_authdays != *"2"* ]]; then
+									temp_authdays=$temp_authdays",2"
+								elif [[ $Keyboard_var3 == "3" ]] && [[ $temp_authdays != *"3"* ]]; then
+									temp_authdays=$temp_authdays",3"
+								elif [[ $Keyboard_var3 == "4" ]] && [[ $temp_authdays != *"4"* ]]; then
+									temp_authdays=$temp_authdays",4"
+								elif [[ $Keyboard_var3 == "5" ]] && [[ $temp_authdays != *"5"* ]]; then
+									temp_authdays=$temp_authdays",5"
+								elif [[ $Keyboard_var3 == "6" ]] && [[ $temp_authdays != *"6"* ]]; then
+									temp_authdays=$temp_authdays",6"
+								elif [[ $Keyboard_var3 == "7" ]] && [[ $temp_authdays != *"7"* ]]; then
+									temp_authdays=$temp_authdays",7"
+								elif [[ $Keyboard_var3 == "c" ]]; then
+									temp_authdays=""
+								else
+									echo "Using current setting."
+									sleep 1
+								fi
+								if [[ $(echo $temp_authdays | cut -c1) == "," ]]; then
+									temp_authdays=$(echo $temp_authdays | sed 's/,//')
+								fi											
+								echo " "
+								echo "Temporary Value: "$temp_authdays
+								echo " "
+								if [[ $Keyboard_var3 == "" ]]; then
+									Long_Drives_Tested_Days_of_the_Week=$temp_authdays
+									y=100
+								fi
+							done
+							echo "New Value: "$Long_Drives_Tested_Days_of_the_Week
+							echo " "
+							echo -n "Press Any Key to Continue"
+							read -s -n 1 Keyboard_var3
+							;;
+
+							X)
+							clear
+							echo "Returning to the previous menu..."
+							sleep 2
+							u=100
+							;;
+							
+							*)
+							;;
+
+						esac
+						done
+						;;						
+
+						R)
+						clear
+						echo "            Reports Setup"
+						echo " "
+						echo "You may enable or disable logging"
+						echo " "
+						echo "Current Value: "$Enable_Logging
+						echo " "
+						echo "Do you want to enable logging?"
+						echo " "
+						echo "Press 't' to Enable, or 'f' to Disable"
+						echo " "
+						echo -n "Enter your selection or press Return/Enter to remain the same: "
+						read -s -n 1 Keyboard_var3
+						echo " "
+						if [[ $Keyboard_var3 == "t" ]]; then
+							Enable_Logging="true"
+						elif [[ $Keyboard_var3 == "f" ]]; then
+							Enable_Logging="false"
+						else
+							echo "Using current value."
+							sleep 1
+						fi
+						echo " "
+						echo "New Value: "$Enable_Logging
+						echo " "
+				#		echo -n "Press Any Key to Continue"
+				#		read -s -n 1 Keyboard_var3						
+				#		echo " "
+						if [[ $Enable_Logging == "true" ]]; then
+							echo "Log files will be located here: "$LOG_DIR
+						fi
+						echo " "
+						sleep 1
+						echo -n "Press Any Key to Continue"
+						read -s -n 1 Keyboard
+						;;
+
+						A)
+						clear
+						echo "            Automatic Update Setup"
+						echo " "
+						echo "Automatic updates is not operational at this time."
+						echo " "
+						echo "Current Value: "$Allow_Drive_Selftest_Script_Update
+						echo " "
+						echo "Do you want to enable automatic updates?"
+						echo " "
+						echo "Press 't' to Enable, or 'f' to Disable"
+						echo " "
+						echo -n "Enter your selection or press Return/Enter to remain the same: "
+						read -s -n 1 Keyboard_var3
+						echo " "
+						if [[ $Keyboard_var3 == "t" ]]; then
+							Allow_Drive_Selftest_Script_Update="true"
+						elif [[ $Keyboard_var3 == "f" ]]; then
+							Allow_Drive_Selftest_Script_Update="false"
+						else
+							echo "Using current value."
+							sleep 1
+						fi
+						echo " "
+						echo "New Value: "$Allow_Drive_Selftest_Script_Update
+						echo " "
+						echo -n "Press Any Key to Continue"
+						read -s -n 1 Keyboard_var3						
+						;;
+						
+						E)
+						clear
+						echo "            Enable Drive Self-test Script"
+						echo "                  (Set path & name)"
+						echo " "
+						echo "The companion script name is:"
+						echo " "
+						echo "Current Value: "$External_Script_Name
+						echo " "
+						echo "It is highly recommended to leave it as '/path/drive_selftest.sh'"
+						echo " "
+						echo "Enter a new path and script name"
+						echo " "
+						echo -n "Or press Return/Enter to remain the same: "
+						read Keyboard_var3
+						echo " "
+						if [[ $Keyboard_var3 != "" ]]; then
+							External_Script_Name=$Keyboard_var3
+						fi
+						echo " "
+						echo "New Value: "$External_Script_Name
+						echo " "
+						echo -n "Press Any Key to Continue"
+						read -s -n 1 Keyboard_var3						
+
+						clear
+						echo "            Enable Drive Self-test Script"
+						echo " "
+						echo "Do you want to enable the companion script to test drives?"
+						echo " "
+						echo "Current Value: "$External_SMART_Testing
+						echo " "
+						echo "Press 't' to Enable, or 'f' to Disable"
+						echo " "
+						echo -n "Enter your selection or press Return/Enter to remain the same: "
+						read -s -n 1 Keyboard_var3
+						echo " "
+						if [[ $Keyboard_var3 == "t" ]]; then
+							External_SMART_Testing="true"
+							Use_multi_report_config_values="false"
+						elif [[ $Keyboard_var3 == "f" ]]; then
+							External_SMART_Testing="false"
+							Use_multi_report_config_values="true"
+						elif [[ $Keyboard_var3 == "" ]]; then
+							echo "No change"
+						else
+							echo "Invalid Entry"
+						fi
+						sleep 1
+						echo " "
+						echo "New Value: "$External_SMART_Testing
+						echo " "
+						echo -n "Press Any Key to Continue"
+						read -s -n 1 Keyboard_var3										
+						;;
+						
+						W)
+						echo " "
+						echo "Writing Configuration File"
+						echo " "
+						echo " "
+						sleep 1
+						update_config_file
+						echo "File updated."
+						echo " "
+						x=100
+						sleep 1
+						echo -n "Press Any Key to Continue"
+						read -s -n 1 Keyboard	
+						;;
+						
+						X)
+						clear
+						echo "Returning to the previous menu..."
+						sleep 2
+						v=100
+						;;
+						
+						*)
+						;;
+
+						
+					esac
+					done						
+						
+				;;							
 
 				H)
 					clear
@@ -8959,6 +10327,7 @@ generate_config_file () {
 ########## HELP INSTRUCTIONS ##########
 
 display_help () {
+if [[ $Debug_Steps == "true" ]]; then echo "display_help"; fi
 	clear
 	echo "NAME"
 	echo "      Multi Report - System status reporting for TrueNAS Core and Scale"
@@ -8987,7 +10356,7 @@ display_help () {
 	echo "      -s [-m]       Record drive statistics only, do not generate a"
 	echo '                    corresponding email, unless used with "-m"'
 	echo " "
-	echo "	    -cleanup      Cleanup any left over Multi-Report files then may have been"
+	echo "      -cleanup      Cleanup any left over Multi-Report files then may have been"
 	echo "                    abandoned due to script error.  A reboot will do the same thing."
 	echo " "
 	echo "      -config       Generate or edit a configuration file in the directory the"
@@ -8995,22 +10364,22 @@ display_help () {
 	echo " "
 	echo "      -delete       Deletes the statistical data file if the file exists."
 	echo " "
-	echo "      -dump [all]         Generates an email with attachments of all drive data"
-	echo "            [email]       and the multi_report_config.txt additionally it also"
-	echo "            [emailextra]  suppress the config_backup file and statistics file"
-	echo "                          from being attached to the email unless you use"
-	echo "                    the [all] option, then the config_backup and statistics files"
-	echo "                    will be appended. The [email] option runs the normal -dump"
-	echo "                    command but also will send the email to"
-	echo "                    joeschmuck2023@hotmail.com for further analysis or just to"
+	echo "      -dump         Generates an email to the user that provides additional data."
+	echo "      -dump all     Generates an email with attachments of all drive data and"
+	echo "                    and the multi_report_config.txt additionally it also suppress"
+	echo "                    the config_backup file and statistics file from being attached"
+    echo "                    to the email unless you use the [all] option, then the"
+    echo "                    config_backup and statistics files will be appended."
+	echo " "
+    echo "      -dump email   The [email] option runs the normal -dump command but will send"
+	echo "                    an email to joeschmuck2023@hotmail.com for further analysis or just to"
 	echo "                    provide drive data information to Joe to help make improvements"
-	echo "                    to the script.  If you use the [-dump email] option, you will"
-	echo "                    be asked to confirm sending of the email. So you cannot run"
-	echo "                    this parameter from a script, it must be CLI.  You will also"
-	echo "                    be asked to enter a comment to aid Joe in your problem."
-	echo "                    [-dump emailextra] option is the same as '-dump email'"
-	echo "                    except it also includes 'smartctl -a' and smartctl -x' text file"
-	echo "                    data for each drive.  This should normally not be required."
+	echo "                    to the script.  You will be asked to enter a comment to aid Joe in"
+    echo "                    your specific problem."
+	echo " "
+	echo "      -dump emailall    [emailall | emailextra] these options produce the same result."
+	echo "      -dump emailextra  and the 'emailextra' is being depreciated.  This switch provides"
+	echo "                        additional details should those be required."
 	echo " "
 	echo "      -m [-s]       Monitor Drive Temperature Alarms. This will generate"
 	echo '                    an email to "AlertEmail" that contains a'
@@ -9019,21 +10388,21 @@ display_help () {
 	echo '                    write to the Statistical Data File, appending "-s"'
 	echo "                    will update the statistics as well."
 	echo " "
-	echo "      -purge	This will purge all test data from the statistical data file."
+	echo "      -purge        This will purge all test data from the statistical data file."
 	echo " "
-	echo "      -scsismart  This will allow running a SMART Short Self-test is required to"
-	echo "                  obtain the current power_on_time from a SCSI drive.  A 130 second"
-	echo "                  delay will allow the test to complete, and the delay is definable."
+	echo "      -scsismart    This will allow running a SMART Short Self-test is required to"
+	echo "                    obtain the current power_on_time from a SCSI drive.  A 130 second"
+	echo "                    delay will allow the test to complete, and the delay is definable."
 	echo " "
 	echo "      -t [path] [-dump]	Use strictly for test files (.json format)"
-	echo "	   			This is strickly for development."
+	echo "	   			This is strictly for development."
 	echo " "
-	echo " 	    -u7zip	This will remove 7-Zip from Scale if it was installed."
+	echo " 	    -u7zip        This will remove 7-Zip from Scale if it was installed."
 	echo " "
-	echo "      -update	Manually check GitHub for an update."
+	echo "      -update       Manually check GitHub for an update."
 	echo " "
 	echo "      -ignore_lock  This will ignore multiple instances running."
-	echo "			  This option should be last on the command line."
+	echo "                    This option should be last on the command line."
 	echo " "
 	echo "      -disable_smr  This will modify the multi_report_config.txt file to"
 	echo "                    disable checking for SMR drives.  This only needs to be done once."
@@ -9068,6 +10437,7 @@ display_help () {
 	echo "          N)ew configuration file"
 	echo "          A)dvanced configuration"
 	echo "          S)pencer Integration"
+	echo "          D)rive Self-test configuration"
 	echo "          H)ow to use this configuration tool"
 	echo "          X) Exit"
 	echo " "
@@ -9214,7 +10584,7 @@ display_help () {
 	echo "      terminal/SSH window.  Critical formatting data is lost that is required."
 	echo " "
 	echo "Recommendation:  When troubleshooting a problem you may be asked to provide"
-	echo "dump data to assist troubleshooting. Use the [-dump email] or [-dump emailextra]"
+	echo "dump data to assist troubleshooting. Use the [-dump email] or [-dump emailall]"
 	echo "to include all relevant data (drive data and configuration file) which sends an"
 	echo "email to joeschmuck2023@hotmail.com, your email address will not be shared!."
 	echo "If you prefer you can use [-dump] or [-dump all] and then open up a dialog"
@@ -9225,6 +10595,7 @@ display_help () {
 ########## HELP COMMANDS ##########
 
 display_help_commands () {
+if [[ $Debug_Steps == "true" ]]; then echo "display_help_commands"; fi
 	clear
 	echo "NAME"
 	echo "      Multi Report - System status reporting for TrueNAS Core and Scale"
@@ -9247,7 +10618,7 @@ display_help_commands () {
 	echo "      -m [-s]       Monitor Drive Temperature Alarms, generate special email"
 	echo "                    notification when a drive reaches the Warning Temp Limit."
 	echo " "
-	echo "	    -cleanup      Cleanup any left over Multi-Report files then may have been"
+	echo "      -cleanup      Cleanup any left over Multi-Report files then may have been"
 	echo "                    abandoned due to script error.  A reboot will do the same thing."
 	echo " "
 	echo "      -config       Generate or edit a configuration file in the directory the"
@@ -9261,7 +10632,7 @@ display_help_commands () {
 	echo "                    will be appended. The [email] option runs the normal -dump"
 	echo "                    command but also will send the email to"
 	echo "                    joeschmuck2023@hotmail.com for further analysis or just to"
-	echo "                    provide drive data information to Joe to help make improvments"
+	echo "                    provide drive data information to Joe to help make improvements"
 	echo "                    to the script.  If you use the [-dump email] option, you will"
 	echo "                    be asked to confirm sending of the email. So you cannot run"
 	echo "                    this parameter from a script, it must be CLI.  You will also"
@@ -9280,7 +10651,7 @@ display_help_commands () {
 	echo "			  This option should be last on the command line."
 	echo " "
 	echo "Recommendation:  When troubleshooting a problem you may be asked to provide"
-	echo "dump data to assist troubleshooting. Use the [-dump email] or [-dump emailextra]"
+	echo "dump data to assist troubleshooting. Use the [-dump email] or [-dump emailall]"
 	echo "to include all relevant data (drive data and configuration file) which sends an"
 	echo "email to joeschmuck2023@hotmail.com, your email address will not be shared!."
 	echo "If you prefer you can use [-dump] or [-dump all] and then open up a dialog"
@@ -9364,10 +10735,19 @@ zfs
 zpool
 )
 
+if ! test -e mr_sendemail.py; then
+# We need to generate the Python Script
+echo "Downloading @oxyde's sendemail.py script to send emails..."
+	get_sendemail
+fi
+
+#Temporary testing location, move to end of script.
+#smart_selftest
+
 # Test if the commands exist
 for command in "${commands[@]}"; do
 	if ! type "${command}" &> /dev/null; then
-		echo "'${command}' is missing, FIRST ensure you have elevated privlegdes -root- and if that fails, Contact Joe referencing this message." >&2
+		echo "'${command}' is missing, FIRST ensure you have elevated privileges -root- and if that fails, Contact Joe referencing this message." >&2
 		exit 1
 	fi
 done
@@ -9385,9 +10765,7 @@ if [[ "$1" == "-cleanup" ]]; then
 	echo "Cleaning up any old left over files."
 	cleanup_files
 	echo " "
-	if test -e "/tmp/Multi-Report"; then
-		rm -R "/tmp/Multi-Report"
-	fi
+	if test -e "/tmp/Multi-Report"; then rm -R "/tmp/Multi-Report"; fi
 	echo "All old left over files are gone, Yippie!"
 	echo " "
 	exit 0
@@ -9427,18 +10805,20 @@ fi
 # Use dump_all=1 during the running routine to gather all the drive data and dump to drive ID files.
 # if -dump all is used, then include config and statistical attachments (dump_all=2).
 # if -dump email is used, send "-dump" data to Joe Schmuck for analysis (dump_all=3).
-# if -dump emailextra is used, send "-dump" plus smart _a.txt & -x.txt files (dump_all=4).
+# if -dump emailextra | emailall is used, send "-dump" plus smart _a.txt & -x.txt files (dump_all=4).
 # Dump the files into /tmp/ and then email them.
 
+No_Drive_Test="false"
 if [[ "$1" == "-dump" || "$3" == "-dump" ]]; then
+	No_Drive_Test="true"
 	Attach_Files1="true"
 	zpool list > /tmp/zpoollist.txt
 	zpool status -v > /tmp/zpoolstatus.txt
 	zfs list -d 0 > /tmp/zfslist.txt
 	if [[ "$2" == "all" ]]; then dump_all="2"; echo "Attaching Drive Data, Multi-Report Configuration, Statistics, and TrueNAS Configuration files."; fi
 	if [[ "$2" == "" || "$3" == "-dump" ]]; then dump_all="1"; echo "Attaching Drive Data and Multi-Report Configuration files."; fi
-	if [[ "$2" == "email" || "$2" == "emailextra" ]]; then echo "emailing to Joe Schmuck & Attaching Drive Data and Multi-Report Configuration."
-		if [[ "$2" == "emailextra" ]]; then
+	if [[ "$2" == "email" || "$2" == "emailextra" || "$2" == "emailall" ]]; then echo "emailing to Joe Schmuck & Attaching Drive Data and Multi-Report Configuration."
+		if [[ "$2" == "emailextra"  || "$2" == "emailall" ]]; then
 			dump_all="4"
 		else
 			dump_all="3"
@@ -9532,29 +10912,29 @@ if [[ $TrueNASConfigEmailEncryption != "" ]]; then check_7zip; fi
 if [[ "$1" == "-check_smr" ]]; then SMR_Enable="true"; SMR_Update="true"; echo "Checking for SMR drives this run."; fi
 if [[ "$1" == "-disable_smr_alarm" ]]; then SMR_Ignore_Alarm="true"; update_config_file; echo "Deactivating Alarms for SMR drive detection."; fi
 if [[ "$1" == "-enable_smr_alarm" ]]; then SMR_Ignore_Alarm="false"; update_config_file; echo "Re-activating Alarms for SMR drive detection."; fi
-if [[ $TDW_Month == "month" ]]; then
-	HDD_TDW_Month_Title="Current Month Read<br>/ Written"
-	SSD_TDW_Month_Title="Current Month Read<br>/ Written"
-	NVM_TDW_Month_Title="Current Month Read<br>/ Written"
+if [[ $Total_Data_Written_Month == "month" ]]; then
+	HDD_Total_Data_Written_Month_Title="Current Month Read<br>/ Written"
+	SSD_Total_Data_Written_Month_Title="Current Month Read<br>/ Written"
+	NVM_Total_Data_Written_Month_Title="Current Month Read<br>/ Written"
 else
-	HDD_TDW_Month_Title="30-Day Read<br>/ Written"
-	SSD_TDW_Month_Title="30-Day Read<br>/ Written"
-	NVM_TDW_Month_Title="30-Day Read<br>/ Written"
+	HDD_Total_Data_Written_Month_Title="30-Day Read<br>/ Written"
+	SSD_Total_Data_Written_Month_Title="30-Day Read<br>/ Written"
+	NVM_Total_Data_Written_Month_Title="30-Day Read<br>/ Written"
 fi
 
-# Cleanup previous run files if anything is left (there shoudn't be).
+# Cleanup previous run files if anything is left (there shouldn't be).
 cleanup_files
 
 # Let's check for a script update.
-if [[ $CheckForUpdates == "true" ]] && [[ "$1" != "-t" && "$1" != "-m" && "$1" != "-dump" ]]; then
+if [[ $Check_For_Updates == "true" ]] && [[ "$1" != "-t" && "$1" != "-m" && "$1" != "-dump" ]]; then
 	checkforupdate
 fi
 
 # Let's Update Automatically if allowed.
-if [[ $UpdateAvailable == "true" ]] && [[ $AutomaticUpdate == "true" ]]; then
+if [[ $UpdateAvailable == "true" ]] && [[ $Automatic_Update == "true" || $UpdateDriveAvailable == "true" || $UpdateSendemailAvailable == "true" ]]; then
 	# We are updating automatically
 	update_script
-	if [[ $AutomaticUpdate == "true" ]]; then
+	if [[ $Automatic_Update == "true" ]]; then
 		rm -rf /tmp/multi_report.lock
 		echo "Running script normally."
 	# How do we run the script when the script is the same name?  Temporarily copy the new script to a new name and run that name.
@@ -9562,7 +10942,7 @@ if [[ $UpdateAvailable == "true" ]] && [[ $AutomaticUpdate == "true" ]]; then
 		cd $SCRIPT_DIR"/"
 		cp $SCRIPT_DIR"/"$runfilename $SCRIPT_DIR"/"temprunfile.sh ; chmod 755 $SCRIPT_DIR"/"temprunfile.sh
 		./temprunfile.sh $1
-		sleep 3
+		sleep 2
 		rm $SCRIPT_DIR"/"temprunfile.sh
 		)
 		exit 0
@@ -9572,17 +10952,37 @@ if [[ $UpdateAvailable == "true" ]] && [[ $AutomaticUpdate == "true" ]]; then
 	fi
 fi
 
+# GRAB DRIVE-SELFTEST SCRIPT THIS ONE TIME, ONLY BECASUE IT IS NEW.
+# THIS GOES AWAY IN THE NEXT VERSION OR SOMETHING SIMILAR NEEDS TO HAPPEN.  ALSO VERSION CHECKING IS NEEDED TO ENSURE
+# WE ARE USING A COMPATABLE VERSION.  ALSO ADD CHKSUM TO DRIVE-SELFTEST IN NEXT VERSION. AND DO NOT USE HARD CODED FILE NAMES.
+	if [[ "$(curl -is https://github.com | head -n 1)" ]]; then
+		# Go git the file
+		( 
+		if ! test -e $SCRIPT_DIR"/drive_selftest.sh"; then
+			echo "Installing Drive-Selftest Script.  This is a companion to Multi-Report in order to test the drives out."
+			echo "this will become a seperate function in the next version of the script."
+			if ! test -e "/tmp/Multi-Report"; then mkdir /tmp/Multi-Report; fi
+			cd /tmp/Multi-Report
+			curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/drive_selftest_v1_2024_12_27.txt
+			curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/Drive_Selftest_User_Guide.pdf
+			cp "/tmp/Multi-Report/drive_selftest_v1_2024_12_27.txt" $SCRIPT_DIR"/"drive_selftest.sh
+			cp "/tmp/Multi-Report/Drive_Selftest_User_Guide.pdf" $SCRIPT_DIR"/."
+		fi
+		)
+	fi
+
 if [[ $Partition_Check == "true" ]]; then	# Check to see if the files needed are there.
 	check_gdisk
 fi
 
 # 1 = -dump : Normal Dump, No TrueNAS configuration and Statistical Data File.
-# 2 = -dump all : Attach Everything.
+# 2 = -dump all : Attach Almost Everything. (Includes TrueNAS Config File, Statistics, and MR Config)
 # 3 = -dump email : Add Joe's email address and SAME data as #1.
+# 4 = -dump emailextra or -dump emailall (Includes smartctl -a and smartctl -x).
 
-if [[ "$dump_all" == "1" ]]; then TrueNASConfigEmailEnable="false"; SDF_DataEmail="false"; fi
-if [[ "$dump_all" == "2" ]]; then TrueNASConfigEmailEnable="true"; SDF_DataEmail="true"; TrueNASConfigEmailDay="All"; SDF_DataEmailDay="All"; fi
-if [[ "$dump_all" > "2" ]]; then Email=$Email",joeschmuck2023@hotmail.com"; TrueNASConfigEmailEnable="false"; SDF_DataEmail="false"; fi
+if [[ "$dump_all" == "1" ]]; then TrueNASConfigEmailEnable="false"; SDF_DataEmail="false"; dump_type="Normal - Local"; fi
+if [[ "$dump_all" == "2" ]]; then TrueNASConfigEmailEnable="true"; SDF_DataEmail="true"; TrueNASConfigEmailDay="All"; SDF_DataEmailDay="All"; dump_type="Attach All Files - Local"; fi
+if [[ "$dump_all" > "2" ]]; then Email=$Email",joeschmuck2023@hotmail.com"; TrueNASConfigEmailEnable="false"; SDF_DataEmail="false"; dump_type="Attach All Files & Send copy to Joe"; fi
 
 testfilepath=""
 
@@ -9594,6 +10994,13 @@ if [[ $softver != "Linux" ]]; then
 else
 # Linux gets second resolution as well
 	timestamp=$(date +"%T")
+fi
+
+#### Check if the statistical data file exists and if it does, check if it is current, if not then update it.
+
+if test -e "$statistical_data_file"; then
+#	if ! cat $statistical_data_file | grep -q "Total MBytes Read"; then echo "Updating statistical data file to new version."; rewrite_csv; fi
+	if ! grep -q "Total MBytes Read" $statistical_data_file; then echo "Updating statistical data file to new version."; rewrite_csv; fi
 fi
 
 #### SIMULATION SECTION START - NOT FOR REAL DRIVES
@@ -9666,29 +11073,6 @@ if [[ "$1" == "-t" ]]; then
 		fi
 	done
 
-#  THE OUTPUT HERE IS ONLY ONE DRIVE IDENT FOR HDD/SSD/NVM IS A DRIVE OR MANY DRIVES EXIST IN THE CATEGORY
-#  NOT EXACTLY HOW I THOUGHT IT WAS GOING TO BE BUT IT WORKS TO TRIGGER HDD/SSD/NVM ACTIONS LATER
-#  WE NEED TO USE AN IN-TEST VARIABLE AND SORT LATER IN THE SCRIPT. BUT I THINK WE LOOK AT THE ACTUAL DRIVE LATER, COULD BE A PROBLEM.
-
-	#if [[ "$smartdrives" != "" || "$smartdrivesSSD" != "" || "$smartcrivesNVM" != "" ]]; then
-	#	if [[ $Multipath != "off" ]]; then
-	#		duplicate_list=$smartdrives
-	#		remove_duplicate		# Remove duplicate serial numbers for MultiPath
-	#		smartdrives=$duplicate_list
-	#	fi
-#  THIS SORT SHOULD BE SKIPPED IF USING serial
-#  ACTUALLY THERE IS NO SORTING SINCE WE DO NOT HAVE A LIST OF DRIVE IDENTS
-	#	if [[ "$Multipath" != "serial" ]]; then
-	#		sort_list=$smartdrives
-	#		if [ $softver != "Linux" ]; then
-	#			sort_drives
-	#		else
-	#			sort_drives_scale
-	#		fi
-	#		smartdrives=$sort_list
-	#	fi
-	#fi
-
 # AT THIS POINT I DO NOT HAVE A LISTING OF SMARTDRIVES IN THE SIMULATOR AS AN OUTPUT.  IS IT NEEDED?  SEEMS TO WORK WITHOUT IT.
 
 fi
@@ -9699,7 +11083,9 @@ if [[ "$3" == "-config" ]] && [[ "$1" == "-t" ]]; then
 	generate_config_file
 	exit 0
 fi
-
+if [[ $Debug_Steps == "true" ]]; then
+	echo "Debug_Steps Turned On"
+fi
 # Do not collect real drive data if we are using test data.
 if [[ "$testfilepath" == "" ]]; then
 	get_smartHDD_listings
@@ -9731,32 +11117,9 @@ if [[ $SDF_DataRecordEnable == "true" ]]; then
 	else
 		# The file does not exist, create it.
 		printf "Date,Time,Device ID,Drive Type,Serial Number,SMART Status,Temp,Power On Hours,Wear Level,Start Stop Count,Load Cycle,Spin Retry,Reallocated Sectors,\
-		Reallocated Sector Events,Pending Sectors,Offline Uncorrectable,UDMA CRC Errors,Seek Error Rate,Multi Zone Errors,Read Error Rate,Helium Level,Total Bytes Written,Total Bytes Read\n" > "$statistical_data_file"
+		Reallocated Sector Events,Pending Sectors,Offline Uncorrectable,UDMA CRC Errors,Seek Error Rate,Multi Zone Errors,Read Error Rate,Helium Level,Total MBytes Written,Total MBytes Read\n" > "$statistical_data_file"
 		# And set flag the file was created.
 		statistical_data_file_created=1
-	fi
-fi
-
-# Check if smartctl is less than version 7.4
-Now=$(date +"%a")
-smart_ver=$(smartctl | grep "7." | cut -d " " -f 2)
-if [[ "$1" != "-t" ]]; then		# Skip if test file
-	if [[ "$smart_ver" < "7.4" || $NVM_Smartmontools_74_Override == "enable" ]] && [[ "$NVM_Daily_Short_Selftest" == "true" || "$NVM_Weekly_Long_Selftest" == "true" ]] && [[ "$dump_all" == "0" ]]; then
-		
-		if [[ "$NVM_Daily_Short_Selftest" == "true" ]] && [[ "$Wait_For_SMART_Short_Test" == "true" ]] && ! [[ "$Now" == "$NVM_Weekly_Long_Selftest_Day" ]]; then
-			nvm_selftest Short
-			check_nvme_test Short
-		fi
-		if [[ "$NVM_Weekly_Long_Selftest" == "true" ]] && [[ "$Wait_For_SMART_Long_Test" == "true" ]] && [[ "$Now" == "$NVM_Weekly_Long_Selftest_Day" ]]; then
-			nvm_selftest Long
-			check_nvme_test Long
-		fi
-
-		if [[ "$NVM_Weekly_Long_Selftest" == "true" ]] && [[ "$Wait_For_SMART_Long_Test" != "true" ]] && [[ "$Now" == "$NVM_Weekly_Long_Selftest_Day" ]]; then
-			nvm_selftest Long 
-		elif [[ "$NVM_Daily_Short_Selftest" == "true" ]] && [[ "$Wait_For_SMART_Short_Test" != "true" ]]; then
-			nvm_selftest Short
-		fi
 	fi
 fi
 
@@ -9767,6 +11130,58 @@ if [[ $Develop == "true" ]]; then
 	echo "smartdrives="${smartdrives[*]}
 	echo " "
 fi
+# Examine for failure SMART HDD Report
+SER1=""
+sas_message=""
+
+####  INSERT A CHECK FOR THE LAST SMART TEST PASS/FAIL OR ADD IT TO THE CRUNCH NUMBERS SECTION - SEE LINE 4153
+## WE WILL CHECK THE SECOND LINE (PREVIOUS TEST) IN THE GET_DRIVE_DATA ROUTINE.
+
+# External_SMART_Testing - IS THE VALUE STATING A SMART TEST IS REQUESTED.
+# Use_multi_report_config_values - IS THE VALUE STATING TO USE THE EXTERNAL CONFIGURATION FILE (multi_report_config.txt).
+# dump_all  - IS A ZERO (0) VALUE FOR NO DUMP ACTION, A NON-ZERO VALUE FOR A DUMP TO OCCUR.
+
+# If this script value is true, read the config file.  The -use_external_file will also force the external script use.
+
+#if [[ $Use_multi_report_config_values == "true" ]]; then External_SMART_Testing="true"; fi  # NOT TRUE, WE MAY NOT WANT TO USE SMART TESTING BUT DO WANT TO USE THE EXTERNAL FILE.
+
+if [[ $External_SMART_Testing == "true" ]]; then
+	echo "Running Drive Self-test Script: "$External_Script_Name
+else
+	echo "SMART Testing not enabled."
+fi
+
+echo " "
+
+if [[ $External_SMART_Testing == "true" ]]; then
+	# If the script does not exist, exit.
+	if test -e "$External_Script_Name"; then
+
+		if [[ $dump_all == "0" ]]; then
+			if [[ $Use_multi_report_config_values == "true" ]]; then
+#				echo "USING EXTERNAL FILE"
+				/bin/bash $External_Script_Name -use_external_file
+			else
+#				echo "USING INTERNAL FILE"
+				/bin/bash $External_Script_Name	
+			fi
+		else
+			if [[ $Use_multi_report_config_values == "true" ]]; then
+#				echo "USING EXTERNAL FILE AND DUMPING"
+				/bin/bash $External_Script_Name -use_external_file -dump
+			else
+#				echo "USING INTERNAL FILE AND DUMPING"
+				/bin/bash $External_Script_Name	-dump
+			fi
+		fi
+	else
+		echo "The file '$External_Script_Name' does not exist, no SMART Testing Occuring."
+		No_External_File="true"
+	fi
+fi
+
+echo "Collecting Report Data..."
+
 # Generate SMART HDD Report
 SER1=""
 sas_message=""
@@ -9780,7 +11195,6 @@ if [[ "$smartdrives" != "" ]]; then
 	done
 	end_table "HDD"
 fi
-
 if [[ $Develop == "true" ]]; then
 	echo "End of HDD Section"
 	duration=$SECONDS
@@ -9790,7 +11204,6 @@ if [[ $Develop == "true" ]]; then
 	echo "smartdrivesSSD="${smartdrivesSSD[*]}
 	echo " "
 fi
-
 # Generate SSD Report
 SER1=""
 sas_message=""
@@ -9804,7 +11217,6 @@ if [[ $smartdrivesSSD != "" ]]; then
 	done
 	end_table "SSD"
 fi
-
 if [[ $Develop == "true" ]]; then
 	echo "End of SSD Section"
 	duration=$SECONDS
@@ -9814,7 +11226,6 @@ if [[ $Develop == "true" ]]; then
 	echo "smartdrivesNVM="${smartdrivesNVM[*]}
 	echo " "
 fi
-
 # Generate NVMe Report
 SER1=""
 sas_message=""
@@ -9831,16 +11242,6 @@ fi
 
 if [[ $Develop == "true" ]]; then echo "End of NVMe Section"; fi
 
-#if [[ "$testfilepath" == "" ]]; then
-#	for drive in $nonsmartdrives; do
-#		clear_variables
-#
-###FIXME # routine does not have a "NON" option.  Fix this!
-#
-#		get_drive_data "NON" 
-#	done
-#fi
-
 if [[ $Develop == "true" ]]; then echo "$(echo "${json_error_log}")"; fi
 
 # This purge happens here directly after data collection.
@@ -9850,17 +11251,20 @@ if [[ $SDF_DataPurgeDays != 0 ]]; then
 fi
 
 write_ATA_Errors="0"
-
 if [[ "$Enable_Text_Section" == "true" ]]; then
 	if [[ $spencer_enable == "true" ]]; then
-		if test -e "$spencer_script_name"; then cd $SCRIPT_DIR && python3 "$spencer_script_name" multi_report; fi
+		if test -e "$spencer_script_name"; then
+			cd $SCRIPT_DIR && python3 "$spencer_script_name" multi_report
+		fi
 		spencer
 	fi
 
 	detailed_report $2
+
 	if [[ $ReportNonSMART == "true" ]]; then
 		if [[ $DisableRAWdata != "true" ]]; then
 			non_smart_report
+
 		fi
 	fi
 fi
@@ -9874,7 +11278,6 @@ fi
 		ATA_Errors_List="$(echo "$temp_ATA_Errors" | sed 's/.$//')"
 		update_config_file
 	fi
-
 
 if [[ "$1" == "-s" || "$2" == "-s" ]] && [[ "$Monitor" == "false" ]]; then
 	echo "Statistical Data Collection Complete"
@@ -9911,6 +11314,8 @@ if [[ $Email_On_Alarm_Only_And_Attachments == "true" ]] && [[ $Attach_Files1 == 
 		create_Email
 fi
 
+#smart_selftest Long 	# Run Long HDD/SSD SMART Tests
+
 if [[ $NVM_Low_Power == "true" ]]; then
 	if [[ "$testfilepath" == "" ]]; then
 		if [[ $softver != "Linux" ]]; then
@@ -9920,6 +11325,7 @@ if [[ $NVM_Low_Power == "true" ]]; then
 fi
 
 cleanup_files
+
 duration=$SECONDS
 if [[ $Develop == "true" ]]; then echo "$(($duration / 60)) minutes and $(($duration % 60)) seconds elapsed."; fi
 
