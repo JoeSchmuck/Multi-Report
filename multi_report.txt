@@ -1357,6 +1357,8 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_Sendemail_script"; fi
 		echo "The new version is: "$GitSendemailVersion 
 		echo " "
 
+#		if test -e $SCRIPT_DIR"/mr_sendemail.py"; then sleep .1; else Automatic_Sendemail_Update="true"; fi
+
 		if [[ $Automatic_Sendemail_Update != "true" ]]; then
 			echo "Enter 'y' to commit or any other key to abort."
 			read Keyboard_yn
@@ -11127,7 +11129,10 @@ if [[ $UpdateSendemailAvailable == "true" ]] && [[ $Automatic_Sendemail_Update =
 	update_Sendemail_script
 fi
 
-if ! test -e $SCRIPT_DIR"/mr_sendemail.py"; then Automatic_Selftest_Update="true"; update_Sendemail_script; fi
+if ! test -e $SCRIPT_DIR"/mr_sendemail.py"; then
+	Automatic_Sendemail_Update="true"
+	update_Sendemail_script
+fi
 
 
 # GRAB DRIVE-SELFTEST SCRIPT THIS ONE TIME, ONLY BECASUE IT IS NEW.  IN NEXT VERSION, MAKE THIS AN AUTOMATIC UPDATE IF THE FILE IS MISSING.
