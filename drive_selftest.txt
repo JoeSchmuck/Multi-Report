@@ -4,7 +4,7 @@ LANG="en_US.UTF-8"
 if [[ $TERM == "dumb" ]]; then          # Set a terminal as the script may generate an error message if using 'dumb'.
     export TERM=unknown
 fi
-##### Version 1.01
+##### Version 1.02
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
@@ -52,8 +52,8 @@ SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 # Change Log
 #
 
-# Version 1.01 (14 January 2025)
-
+# Version 1.02 (16 January 2025)
+#
 # 27 December - Addressed invalid drives for SMART testing.
 # 10 January  - Finished no sleep if no tests.
 #
@@ -81,6 +81,8 @@ SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 ###                                         ###
 ###          THESE ARE FUNCTIONAL           ###
 ###         MAKE YOUR CHANGES HERE          ###
+###          THESE ARE OVERRIDEN            ###
+###      BY MULTI_REPORT_CONFIG.TXT         ###
 ###                                         ###
 ###############################################
 
@@ -89,8 +91,8 @@ Config_File_Name=$SCRIPT_DIR"/multi_report_config.txt"
 Use_multi_report_config_values="true"		# A "true" value here will use the $Config_File_Name file values to override the values defined below.
 											# This allows the values to be retained between versions.  A "false" will utilize the values below.
 
-###### SCRIPT UPDATES ---- NOT OPERATIONAL YET
-Allow_Drive_Selftest_Script_Update="true"	# When set to "true" then the script will automatically update itself if a new update is present.
+###### SCRIPT UPDATES
+Automatic_Selftest_Update="false"	# WARNING !!!  This option will automatically update the Drive_Selftest script if a newer version exists on GitHub with no user interaction. Default = "false"
 
 ###### HDD/SSD/NVMe SMART Testing
 ### SHORT SETTINGS
@@ -163,8 +165,8 @@ fi
 programver3=$(( programver3 + 0 ))		# Make Base 10
 programver4=$(( programver4 + 0 ))
 Program_Name="drive_selftest.sh"
-Version="1.0"							# Current version of the script
-Version_Date="(10 January 2025)"
+Version="1.02"							# Current version of the script
+Version_Date="(17 January 2025)"
 
 # GLOBAL VARIABLES - MUST BE DEFINED EARLY BEFORE FUNCTION TO BE GLOBAL
 Drive_Disk_Query=""				# Valid
@@ -212,64 +214,106 @@ smartctlscan=$(smartctl --scan-open)
 ##########################
 ##########################
 
+checkforupdate () {
+	echo "Checking for Updates"
+	if test -e "/tmp/Multi-Report"; then rm -R "/tmp/Multi-Report"; fi
+	if [[ "$(curl -is https://github.com | head -n 1)" ]]; then
+		# Go git the file
+		(
+			cd /tmp
+			mkdir Multi-Report
+			cd Multi-Report
+			curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/drive_selftest.txt			
+		)
 
-update_script () {
-# NOT OPERATIONAL NOR CALLED IN THE PROCEDURE (YET) - PLACEHOLDER
-
-# This will check for the file 'drive_selftest.up', if the file exists then read the first line for the version number.
-# If the version number is greater than the current version, then update script, and delete the 'drive_selftest.up' file.
-	Update_GO=0
-	
-	
-# REMOVE THIS BEFORE FINALIZING
-cp /mnt/farm2/scripts/drive_selftest.up /tmp/Multi-Report/drive_selftest.up
-
-	# Test for the file.
-	if [ -f "/tmp/Multi-Report/drive_selftest.up" ]; then
-		echo "Found Drive_Selftest Update Script, checking if newer version..."
-		Update_Major_Version=$(head -n 1 /tmp/Multi-Report/drive_selftest.up | grep -m 1 "Version" | cut -d 'V' -f2 | cut -d '.' -f1)
-		Update_Minor_Version=$(head -n 1 /tmp/Multi-Report/drive_selftest.up | grep -m 1 "Version" | cut -d 'V' -f2 | cut -d '.' -f2)
-		Current_Major_Version=$(echo $Version | cut -d '.' -f1)
-		Current_Minor_Version=$(echo $Version | cut -d '.' -f2)		
-		if [[ $Update_Major_Version -gt $Current_Major_Version ]]; then 			# Major Version is newer
-			Update_GO=1
-		elif [[ $Update_Major_Version -ge $Current_Major_Version ]] && [[ $Update_Minor_Version -gt $Current_Minor_Version ]]; then
-			Update_GO=1
+		if test -e "/tmp/Multi-Report/drive_selftest.txt"; then
+			GitDriveVersion=$(cat "/tmp/Multi-Report/drive_selftest.txt" | grep "##### Version" | cut -d 'n' -f2 | tr -d ' ' | head -1)
+			VersionDriveFilename=$(cat $SCRIPT_DIR"/drive_selftest.sh" | grep "##### Version" | cut -d 'n' -f2 | tr -d ' ' | head -1)
+			echo "   Drive_Selftest - Installed: "$VersionDriveFilename", GitHub: "$GitDriveVersion
+			if [[ $GitDriveVersion > $VersionDriveFilename ]] && [[ $VersionDriveFilename != "" ]]; then
+				UpdateDriveAvailable="true"
+				rm /tmp/Multi-Report/drive_selftest.txt
+			fi
 		else
-			echo "No new update."			# Delete this line and the "else" above it.
+			echo "No GitHub Version File Available"
 		fi
 	fi
-	
-	if [[ $Update_GO == 1 ]] && [[ $Allow_Script_Update == "true" ]]; then			# We have an update
-		echo "We have an update to the 'drive_selftest.sh' script."
-		# ARG!  I need to transfer the variables.
-		# READ THE NEW UPDATED FILE AND CHANGE THE MATCHING LINES FOR SPECIFIC VARIABLES.
-		
-		# VARIABLES TO CHANGE
-#		sed -i -e '/*Allow_Script_Update=*/Allow_Script_Update="$Allow_Script_Update" drive_selftest.up
-#		sed -i -e 's/Allow_Script_Update=".*/Allow_Script_UpDate="${Test_Data}"/' drive_selftest.up
-		Short_Test_Mode=2
-		Short_Time_Delay_Between_Drives=1
-		Short_SMART_Testing_Order="DriveID"
-		Short_Drives_to_Test_Per_Day=1
-		Short_Drives_Test_Period="Week"
-		Short_Drives_Tested_Days_of_the_Week="1,2,3,4,5,6,7"
-#		Short_Drives_Test_Delay=130
-		Long_Test_Mode=1
-		Long_Time_Delay_Between_Drives=1
-		Long_SMART_Testing_Order="Serial"
-		Long_Drives_to_Test_Per_Day=1
-		Long_Drives_Test_Period="Week"
-		Long_Drives_Tested_Days_of_the_Week="1,2,3,4,5,6,7"
-		Ignore_Drives_List="RQTY4D78E,JJ6XTZ,OU812,ZR13JRL"
-		Drive_List_Length=10
-		Enable_Logging="true"
 
+	if [[ $UpdateDriveAvailable == "true" ]]; then
+		echo "UPDATE AVAILABLE -- Use the '-update' switch to force the update."
 	else
-		echo "Automatic updates are not functional yet.  Run 'drive_selftest.sh -update' to update the script."
+		echo "NO UPDATES AVAILABLE"
 	fi
-	
+
 	}
+
+	update_Drive_script () {
+	echo "Update Script Routine"
+#
+# ENSURE WE DELETE /TMP/MULTI-REPORT DIRECTORY WHEN EITHER WE END THE SCRIPT OR START THE SCRIPT.  MAYBE IN THE UPDATE?
+#
+	echo "Removing Old Script Source if it exists"
+	if test -e "/tmp/Multi-Report"; then rm -R "/tmp/Multi-Report"; fi
+	if test -e "/tmp/multi_report_update.txt"; then rm "/tmp/multi_report_update.txt"; fi
+	echo "Downloading new script files"
+	if [[ "$(curl -is https://github.com | head -n 1)" ]]; then
+		# Go git the file
+		( mkdir /tmp/Multi-Report
+		cd /tmp/Multi-Report
+		curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/drive_selftest.txt
+		curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/Drive_Selftest_User_Guide.pdf
+		)
+		GitDriveVersion=$(cat "/tmp/Multi-Report/drive_selftest.txt" | grep "##### Version" | cut -d 'n' -f2 | tr -d ' ' | head -1)
+		VersionDriveFilename=$(cat $SCRIPT_DIR"/drive_selftest.sh" | grep "##### Version" | cut -d 'n' -f2 | tr -d ' ' | head -1)
+		echo " "
+		echo "Your current version is: "$VersionDriveFilename
+		echo "     The new version is: "$GitDriveVersion 
+		echo " "
+
+		if [[ $Automatic_Selftest_Update != "true" ]]; then
+			echo "Enter 'y' to commit or any other key to abort."
+			read Keyboard_yn
+		else
+			echo "Automatic Update is Enabled..."
+			Keyboard_yn="y"
+		fi
+		if [[ $Keyboard_yn == "y" ]] || [[ $Keyboard_yn == "Y" ]]; then
+			echo "Updating Script..."
+
+			# Copy the new multi_report.sh file and set permissions
+			cp /tmp/Multi-Report/drive_selftest.txt $SCRIPT_DIR"/drive_selftest.sh"
+			chmod 755 $SCRIPT_DIR"/drive_selftest.sh" > /dev/null 2<&1
+
+			# Copy the User Guide
+			echo "1"
+			sleep .5
+			cp "/tmp/Multi-Report/Drive_Selftest_User_Guide.pdf" $SCRIPT_DIR"/."
+			echo " "
+			echo "Your script has been updated and a copy of the User Guide and changelog is in your directory."
+			sleep 1
+				
+			### THIS IS NOT COMPLETE AND IS INTENTIONED TO UPDATE THE DRIVE SELF-TEST SCRIPT.
+			# Copy the drive_selftest.sh script.  When it runs, if it sees a newer version, it will automatically update itself.
+			#    cp "/tmp/Multi-Report/drive_selftest.up" $SCRIPT_DIR"/drive_selftest.sh"	# Temporary to get the script on systems.
+		
+			# Cleanup Leftover Files
+			if test -e "/tmp/Multi-Report"; then rm -R "/tmp/Multi-Report"; fi
+			if test -e "/tmp/multi_report_update.txt"; then	rm "/tmp/multi_report_update.txt"; fi
+		else
+			echo "Aborted"
+			if test -e "/tmp/Multi-Report"; then rm -R "/tmp/Multi-Report"; fi
+			exit 0
+		fi
+	else
+		echo "GitHub is Not Available"
+	fi
+	if [[ $Automatic_Selftest_Update != "true" ]]; then 
+		echo "Exiting..."
+		exit 0
+	fi
+
+	}
+	
 
 remove_duplicate_tests () {
 # THIS WILL COMPARE BOTH SHORT AND LONG TESTS AND REMOVE DUPLICATE SHORT TESTS FROM THE TESTING LIST.
@@ -1333,7 +1377,7 @@ help_text () {
     echo "There are five groups of variables: Automatic Update, Short tests, Long tests,"
 	echo "Ignore Drives, and Reports."
 	echo " "
-    echo "Automatic Updates is Not Functional in this release."
+    echo "Automatic Updates will allow the drive_selftest.sh file to be updated should it be out of date."
 	echo " "
 	echo "This script can use the multi_report_config.txt file when combined with Multi-Report."
 	echo "You must configure these settings in Multi-Report, otherwise the values at the top"
@@ -1566,18 +1610,23 @@ troubleshooting_help () {
 ### Use multi_report_config.txt or not?
 # If the file does not exist, script values will be used and no error message will be generated.
 # Either setting the Use_multi_report_config_values="true" (at top of script), or switch will use the Multi-Report file, if it exists.
+# First line finds out if this script was called by Multi-Report.
+[[ $SHLVL -gt 2 ]] &&
+	sleep .1  ||
+	checkforupdate
 
-if [[ $1 == "-use_external_file" ]]; then Use_multi_report_config_values="true"; fi
-
-if [[ $Use_multi_report_config_values == "true" ]]; then
+if test -e "$Config_File_Name" || [[ $1 == "-use_external_file" ]]; then
+	Use_multi_report_config_values="true"
 	if test -e "$Config_File_Name"; then
 		. "$Config_File_Name"
-#		echo "External File was read..."
 	else
 		echo "External File Does Not Exist ($Config_File_Name)"
 		echo "Using script values..."
 	fi
 fi
+
+if [[ $Automatic_Selftest_Update == "true" ]] && [[ $UpdateDriveAvailable == "true" ]]; then update_script; fi
+if [[ $1 == "-update" ]]; then update_script; fi
 
 ### DELETE ANY LEFTOVER TEMPORARY FILES IF THEY EXIST
 rm "/tmp/drive_test_timer_temp.txt" > /dev/null 2<&1
