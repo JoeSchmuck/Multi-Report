@@ -6,7 +6,7 @@ TrueNASConfigEmailEncryption=""	 # Set this to "" for no encryption, MUST REMAIN
 # NOTE: Some email providers will not send some encrypted file types, such as GMAIL, but .zip files are okay.
 # NOTE: 7zip is used for the compression/encryption and will not be installed unless encryption is enabled.
 
-##### Version 3.1
+##### Version 3.1 Beta 7
 
 ###### Get Config File Name and Location
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
@@ -84,33 +84,17 @@ fi
 # Version
 ### Changelog:
 #
-# V3.1 Beta 7 (14 January 2025)
+# V3.1 Beta 7 (17 January 2025)
 #
-#   VERIFY DEFAULT VALUES
+# THIS IS BETA 7.
 #
-#   - The multi_report script when generating a new config file had the wrong default value for
-#     ---- the value 'Use_multi_report_config_values' which should have been "true".  This has been corrected.
+# ANY PROBLEMS, PLEASE ADDRESS THEM TO JOESCHMUCK2003@HOTMAIL.COM
+# READ THE DOCUMENTS IF YOU JUST HAVE A QUESTION ABOTU SETUP AND IF THE DOCUMENTS ARE LAKING IN INFORMATION, PLEASE LET ME KNOW.
 #
-#
-#  NEXT VERSION --> ADD TROUBLESHOOTING ANALYTICS.
-#
-#  CHECK INTO TESTING NVME DRIVES ONLY SETTING FOR DRIVE_SELFTEST.  PUT THE SETTING IN MR CONFIG FILE.
-#
-#  DONE --> VERIFY THE MR -CONFIG COVERS THE NEW FUNCTIONS.
-#
-#  ENSURE DOCS ARE COPIED TO SCRIPT DIRECTORY (UPDATE DOCS).
-#
-#  CONSIDER CHANGING FILES TO THE NORMAL NAMES AND USING ##### Version X.X AT THE BEGINING OF THE SCRIPT TO IDENTIFY THE VERSION NUMBER.
-#
-#  NEED TO TEST ON 24.10.1 WITH NON-NVME DRIVES ---> .PAR FILES NEED TO BE .TAR AS THERE COULD BE A LOT OF THEM.  ONLY FOR 24.10.1 OR GREATER.
-#
-#  NEED TO REARRANGE THE ATTACHMENTS SO ONLY: MULTI_REPORT_CONFIG, TRUENAS_CONFIG, STATISTICAL DATA FILE, ARE INDIVIDUAL FILES, EVERYTHING ELSE IS .TAR
-#  -- WE CAN INDIVIDUALLY .TAR THE PAR FILES, BUT EVERYTHING ELSE IS A TROUBLESHOOTING.TAR FILE
-#
-#  midclt call smart.test.results COMMAND FAILS IN 25.04 (14 JAN 2025)  CHECK AGAIN WHEN BETA HITS.  NOT A HUGE LOSS BUT AN API LOSS NONE THE LESS.
-# 
 
-# V3.1 (14 January 2025)
+
+
+# V3.1 (17 January 2025)
 #
 #   - Removed all S.M.A.R.T. testing from Multi-Report and created companion script Drive-Selftest.
 #     ---- Drive-Selftest script provides all the required functionality to run SMART tests on
@@ -247,7 +231,6 @@ fi
 #   - Removed variables (IncludedSSD and IncludeNVM).
 #
 
-
 ###### EMAIL SECTION ######
 
 ###### Email Address(s)
@@ -275,9 +258,11 @@ Ignore_Lock="disable"		# Ignore_Lock when set to "enable" will ignore checking f
 
 ###### SCRIPT UPDATE ######
 ###### Script Update
-### Ensure you understand these options.  Defaults check only, will not automatically update.
+### Ensure you understand these options.  The Default values will only check for updates and not automatically update.
 Check_For_Updates="true"	# Will check GitHub for updates and include message in next email.  Default = "true"
-Automatic_Update="false"	# WARNING !!!  This option will automatically update the script if a newer version exists on GitHub with no user interaction. Default = "false"
+Automatic_MR_Update="false"	# WARNING !!!  This option will automatically update the Multi-Report script if a newer version exists on GitHub with no user interaction. Default = "false"
+Automatic_Selftest_Update="false"	# WARNING !!!  This option will automatically update the Drive_Selftest script if a newer version exists on GitHub with no user interaction. Default = "false"
+Automatic_Sendemail_Update="false"	# WARNING !!!  This option will automatically update the Sendermail.py script if a newer version exists on GitHub with no user interaction. Default = "false"
 
 ###### SCRIPT ADD-ONS ######
 SMR_Enable="true"			# Will enable SMR operations if set to "true".  Default = "true"
@@ -728,8 +713,8 @@ logfile_header="/tmp/${tempfilepath}smart_report_header.tmp"
 logfile_temp="/tmp/${tempfilepath}smart_report_temp.tmp"
 boundary="gc0p4Jq0M2Yt08jU534c0p"
 
-CurrentFilename="multi_report_v3.1Beta7_2025_01_13a.txt"
-valid_config_version_date="2025-01-05"	# Configuration file valid date
+CurrentFilename="multi_report_v3.1Beta7_2025_01_17.txt"
+valid_config_version_date="2025-01-17"	# Configuration file valid date
 progverdate="$(echo $CurrentFilename | cut -d '_' -f4,5,6 | cut -d '.' -f1 | sed -r 's/[_]+/-/g')"
 progname="Multi-Report "$(echo $CurrentFilename | cut -d '_' -f3)" dtd:"
 
@@ -1178,14 +1163,12 @@ if [[ $Debug_Steps == "true" ]]; then echo "check_gdisk"; fi
 #   Next write the new file over the current file name.
 #   Edit line #5 with a password if one was present.
 
-update_script () {
-if [[ $Debug_Steps == "true" ]]; then echo "update_script"; fi
+update_MR_script () {
+if [[ $Debug_Steps == "true" ]]; then echo "update_MR_script"; fi
 	echo "Update Script Routine"
-	
 #
 # ENSURE WE DELETE /TMP/MULTI-REPORT DIRECTORY WHEN EITHER WE END THE SCRIPT OR START THE SCRIPT.  MAYBE IN THE UPDATE?
 #
-
 	echo "Removing Old Script Source if it exists"
 	if test -e "/tmp/Multi-Report"; then rm -R "/tmp/Multi-Report"; fi
 	if test -e "/tmp/multi_report_update.txt"; then rm "/tmp/multi_report_update.txt"; fi
@@ -1194,59 +1177,25 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_script"; fi
 		# Go git the file
 		( mkdir /tmp/Multi-Report
 		cd /tmp/Multi-Report
-		curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/current_script
-		new_script=$(cat current_script)
-		curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/${new_script}
-		curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/current_cksum
+		curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/multi_report.txt
 		curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/Multi_Report_User_Guide.pdf
 		curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/Multi_Report_Quick_Start_Guide.pdf
 		curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/changelog.txt
-		curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/current_drive_script
-		new_drive_script=$(cat current_drive_script)
-		curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/${new_drive_script}
-#		curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/current_sendemail_script
-#		new_sendemail_script=$(cat current_sendemail_script)
-#		curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/${new_sendemail_script}		
+
+
+#		curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/drive_selftest.txt
+		
 # FOR OXYDE GITHUB
-		new_sendemail_script="multireport_sendemail.py"
-		curl -LJOs https://raw.githubusercontent.com/oxyde1989/standalone-tn-send-email/refs/heads/main/multireport_sendemail.py
+#		curl -LJOs https://raw.githubusercontent.com/oxyde1989/standalone-tn-send-email/refs/heads/main/multireport_sendemail.py
 		)
-
-# For the Public distribution
-		GitVersion="$(cat "/tmp/Multi-Report/current_script")"
-		validate="$(cat "/tmp/Multi-Report/current_cksum")"
-		checksum="$(cat "/tmp/Multi-Report/current_script")"
-
-# For the Development distribution
-		if [[ $GitHubSimulate == "true" ]]; then
-			GitVersion="$(cat "/tmp/Multi-Report/current_script1")"
-			validate="$(cat "/tmp/Multi-Report/current_cksum1")"
-			checksum="$(cat "/tmp/Multi-Report/current_script1")"
-		fi
-
+		GitVersion="$(cat "/tmp/Multi-Report/multi_report.txt" | grep "##### Version" | cut -d 'n' -f2 | cut -d '_' -f 1 | head -1)"
+		VersionFilename="$(echo $CurrentFilename | cut -d 'v' -f 2 | cut -d '_' -f 1)"
 		echo " "
-		echo "Your current version is: "$CurrentFilename
-		echo "     The new version is: "$GitVersion 
+		echo "Multi-Report current version is: "$VersionFilename
+		echo "The new version is: "$GitVersion 
 		echo " "
 
-		if [ $softver != "Linux" ]; then
-			# Script Checksum
-			checksum="$(md5 /tmp/Multi-Report/$checksum | cut -d '=' -f 2 | cut -d ' ' -f 2)"
-		else
-			# Script Checksum
-			checksum="$(md5sum --tag /tmp/Multi-Report/$checksum | cut -d '=' -f 2 | cut -d ' ' -f 2)"
-		fi
-		if [[ $checksum == $validate ]]; then
-			echo "File is valid"
-		else
-			echo "Downloaded file is corrupt, does not match CRC."
-			if [[ $Automatic_Update == "true" ]]; then
-				Automatic_Update="false"
-				return
-			fi
-		fi
-
-		if [[ $Automatic_Update != "true" ]]; then
+		if [[ $Automatic_MR_Update != "true" ]]; then
 			echo "Enter 'y' to commit or any other key to abort."
 			read Keyboard_yn
 		else
@@ -1282,10 +1231,8 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_script"; fi
 			cp "/tmp/Multi-Report/Multi_Report_User_Guide.pdf" $SCRIPT_DIR"/."
 			cp "/tmp/Multi-Report/Multi_Report_Quick_Start_Guide.pdf" $SCRIPT_DIR"/." > /dev/null 2<&1
 			cp "/tmp/Multi-Report/changelog.txt" $SCRIPT_DIR"/."
-			cp "/tmp/Multi-Report/"${new_drive_script} $SCRIPT_DIR"/drive_selftest.sh"
-			cp "/tmp/Multi-Report/"${new_sendemail_script} $SCRIPT_DIR"/mr_sendemail.py"
 			echo " "
-			echo "Your script has been updated and a new copy of the User Guide and changelog is in your directory."
+			echo "Your script has been updated and a copy of the User Guide and changelog is in your directory."
 			sleep 1
 				
 			### THIS IS NOT COMPLETE AND IS INTENTIONED TO UPDATE THE DRIVE SELF-TEST SCRIPT.
@@ -1303,12 +1250,149 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_script"; fi
 	else
 		echo "GitHub is Not Available"
 	fi
-	if [[ $Automatic_Update != "true" ]]; then 
+	if [[ $Automatic_MR_Update != "true" ]]; then 
 		echo "Exiting..."
 		exit 0
 	fi
 
 	}
+	
+	
+	update_Drive_script () {
+if [[ $Debug_Steps == "true" ]]; then echo "update_Drive_script"; fi
+	echo "Update Script Routine"
+#
+# ENSURE WE DELETE /TMP/MULTI-REPORT DIRECTORY WHEN EITHER WE END THE SCRIPT OR START THE SCRIPT.  MAYBE IN THE UPDATE?
+#
+	echo "Removing Old Script Source if it exists"
+	if test -e "/tmp/Multi-Report"; then rm -R "/tmp/Multi-Report"; fi
+	if test -e "/tmp/multi_report_update.txt"; then rm "/tmp/multi_report_update.txt"; fi
+	echo "Downloading new script files"
+	if [[ "$(curl -is https://github.com | head -n 1)" ]]; then
+		# Go git the file
+		( mkdir /tmp/Multi-Report
+		cd /tmp/Multi-Report
+		curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/drive_selftest.txt
+		curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/Drive_Selftest_User_Guide.pdf
+		)
+		GitDriveVersion=$(cat "/tmp/Multi-Report/drive_selftest.txt" | grep "##### Version" | cut -d 'n' -f2 | tr -d ' ' | head -1)
+		if test -e $SCRIPT_DIR"/drive_selftest.sh"; then
+			VersionDriveFilename=$(cat $SCRIPT_DIR"/drive_selftest.sh" | grep "##### Version" | cut -d 'n' -f2 | tr -d ' ' | head -1)
+		else
+			VersionDriveFilename=0
+		fi
+		echo " "
+		echo "Drive_Selftest current version is: "$VersionDriveFilename
+		echo "The new version is: "$GitDriveVersion 
+		echo " "
+
+		if [[ $Automatic_Selftest_Update != "true" ]]; then
+			echo "Enter 'y' to commit or any other key to abort."
+			read Keyboard_yn
+		else
+			echo "Automatic Update is Enabled..."
+			Keyboard_yn="y"
+		fi
+		if [[ $Keyboard_yn == "y" ]] || [[ $Keyboard_yn == "Y" ]]; then
+			echo "Updating Script..."
+
+			# Copy the new multi_report.sh file and set permissions
+			cp /tmp/Multi-Report/drive_selftest.txt $SCRIPT_DIR"/drive_selftest.sh"
+			chmod 755 $SCRIPT_DIR"/drive_selftest.sh" > /dev/null 2<&1
+
+			# Copy the User Guide
+			echo "1"
+			sleep .5
+			cp "/tmp/Multi-Report/Drive_Selftest_User_Guide.pdf" $SCRIPT_DIR"/."
+			echo " "
+			echo "Your script has been updated and a copy of the User Guide and changelog is in your directory."
+			sleep 1
+				
+			### THIS IS NOT COMPLETE AND IS INTENTIONED TO UPDATE THE DRIVE SELF-TEST SCRIPT.
+			# Copy the drive_selftest.sh script.  When it runs, if it sees a newer version, it will automatically update itself.
+			#    cp "/tmp/Multi-Report/drive_selftest.up" $SCRIPT_DIR"/drive_selftest.sh"	# Temporary to get the script on systems.
+		
+			# Cleanup Leftover Files
+			if test -e "/tmp/Multi-Report"; then rm -R "/tmp/Multi-Report"; fi
+			if test -e "/tmp/multi_report_update.txt"; then	rm "/tmp/multi_report_update.txt"; fi
+		else
+			echo "Aborted"
+			if test -e "/tmp/Multi-Report"; then rm -R "/tmp/Multi-Report"; fi
+			exit 0
+		fi
+	else
+		echo "GitHub is Not Available"
+	fi
+	if [[ $Automatic_Selftest_Update != "true" ]]; then 
+		echo "Exiting..."
+		exit 0
+	fi
+
+	}
+	
+	
+	update_Sendemail_script () {
+if [[ $Debug_Steps == "true" ]]; then echo "update_Sendemail_script"; fi
+	echo "Update Script Routine"
+#
+# ENSURE WE DELETE /TMP/MULTI-REPORT DIRECTORY WHEN EITHER WE END THE SCRIPT OR START THE SCRIPT.  MAYBE IN THE UPDATE?
+#
+	echo "Removing Old Script Source if it exists"
+	if test -e "/tmp/Multi-Report"; then rm -R "/tmp/Multi-Report"; fi
+	if test -e "/tmp/multi_report_update.txt"; then rm "/tmp/multi_report_update.txt"; fi
+	echo "Downloading new script files"
+	if [[ "$(curl -is https://github.com | head -n 1)" ]]; then
+		# Go git the file
+		( mkdir /tmp/Multi-Report
+		cd /tmp/Multi-Report
+# FOR OXYDE GITHUB
+		curl -LJOs https://raw.githubusercontent.com/oxyde1989/standalone-tn-send-email/refs/heads/main/multireport_sendemail.py
+		)
+		GitSendemailVersion=$(cat /tmp/Multi-Report/multireport_sendemail.py | grep "##### V" | cut -d 'V' -f2 | tr -d ' ')
+		if test -e $SCRIPT_DIR"/mr_sendemail.py"; then
+			VersionSendemailFilename=$(cat $SCRIPT_DIR"/mr_sendemail.py" | grep "##### V" | cut -d 'V' -f2 | tr -d ' ')
+		else
+			VersionSendemailFilename=0
+		fi
+		echo " "
+		echo "Sendemail.py current version is: "$VersionSendemailFilename
+		echo "The new version is: "$GitSendemailVersion 
+		echo " "
+
+		if [[ $Automatic_Sendemail_Update != "true" ]]; then
+			echo "Enter 'y' to commit or any other key to abort."
+			read Keyboard_yn
+		else
+			echo "Automatic Update is Enabled..."
+			Keyboard_yn="y"
+		fi
+		if [[ $Keyboard_yn == "y" ]] || [[ $Keyboard_yn == "Y" ]]; then
+			echo "Updating Script..."
+
+			# Copy the new multi_report.sh file and set permissions
+			cp /tmp/Multi-Report/multireport_sendemail.py $SCRIPT_DIR"/mr_sendemail.py"
+			echo " "
+			echo "Your script has been updated."
+			sleep 1
+		
+			# Cleanup Leftover Files
+			if test -e "/tmp/Multi-Report"; then rm -R "/tmp/Multi-Report"; fi
+			if test -e "/tmp/multi_report_update.txt"; then	rm "/tmp/multi_report_update.txt"; fi
+		else
+			echo "Aborted"
+			if test -e "/tmp/Multi-Report"; then rm -R "/tmp/Multi-Report"; fi
+			exit 0
+		fi
+	else
+		echo "GitHub is Not Available"
+	fi
+	if [[ $Automatic_Sendemail_Update != "true" ]]; then 
+		echo "Exiting..."
+		exit 0
+	fi
+
+	}
+	
 
 ########## CHECK FOR NEWER SCRIPT ##########
 # This will check GitHub to find out if the script is newer.
@@ -1325,66 +1409,61 @@ if [[ $Debug_Steps == "true" ]]; then echo "checkforupdate"; fi
 			cd /tmp
 			mkdir Multi-Report
 			cd Multi-Report
-			curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/current_script
 			curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/messages.txt
-			curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/current_drive_script
-			new_drive_script=$(cat current_drive_script)
-			curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/${new_drive_script}
+			curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/multi_report.txt
+			curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/drive_selftest.txt			
 			curl -LJOs https://raw.githubusercontent.com/oxyde1989/standalone-tn-send-email/refs/heads/main/multireport_sendemail.py
 		)
 
-		# Examine the file name in 'current_script' for version and date.
-		if test -e "/tmp/Multi-Report/current_script"; then
-			GitVersion="$(cat "/tmp/Multi-Report/current_script" | cut -d 'v' -f 2 | cut -d '_' -f 1)"
-
+		if test -e "/tmp/Multi-Report/multi_report.txt"; then
+			GitVersion="$(cat "/tmp/Multi-Report/multi_report.txt" | grep "##### Version" | cut -d 'n' -f2 | cut -d '_' -f 1 | head -1)"
 			VersionFilename="$(echo $CurrentFilename | cut -d 'v' -f 2 | cut -d '_' -f 1)"
 			echo "   1. Multi-Report - Installed: "$VersionFilename", GitHub: "$GitVersion
-
 			if [[ $GitVersion > $VersionFilename ]] && [[ $VersionFilename != "" ]]; then
 				UpdateAvailable="true"
+				rm /tmp/Multi-Report/multi_report.txt
 			fi
 		else
 			echo "No GitHub Version File Available"
 		fi
-		new_drive_script=$(cat /tmp/Multi-Report/current_drive_script)
-		# Examine the file name in 'current_drive_script' for version and date.
-		if test -e "/tmp/Multi-Report/current_drive_script"; then
-			GitDriveVersion="$(cat "/tmp/Multi-Report/"${new_drive_script} | grep "##### Version" | cut -d 'n' -f 2 | tr -d ' ')"
-
-			VersionDriveFilename=$(cat $SCRIPT_DIR"/drive_selftest.sh" | grep "##### Version" | cut -d 'n' -f2 | tr -d ' ')
-
+		if test -e "/tmp/Multi-Report/drive_selftest.txt"; then
+			GitDriveVersion=$(cat "/tmp/Multi-Report/drive_selftest.txt" | grep "##### Version" | cut -d 'n' -f2 | tr -d ' ' | head -1)
+			if test -e $SCRIPT_DIR"/drive_selftest.sh"; then
+				VersionDriveFilename=$(cat $SCRIPT_DIR"/drive_selftest.sh" | grep "##### Version" | cut -d 'n' -f2 | tr -d ' ' | head -1)
+			else
+				VersionDriveFilename=0
+			fi
 			echo "   2. Drive_Selftest - Installed: "$VersionDriveFilename", GitHub: "$GitDriveVersion
-
 			if [[ $GitDriveVersion > $VersionDriveFilename ]] && [[ $VersionDriveFilename != "" ]]; then
 				UpdateDriveAvailable="true"
-				rm /tmp/Multi-Report/${new_drive_script}
+				rm /tmp/Multi-Report/drive_selftest.txt
 			fi
 		else
 			echo "No GitHub Version File Available"
-		fi
-		
+		fi	
 		# Check sendemail.py for version.
-		online_sendemail_version=$(cat /tmp/Multi-Report/multireport_sendemail.py | grep "##### V" | cut -d 'V' -f2 | tr -d ' ')
-		current_sendemail_version=$(cat $SCRIPT_DIR"/mr_sendemail.py" | grep "##### V" | cut -d 'V' -f2 | tr -d ' ')
-		echo "   3. sendemail.py - Installed: "$current_sendemail_version", Github: "$online_sendemail_version
-		if [[ "$online_sendemail_version" > "$current_sendemail_version" ]]; then
+		GitSendemailVersion=$(cat /tmp/Multi-Report/multireport_sendemail.py | grep "##### V" | cut -d 'V' -f2 | tr -d ' ')
+		if test -e $SCRIPT_DIR"/mr_sendemail.py"; then
+			VersionSendemailFilename=$(cat $SCRIPT_DIR"/mr_sendemail.py" | grep "##### V" | cut -d 'V' -f2 | tr -d ' ')
+		else
+			VersionSendemailFilename=0
+		fi
+		echo "   3. sendemail.py - Installed: "$VersionSendemailFilename", Github: "$GitSendemailVersion
+		if [[ "$GitSendemailVersion" > "$VersionSendemailFilename" ]]; then
 			UpdateSendemailAvailable="true"
 			rm /tmp/Multi-Report/multireport_sendemail.py
 		fi		
-		
 	else
 		echo "GitHub.com Not Available"
 	fi
-
 	if test -e "/tmp/Multi-Report/messages.txt"; then
 		Messages="$(cat "/tmp/Multi-Report/messages.txt")"
 		if [[ $Messages != "" ]]; then echo "Message from Joe"; fi
 	else
 		echo "No GitHub Message Available"
 	fi
-	
 	if [[ $UpdateAvailable == "true" ]] || [[ $UpdateDriveAvailable == "true" ]] || [[ $UpdateSendemailAvailable == "true" ]]; then
-		echo "UPDATE AVAILABLE -- Use the '-update' switch to force the update."
+		echo "UPDATE AVAILABLE"
 	else
 		echo "NO UPDATES AVAILABLE"
 	fi
@@ -1939,9 +2018,9 @@ if [[ $Debug_Steps == "true" ]]; then echo "cleanup_files"; fi
 	if test -e "/tmp/logfile_tmp"; then rm "/tmp/logfile_tmp"; fi
 	if test -e "/tmp/output.html"; then rm "/tmp/output.html"; fi
 	if test -e "/tmp/mr_sendemail.py"; then rm "/tmp/mr_sendemail.py"; fi
-	if test -e "/tmp/mr_sendemail_cksum.txt"; then rm "/tmp/mr_sendemail_cksum.txt"; fi
+#	if test -e "/tmp/mr_sendemail_cksum.txt"; then rm "/tmp/mr_sendemail_cksum.txt"; fi
 	if test -e "/tmp/attachment_files2.txt"; then rm "/tmp/attachment_files2.txt"; fi
-#	if test -e "/tmp/Old_multi_report_config.txt"; then rm "/tmp/Old_multi_report_config.txt"; fi
+
 
 	### Clean up Spencer File
 	if test -e "/tmp/spencer_report.txt"; then rm "/tmp/spencer_report.txt"; fi
@@ -6328,7 +6407,12 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_config_file"; fi
 			cp "$Config_File_Name" /tmp/Old_multi_report_config.txt
 		fi
 	(
-		# Lets convert any old variables into new variables from version 2.4 to 3.0.4
+		# Lets convert any old variables into new variables from version 2.4 to 3.1
+
+		# version 3.1
+		# Update the Automatic updates for Multi-Report, Sendemail, and Drive_Selftest.
+		if [[ "$Automatic_Update" == "false" ]]; then Automatic_MR_Update="false"; fi
+		if [[ "$Automatic_Update" == "true" ]]; then Automatic_MR_Update="true"; fi
 
 		# version 3.0.4
 		# Update titles for "Read" addition.
@@ -6378,7 +6462,9 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_config_file"; fi
 		echo " "
 		echo "###### SCRIPT UPDATE -- Ensure you understand these options."
 		echo 'Check_For_Updates="'$Check_For_Updates'"			# Will check GitHub for updates and include message in next email.'
-		echo 'Automatic_Update="'$Automatic_Update'"			# WARNING !!!  This option will automatically update the script if a newer version exists on GitHub.'
+		echo 'Automatic_MR_Update="'$Automatic_MR_Update'"			# WARNING !!!  This option will automatically update the Multi-Report script if a newer version exists on GitHub.'
+		echo 'Automatic_Sendemail_Update="'$Automatic_Sendemail_Update'"	# WARNING !!!  This option will automatically update the Sendermail.py script if a newer version exists on GitHub with no user interaction. Default = "false"'
+		echo 'Automatic_Selftest_Update="'$Automatic_Selftest_Update'"	# WARNING !!!  This option will automatically update the Drive_Selftest script if a newer version exists on GitHub with no user interaction. Default = "false"'
 		echo " "
 		echo "###### Script Add-Ons"
 		echo 'SMR_Enable="'$SMR_Enable'"		# Will enable SMR operations if set to "true".  Default = "true"'
@@ -9299,7 +9385,8 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file"; fi
 							echo "and if Github has an update on it, it will be downloaded"
 							echo "and installed immediately."
 							echo " "
-							if [[ $Automatic_Update != "true" ]]; then
+							echo "Multi-Report Automatic Update"
+							if [[ $Automatic_MR_Update != "true" ]]; then
 								echo "You are currently using Manual Updates (system default)."
 							else
 								echo "You are currently using Fully Automatic Updates."
@@ -9312,15 +9399,69 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file"; fi
 								echo "Keeping the current setting"
 							elif [[ $Keyboard_yn == "a" ]]; then 
 								echo "You selected Fully Automatic Updates."
-								Automatic_Update="true"
+								Automatic_MR_Update="true"
 							elif [[ $Keyboard_yn == "m" ]]; then
 								echo "You selected the safer Manual Updates."
-								Automatic_Update="false"
+								Automatic_MR_Update="false"
 							fi
 							echo " "
-							echo "Automatic_Update ("$Automatic_Update")"
+							echo "Automatic_MR_Update ("$Automatic_MR_Update")"
 							echo " "
-							echo "Make sure you write your changes."
+							echo "Make sure you write/save your changes."
+							echo "Press any key to continue"
+							read -s -n 1 key
+							echo " "
+							clear
+							echo "Drive-Selftest Automatic Update"
+							if [[ $Automatic_Selftest_Update != "true" ]]; then
+								echo "You are currently using Manual Updates (system default)."
+							else
+								echo "You are currently using Fully Automatic Updates."
+							fi
+							echo " "
+							echo "Press 'a' for Automatic, or 'm' for Manual Updates,"
+							echo "or any other key to keep the current setting."
+							read -s -n 1 Keyboard_yn
+							if [[ $Keyboard_yn == "" ]]; then
+								echo "Keeping the current setting"
+							elif [[ $Keyboard_yn == "a" ]]; then 
+								echo "You selected Fully Automatic Updates."
+								Automatic_Selftest_Update="true"
+							elif [[ $Keyboard_yn == "m" ]]; then
+								echo "You selected the safer Manual Updates."
+								Automatic_Selftest_Update="false"
+							fi
+							echo " "
+							echo "Automatic_Selftest_Update ("$Automatic_Selftest_Update")"
+							echo " "
+							echo "Make sure you write/save your changes."
+							echo "Press any key to continue"
+							read -s -n 1 key
+							clear
+							echo " "
+							echo "Sendemail Automatic Update"
+							if [[ $Automatic_Sendemail_Update != "true" ]]; then
+								echo "You are currently using Manual Updates (system default)."
+							else
+								echo "You are currently using Fully Automatic Updates."
+							fi
+							echo " "
+							echo "Press 'a' for Automatic, or 'm' for Manual Updates,"
+							echo "or any other key to keep the current setting."
+							read -s -n 1 Keyboard_yn
+							if [[ $Keyboard_yn == "" ]]; then
+								echo "Keeping the current setting"
+							elif [[ $Keyboard_yn == "a" ]]; then 
+								echo "You selected Fully Automatic Updates."
+								Automatic_Sendemail_Update="true"
+							elif [[ $Keyboard_yn == "m" ]]; then
+								echo "You selected the safer Manual Updates."
+								Automatic_Sendemail_Update="false"
+							fi
+							echo " "
+							echo "Automatic_Sendemail_Update ("$Automatic_Sendemail_Update")"
+							echo " "
+							echo "Make sure you write/save your changes."
 							echo "Press any key to continue"
 							read -s -n 1 key       
 						;;
@@ -10399,7 +10540,13 @@ if [[ $Debug_Steps == "true" ]]; then echo "display_help"; fi
 	echo " "
 	echo " 	    -u7zip        This will remove 7-Zip from Scale if it was installed."
 	echo " "
-	echo "      -update       Manually check GitHub for an update."
+	echo "      -update       Manually check GitHub for a Multi-Report update."
+	echo " "
+	echo "      -update_selftest	Manually check GitHub for a Drive_Selftest update."
+	echo " "
+	echo "      -update_sendemail	Manually check GitHub for a Sendemail update."
+	echo " "
+	echo "      -update_all   Manually check GitHub for ALL files for an update."
 	echo " "
 	echo "      -ignore_lock  This will ignore multiple instances running."
 	echo "                    This option should be last on the command line."
@@ -10735,11 +10882,11 @@ zfs
 zpool
 )
 
-if ! test -e mr_sendemail.py; then
+#if ! test -e mr_sendemail.py; then
 # We need to generate the Python Script
-echo "Downloading @oxyde's sendemail.py script to send emails..."
-	get_sendemail
-fi
+#echo "Downloading @oxyde's sendemail.py script to send emails..."
+#	get_sendemail
+#fi
 
 #Temporary testing location, move to end of script.
 #smart_selftest
@@ -10752,7 +10899,7 @@ for command in "${commands[@]}"; do
 	fi
 done
 
-if ! [[ "$1" == "-config" || "$1" == "-help" || "$1" == "-delete" || "$1" == "-s" || "$1" == "" || "$1" == "-dump" || "$1" == "-purge" || "$1" == "-h" || "$1" == "-t" || "$1" == "-m" || "$1" == "-u7zip" || $1 == "-update" || "$1" == "-ignore_lock" || "$1" == "-cleanup" || "$1" == "-scsismart" || "$1" == "-smr_update" || "$1" == "-check_smr"  || "$1" == "-disable_smr" || "$1" == "-enable_smr" || "$1" == "-disable_smr_alarm" || "$1" == "-enable_smr_alarm" ]]; then
+if ! [[ "$1" == "-config" || "$1" == "-help" || "$1" == "-delete" || "$1" == "-s" || "$1" == "" || "$1" == "-dump" || "$1" == "-purge" || "$1" == "-h" || "$1" == "-t" || "$1" == "-m" || "$1" == "-u7zip" || "$1" == "-update" || "$1" == "-update_selftest" || "$1" == "-update_sendemail" || "$1" == "-update_all" || "$1" == "-ignore_lock" || "$1" == "-cleanup" || "$1" == "-scsismart" || "$1" == "-smr_update" || "$1" == "-check_smr"  || "$1" == "-disable_smr" || "$1" == "-enable_smr" || "$1" == "-disable_smr_alarm" || "$1" == "-enable_smr_alarm" ]]; then
 	echo '"'$1'" is not a valid option.'
 	echo "Use -h for help and look under OPTIONS."
 	echo " "
@@ -10889,8 +11036,31 @@ exit 0
 fi
 
 if [[ "$1" == "-update" ]]; then
-	update_script
+	update_MR_script
 	echo "The script has been updated.  Exiting."
+	sleep 1
+	exit 0
+fi
+
+if [[ "$1" == "-update_selftest" ]]; then
+	update_Drive_script
+	echo "The script has been updated.  Exiting."
+	sleep 1
+	exit 0
+fi
+
+if [[ "$1" == "-update_sendemail" ]]; then
+	update_Sendemail_script
+	echo "The script has been updated.  Exiting."
+	sleep 1
+	exit 0
+fi
+
+if [[ "$1" == "-update_all" ]]; then
+	update_MR_script
+	update_Drive_script
+	update_Sendemail_script
+	echo "All scripts have been updated.  Exiting."
 	sleep 1
 	exit 0
 fi
@@ -10931,9 +11101,9 @@ if [[ $Check_For_Updates == "true" ]] && [[ "$1" != "-t" && "$1" != "-m" && "$1"
 fi
 
 # Let's Update Automatically if allowed.
-if [[ $UpdateAvailable == "true" ]] && [[ $Automatic_Update == "true" || $UpdateDriveAvailable == "true" || $UpdateSendemailAvailable == "true" ]]; then
+if [[ $UpdateAvailable == "true" ]] && [[ $Automatic_MR_Update == "true" ]]; then
 	# We are updating automatically
-	update_script
+	update_MR_script
 	if [[ $Automatic_Update == "true" ]]; then
 		rm -rf /tmp/multi_report.lock
 		echo "Running script normally."
@@ -10951,8 +11121,16 @@ if [[ $UpdateAvailable == "true" ]] && [[ $Automatic_Update == "true" || $Update
 		echo "Running script normally..."
 	fi
 fi
+if [[ $UpdateDriveAvailable == "true" ]] && [[ $Automatic_Selftest_Update == "true" ]]; then
+	update_Drive_script
+fi
+if [[ $UpdateSendemailAvailable == "true" ]] && [[ $Automatic_Sendemail_Update == "true" ]]; then
+	update_Sendemail_script
+fi
 
-# GRAB DRIVE-SELFTEST SCRIPT THIS ONE TIME, ONLY BECASUE IT IS NEW.
+
+
+# GRAB DRIVE-SELFTEST SCRIPT THIS ONE TIME, ONLY BECASUE IT IS NEW.  IN NEXT VERSION, MAKE THIS AN AUTOMATIC UPDATE IF THE FILE IS MISSING.
 # THIS GOES AWAY IN THE NEXT VERSION OR SOMETHING SIMILAR NEEDS TO HAPPEN.  ALSO VERSION CHECKING IS NEEDED TO ENSURE
 # WE ARE USING A COMPATABLE VERSION.  ALSO ADD CHKSUM TO DRIVE-SELFTEST IN NEXT VERSION. AND DO NOT USE HARD CODED FILE NAMES.
 	if [[ "$(curl -is https://github.com | head -n 1)" ]]; then
@@ -10963,9 +11141,9 @@ fi
 			echo "this will become a seperate function in the next version of the script."
 			if ! test -e "/tmp/Multi-Report"; then mkdir /tmp/Multi-Report; fi
 			cd /tmp/Multi-Report
-			curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/drive_selftest_v1_2024_12_27.txt
+			curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/drive_selftest.txt
 			curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/Drive_Selftest_User_Guide.pdf
-			cp "/tmp/Multi-Report/drive_selftest_v1_2024_12_27.txt" $SCRIPT_DIR"/"drive_selftest.sh
+			cp "/tmp/Multi-Report/drive_selftest.txt" $SCRIPT_DIR"/"drive_selftest.sh
 			cp "/tmp/Multi-Report/Drive_Selftest_User_Guide.pdf" $SCRIPT_DIR"/."
 		fi
 		)
@@ -11325,6 +11503,8 @@ if [[ $NVM_Low_Power == "true" ]]; then
 fi
 
 cleanup_files
+# For some odd reason thsi cannot be left in the cleanup_files function or the attachment never happens.  Very odd.  Look into this.
+if test -e "/tmp/Old_multi_report_config.txt"; then rm "/tmp/Old_multi_report_config.txt"; fi
 
 duration=$SECONDS
 if [[ $Develop == "true" ]]; then echo "$(($duration / 60)) minutes and $(($duration % 60)) seconds elapsed."; fi
