@@ -11122,10 +11122,12 @@ fi
 if [[ $UpdateDriveAvailable == "true" ]] && [[ $Automatic_Selftest_Update == "true" ]]; then
 	update_Drive_script
 fi
+
 if [[ $UpdateSendemailAvailable == "true" ]] && [[ $Automatic_Sendemail_Update == "true" ]]; then
 	update_Sendemail_script
 fi
 
+if ! test -e $SCRIPT_DIR"/mr_sendemail.py"; then update_Sendemail_script; fi
 
 
 # GRAB DRIVE-SELFTEST SCRIPT THIS ONE TIME, ONLY BECASUE IT IS NEW.  IN NEXT VERSION, MAKE THIS AN AUTOMATIC UPDATE IF THE FILE IS MISSING.
