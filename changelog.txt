@@ -1,13 +1,70 @@
-See Changelog file on github.com/JoeSchmuck
+# CHANGE LOG FOR MULTI-REPORT
+#
+#
+# V3.1 Beta 7 (17 January 2025)
+#
+#   - Removed all S.M.A.R.T. testing from Multi-Report and created companion script Drive-Selftest.
+#     ---- Drive-Selftest script provides all the required functionality to run SMART tests on
+#     ---- on all the system drives and report any issues.  This is in preparation for when
+#     ---- TrueNAS has resolved the NVMe SMART testing issues, then the companion script
+#     ---- will no longer be required.  Additionally it simplifies the Multi-Report script.
+#   - A Zpool error now flags the suspect drive as well in the text section of the output file.
+#   - Replacing switches '-dump emailextra' with '-dump emailall'. Either will function for now.
+#   - Added NVMe Temperature Sensors 1 and 2 to the Chart, if they exist.
+#   - Fixed sgdisk partition error for drives named 'sdp'.
+#   - And a lot of other small tweaks.
 
-###### ZPool & SMART status report with FreeNAS/TrueNAS config backup
-### Original script by joeschmuck
-### Modified by Bidule0hm, melp, toomuchdata
-### Thanks goes out to Basil Hendroff who created the SMR Drive Check script.
-### Currently maintained by joeschmuck (joeschmuck2023@hotmail.com)
+# V3.0.8 Beta (Not released to the public)  (18 November 2024)
+#
+#   - Fix for some NVMe drives may report self-test results with leading white space.
+#   - Fix for not checking if NVMe drives exist before attempting to run self-test.
+#   - Fix for a drive serial number with white space.
+#   - Added more data collection for NVMe drives (NVMe Self-Test Log and NVMe Error-Log).
+#   - REMOVED SMART Testing from within Multi-Report and created new seperate companion script for SMART testing called Drive_Selftest.
+#   - Added Partition Backups generated and attached when TrueNAS Configuration is attached (by request).
+#   - Cleaned up the Text Section and added a little more data.
+#   - Added dumping of API drive data to aid in development efforts using the API.
+#   - Added automatic update to statistical data file (reformatting the file to fix 30 day Total Data Read/Written issue).
+#   - Updated SMR Drive Checking to report drives for 14 runs of the script.
+#   - Fix for NVMe errors messages for drive checks on NVMe drive which does not support Self-test.
+#   - Added message that if using TrueNAS 24.10 or greater, the Smartmontools Override is no longer "required".  However people may still desire to use it.
+#   - Fixed some (null) error messages while collecting smart data from drive.
+#   - Added error message for statistical data file not containing a drive serial number.
+#   - Added ZFS/Pool ONLINE (green) or if other (red).
+#   - Added API data capture routine for -dump routine supporting troubleshooting.
+#   - Updated the JSON Error Log to remove some of the un-needed data.
+#   - Added option to Enable/Disable running external SMART test script.  Internal testing removed from Multi-Report.
+#   - Added checking previous SMART check pass/fail.  This will catch any SMART Long test failures from a previous run.
+#   - No longer download all github files, only downloads the files we need.
 
+# V3.0.7 (08 June 2024)
+#
+#   - Fixed for some NVMe drives may report self-test results with leading white space.
+#   - Fixed to actually generate an alarm for Media Errors.
+#   - Added Compensation (offset) for Media Errors.
+#   - Added more data collection for NVMe drives (NVMe Self-Test Log and NVMe Error-Log).
 
-### Changelog:
+# V3.0.6 (02 June 2024)
+#
+#   - (The push for this change) Fix for Zpool gptid listing in text section (listing cache, log, meta, spare, and dedup).
+#
+#   - Added polling NVMe drives for self-test completion when 'waiting' for test complete.  The default is now to wait for the test(s) to complete.
+#     ---- The smart self-test will start on ALL NVMe drive at the same time will be asked if the test completed or failed once a second.
+#     ---- When the results are present the script will continue on to each successive NVMe drive, which if they were all identical, the tests
+#     ---- should be completing within a second of the first drive polled.  This happens for both Short and Long tests.
+#     ---- A new pair of variables in the multi_report_config.txt file can be set to "false" to have the script not wait and just use the previous
+#     ---- results.  By default the script will wait.
+#     ---- Now for a question to hose who are reading this...  How would yo feel about checking the last test time for each NVMe and if it
+#     ---- the last test time was less than 18 hours old, then skip the test.  Of course it will end up being a variable that the user could
+#     ---- change the time value.  I just thought of this because when I test, I end up running a lot of NVMe self-tests.
+#     ---- Send me joeschmuck2023@hotmail.com an email or just message me on the forum if you have an option.
+#
+#   - Changed using smartmontool if v7.4 is installed to "enable" as TrueNAS (no version) supports scheduled NVMe self-testing.
+
+# V3.0.5 (25 May 2024)
+#
+#   -Fix for Zpool Status error messages.
+#   -Added SMR drive background in yellow.
 
 # V3.0.4 (20 May 2024)
 #
@@ -17,7 +74,6 @@ See Changelog file on github.com/JoeSchmuck
 #   -Added '-disable_smr' and '-enable_smr' switches to modify the config file.
 #   -Added '-check_smr' switch for a One-Time Run to check SMR drives if normal SMR Checking has been disabled.
 #   -Fix for Pool Names which contain space characters.
-#
 
 # V3.0.3 (13 May 2024)
 #
@@ -30,11 +86,11 @@ See Changelog file on github.com/JoeSchmuck
 #   -Fixed NVMe simulation
 #   -Fixed Automatic Update so it runs the script immediately after the update.
 #   -Added Total Data Read/Total Data Written to Zpool Stats (supports up to 9.2 YB values)
-#   -Added "Total Data" per drive for "Last 30 Days" or "Current Month Actuals" (Past 30 days is default).
+#   -Added "Total Data Written" per drive for "Last 30 Days" or "Current Month Actual" (Past 30 days is default).
 #   -Added SMR Drive Detection, which can be disabled.
 #   -Fixed MultiZone reporting Critical Error vice Warning Error.
 #   -Fixed to Ignore MultiZone errors for SSDs.
-#
+
 # V3.0.1 (08 April 2024)
 #
 #   -Fixed NVMe Advanced Configuration question for NVMe Long Self-test.
@@ -44,18 +100,7 @@ See Changelog file on github.com/JoeSchmuck
 #   -Added SCSI "Use Last Test Hours" for Power On Hours - Option if the previous option is not agreeable.
 #   -Added LastTestType (hours) for drives which stop reporting Self-tests at 65535 hours.
 #   -Updated User Guide to support new features.
-#
-# V3.0.1 (13 April 2024)
-#
-#   -Fixed NVMe Advanced Configuration question for NVMe Long Self-test.
-#   -Fixed Temperature reporting for 'HPE' SSD.
-#   -Added SCSI drive reporting when using SCSI to ATA Translation.
-#   -Added SCSI new method to obtain Power On Hours for SCSI drives that do not expose this data. - Disabled by default, use '-scsismart' switch or new variable.
-#   -Added LastTestType (hours) for drives that do not report correct Power On Hours but do report correct Self-test hours.
-#   -Fixed Execution Timer (dropped off whole minutes).
-#   -Added granularity to Text Output Section, can individually disable Warning/Caution, Zpool, or SMART Data output.
-#   -Updated User Guide to support new features.
-#
+
 # V3.0 (30 March 2024)
 #
 # Notable issues:
@@ -77,6 +122,7 @@ See Changelog file on github.com/JoeSchmuck
 #   - Updated script for SCALE Dragonfish for installing 7zip if required.
 #   - Updated Configuration Questions to make configuration a little easier.
 #   - Removed 'Mouseover' option and hardcoded it.
+
 #   - Corrected 'Pool_Capacity_Type' variable missing in config file.
 #   - Added checking for all software commands to respond (thanks dak180 for the idea).
 #   - Added custom wear level alarm value 'i' to the group 'n' 'r' 'd'. 'i' = Ignore.  This makes wearLevel="", non-exist.
@@ -85,323 +131,5 @@ See Changelog file on github.com/JoeSchmuck
 #   - Changed Non-Recognized drive power_on_hours from Warning to Caution.
 #   - Adjusted script for multiple LBA reporting on Yucun SSDs.
 #   - Updated script to work in a directory with a 'space character' in the path.
-#   - Removed variables (IncluedSSD and IncludeNVM).
+#   - Removed variables (IncludedSSD and IncludeNVM).
 #
-# V2.5.1 (3 December 2023)
-#   - Changed exported configuration file to use .tar/.zip appropriately.
-#   - Moved NVMe power state setting to end of script. 
-#
-# V2.5 (25 November 2023)
-#   - Added Custom Drive option to use 'Normalized' Wear Level.
-#   - Added customization for Normal, Warning, and Critical Subject Lines.
-#   - Added quick fix for odd reporting LITEON SSDs.
-#   - Added nvme power level reporting.
-#   - Added setting nvme lowest power level option.
-#   - Updated to use smartmontools 7.4 or greater.
-#   - Updated to use 'nvme' command in absence of smartmontools 7.4 or greater (Last Test Age is not available in CORE).
-#   - Added Last Test Type and Last Test Age columns for NVMe (when smartmontools 7.4 is incorporated into TrueNAS).
-#   - Remove multipath drive data (duplicate drive serial numbers) from the report.
-#   - Reduced normal drive data collection by 2/3's for troubleshooting/sending to Joe.
-#   - Added '-dump emailextra' to send all (2/3's more) drive data files if required.
-#   - Renamed drive dump files to be more user friendly.
-#   - Added simulation enhancement (Developer tool)
-#   - Added additional troubleshooting help for Script Running Error.
-#   - Updated Multiple Instance Check to work properly. Slower processes would generate a false positive.
-#   - Added '-ignore_lock' parameter to ignore Multiple Instance Check (should never be needed but it's included as an option).
-#   - Updated reading temperature if value is zero or less to read ID 194.
-#
-# V2.4.4 (19 August 2023)
-#   - Incorporated Spencer.py script by calling the external script.
-#   - Changed TrueNAS Backup Configuration file name to include the TrueNAS version number.
-#   - Fixed ability to edit/add Warranty Drive Data so it does not erase previously entered data.
-#   - Fixed SSD/NVMe Capacity Title in chart.
-#   - Fixed NVMe Media Errors column display, it now appears centered and has lines around it.
-#   - Added more Wear Level & TBW compatibility.
-#   - Updated -h and -help commands.
-#   - Updated text section 'Drives for this pool' to list non-GPTID entries.
-#
-# V2.4.3 (16 June 2023)
-#   - Minor Update to recognize more SCSI drive Offline Uncorrectable Errors and Total Data Written.
-#   - Minor Update to recognize UDMA CRC Errors for some older Intel SSD's.
-#
-# V2.4.2 (19 May 2023)
-#   - Bug Fix to properly recognize Samsung HD103UJ HDD.
-#   - Bug fix to properly recognize/display more than 26 drives in Scale.
-#
-# V2.4.1 (29 April 2023)
-#   - Bugfix to allow script to be run outside the script directory.
-#   - Updated chmod 755 to the new script file.
-#   - Updated cleanup routine for upgrade files left behind.
-#   - Updated TrueNAS Config Backup name to reference the NAS name.
-#   - Added Automatic Update Feature.
-#   - Added Update Script File Checksum Check.
-#
-# V2.4 (21 April 2023)
-#
-#   - Added NVMe Columns for Media Errors and Total Data Written.
-#   - Added Total Data Written for all drives.
-#   - Updated User Guide.
-#
-# V2.3 (14 April 2023)
-#   - Simplified User Installation
-#   - Bugfix for Custom Drive Configuration - Wear Level, Helium Level.
-#   - Updated User Guide
-#
-# V2.2 (10 April 2023)
-#   - Bugfix for Test Age always being = "2".
-#   - Bugfix for SSD Wear Level for certain drives.
-#   - Bugfix for Scale, no TrueNAS Config Backup without 7-zip.
-#   - Added Automatic Update Notification for newer version.
-#   - Added Message from the Creator.
-#   - Added Symlink - "multi_report.sh" is the file name to run from this point forward.  Read the User Guide for more details.
-#   - Changed TrueNASConfig Backup to zip file type attachment.
-#   - Adjusted for drive that passes SMART Test but reports the test hour as '0'.
-#
-# V2.1 (29 March 2023)
-#   - Updated TrueNAS password backup to include encrypted password file, and enable encrypted Config File in email.
-#   -- NOTE: The encrypted password is on line #5 of this script and must remain there.
-#
-#   - Updated script to use 'json' data.
-#   - Fixed script to allow for a zero hour runtime on a drive.
-#   - Renamed variables so they make more sence.
-#   - More details when using a '-dump' switch.
-#   - Added Runtime.
-#   - New Wear Level & Helium Level formula.
-#   - Added Backup of original multi_report_config.txt attachment along with the new configuration file.
-#
-#   The multi_report_config.txt file will automatically update previous versions to add new features
-#   and will not be backwards compatible.
-#
-# V2.0.10 (6 March 2023)
-#   - Fixed introduced error '-s' sending emails.
-#
-# V2.0.9 (5 March 2023)
-#   - Only one running instance allowed.
-#   - Minor updates to recognize SMART testing in progress for certain drives.
-#
-# V2.0.8 (23 February 2023)
-#   - Added Email/Text Monitoring Feature for NugentS to try out.
-#   - Edit multi_report_config.txt for additional email address.
-#   - Use '-m' switch to invoke.  Statistical data is recorded each time the script is run.
-#   - Added last two lines to display elapsed time of script running.
-#
-# V2.0.7 (7 February 2023)
-#   - Bug Fix: Nuisance error message, did not impact operation but it doesn't look good.
-#   -- "Cannot open input file /tmp/zpoollist.txt" and "/tmp/zpoolstatus.txt".  Only occurs in Core
-#   -- during TrueNAS configuration file attachment operation (default is Monday).
-# V2.0.6 (1 February 2023)
-#   - Reduced drive data collection.  Added 'zpool' data collection.
-#
-# V2.0.5 (27 January 2023)
-#   - Adjusted Zpool Status to allow 'resilvering' status message. (Line 1340)
-#   - Updated '-dump email' command to allow user to enter comments to the author.
-#
-# V2.0.4 (26 January 2023)
-#   - Fixed if Zpool does not provide a number for fragmentation, will now display non_exist_value string.
-#
-# V2.0.3 (24 January 2023)
-#   - Hacked HDD SMART Testing in progress with "NOW" in the '# 1' line.  Will fix better later.
-#
-# V2.0.2 (24 January 2023)
-#   - Fix Wear Level that may fail on some drives.
-#
-# v2.0.1 (21 January 2023)
-#   - Fixed Zpool Fragmentation Warning for 9% and greater (Hex Math issue again).
-#
-# v2.0 (21 January 2023)
-#   - Formatted all -config screens to fit into 80 column x 24 lines.
-#   - Removed custom builds
-#   - Fixed Custom Configuration Delete Function.
-#   - Fixed Zpool Scrub Bytes for FreeNAS 11.x
-#   - Fixed SMART Test to allow for 'Offline' value.
-#   - Modified Wear Level script to account for 'Reverse' Adjustment.
-#   - Added Wear Level Adjustment Reversing to the Custom Drive configuration.
-#   - Added Output.html to -dump command.
-#   - Added Mouseover and Alternate '()' to Mouseover for normalized values (Reallocated Sectors, Reallocated Sector Events, UDMA CRC, MultiZone).
-#   - Updated Testing Code to accept both drive_a and drive_x files.
-#   - Added Zpool Fragmentation value by request.
-#   - Added '-dump email' parameter to send joeschmuck2023@hotmail.com an email with the drive data and the multi_report_config.txt file ONLY.
-#   - Added Drive dump data in JSON format.  It looks like a better way to parse the drive data.  Still retaining the older file format for now.
-#
-#   The multi_report_config file will automatically update previous versions to add new features.
-#
-# v1.6f (27 December 2022)
-#   - Added recognition for WDC SSD "230 Media_Wearout_Indicator".
-#   - Adjusted the language to English for the Date calculations.
-#   - Updated datestamp2 "date" command to be compatible with FreeBSD 11 and earlier.
-#   - Updated Zpool Status Report to display Used Space Capacity when using the "zpool" reporting configuration.
-#   - Added customizable alarm setpoints for up to 24 drives.
-#   -- This feature allows for customizing drives which do not fit into the default parameters.
-#   -- It is not intended to individualize each drive, but you could if you wanted.
-#   -- This allows the option for removal of the three custom code options.
-#   - The configuration file in the email will now change to FreeNAS or TrueNAS based
-#   -- on the software running vice FreeNAS hard-coded.
-#   - Corrected several spelling errors throughout script.
-#
-#   The multi_report_config file will automatically update previous versions to add new features.
-#
-#   - Future Plan: Remove custom code for snowlucas2022, diedrichg, and mistermanko in version 2.0.
-#
-# v1.6e (11 November 2022)
-#   - Fixed gptid not showing in the text section for the cache drive (Scale only affected).
-#   - Fixed Zpool "Pool Size" - Wasn't calculating correctly under certain circumstances.
-#   - Added Toshiba MG07+ drive Helium value support.
-#   - Added Alphabetizing Zpool Names and Device ID's.
-#   - Added No HDD Chart Generation if no HDD's are identified (nice for SSD/NVMe Only Systems).
-#   - Added Warranty Column to chart (by request and must have a value in the Drive_Warranty variable).
-#   - Removed Update option in -config since the script will automatically update now.
-#   - Updated instructions for multiple email addresses.
-#   - Updated instructions for "from:" address, some email servers will not accept the default
-#   -- value and must be changed to the email address of the account sending the email.
-#   - Added the No Text Section Option (enable_text) to remove the Text Section from the email output
-#   -- and display the chart only, if the value is not "true".
-#   - Added Phison Driven SSD attribute for correct Wear Level value.
-#
-#   NOTES: If there is an error such as the host aborts a drive test and an error occurs, the script may
-#   report a script failure.  I do not desire to account for every possible drive error message.
-#   If you take a look at your drive data, you may notice a problem.  Fix the problem and the
-#   script should work normally.  If it still does not, then reach out for assistance.
-#
-#   The multi_report_config file will automatically update previous versions to add new features.
-#
-# v1.6d-2 (09 October 2022)
-#   - Bug fix for NVMe power on hours.
-#   --- Unfortunately as the script gets more complex it's very easy to induce a problem.  And since I do not have
-#   --- a lot of different hardware, I need the users to contact me and tell me there is an issue so I can fix it.
-#   --- It's unfortunate that I've have two bug fixes already but them's the breaks.
-#   - Updated to support more drives Min/Max temps and display the non-existent value if nothing is obtained vice "0".
-#   
-#   The multi_report_config file is compatible with version back to v1.6d.
-#
-# v1.6d-1 (08 October 2022)
-#   - Bug Fix for converting multiple numbers from Octal to Decimal.  The previous process worked "most" of the time
-#   -- but we always aim for 100% working.
-#   
-#   The multi_report_config file is compatible with version back to v1.6d.
-#
-# v1.6d (05 October 2022)
-#   - Thanks goes out to ChrisRJ for offering some great suggestions to enhance and optimize the script.
-#   - Updated gptid text and help text areas (clarifying information)
-#   - Updated the -dump parameter to -dump [all] and included non-SMART attachments.
-#   - Added Automatic UDMA_CRC, MultiZone, and Reallocated Sector Compensation to -config advanced option K.
-#   - Fixed Warranty Date always showing as expired.
-#   - Added Helium and Raw Read Error Rates to statistical data file.
-#   - Added Raw Read Error Rates chart column.
-#   - Added compensation for Seagate Seek Error Rates and Raw Read Error Rates.
-#   - Added Automatic Configuration File Update feature.
-#   - Added selection between ZFS Pool Size or Zpool Pool Size. ZFS is representative of the actual storage capacity
-#   -- and updated the Pool Status Report Summary chart.
-#   - Added ATA Error Log Silencing (by special request).
-#   - Added 0.1 second delay after writing "$logfile" to eliminate intermittent file creation errors.
-#   - Fixed Text Report -> Drive Model Number not showing up for some drives.
-#   - Added option to email copy of multi_report_config.txt upon any automatic script modification and/or by day.
-# v1.6c (28 August 2022)
-#   - Supports external configuration file (but not required).
-#   - Completely Configurable by running the script -config parameter (this took a lot of work).
-#   - Added HDD/SSDmaxtempovrd variables to combat some bogus SSD values.
-#   - Added TLER (SCT) support.
-#   - Added support for drives which do not support recording over 65536 hours for SMART Tests and rolls over to start at zero again.
-#   - Added -dump parameter to create and email all of the drives smartctl outputs as text file email attachments.
-#   - Added support for Helium drives.
-# v1.6: (05 August 2022)
-#   Thanks to Jeff, Simon, and Sean for providing me more test data than I could shake a stick at and friendly constructive opinions/advice.
-#   - Complete rewrite of the script.  More organized and easier for future updates.
-#   - Almost completely got rid of using AWK, earlier versions had way too much programming within the AWK structure.
-#   - Reads the drives much less often (3 times each I believe).
-#   - Added test input file to parse txt files of smartctl -a output. This will allow for a single drive entry and ability
-#   -- for myself or any script writer to identify additional parameters for unrecognized drives.
-#   -- Usage: program_name.sh [HDD|SSD|NVM] [inputfile_a.txt] [inputfile_b.txt]
-#   - Added better support for SAS drives.
-#   - Fixed NVMe and SAS Power On Hours for statistical data recording, and other things.
-#   - Added Critical and Warning Logs to email output with better descriptive data.
-#   - Logs (stored in /tmp/) no longer deleted after execution to aid in troubleshooting, but deleted at the start of the script.
-#   - Added HELP file, use program_name.sh [-h] [-help]
-#   - Added SCT Error Recovery to the Text Report section.
-#   - Added Zpool Size, Free Space, and Temp Min/Max.
-#   - Added customizable temperature values and customizable Non-Value fields (use to be coded to "N/A").
-#   - Added support for SandForce SSD.
-# v1.5:
-#   - Added NVMe support
-#   - Added clearer error reporting for Warning and Critical errors.
-#   - Known Problems: The NVMe Power On Time has a comma that I can't get rid of, yet. I want to remove the comma when the data is retrieved.
-#   -- NVMe's are not all standardized so I expect tweaks as different drive data arrives.
-#   -- onHours that includes a comma will not record correctly in the statistical data file.  This is related to the NVMe problem above.
-#   -- Zpool Summary does not indicate Scrub Age warning, likely the entire summary has issues. 
-# v1.4d:
-#   - Fixed Scrub In Progress nuisance error when a scrub is in progress.
-#   - Added offsetting Reallocated Sectors for four drives.  This should be for testing only. Any drives
-#   -- with a significant number of bad sectors should be replaced, just my opinion.
-#   - Added Drive Warranty Expiration warning messages and ability to disable the Email Subject line warning.
-#   -- NOT TESTED ON OTHER THAN U.S. FORMATTED DATE YYYY-MM-DD.
-#   - Added HDD and SSD individual temperature settings.
-#   - Changed order of polling Temperature data from HDD/SSD.
-# v1.4c:
-#   - Rewrite to create functions and enable easier editing.
-#   - Added Custom Reports.
-#   - Added disabling the RAW 'smartctl -a' data appended to the end of the email.
-#   - Added sorting drives alphabetically vice the default the OS reports them.
-#   - Added RED warning in Device for any single failure in the summary (deviceRedFlag switch controlled).
-#   - Added some additional SSD definitions.
-#   - Fixed sorting last two SMART Tests, now reports them in proper order.
-#   - Fixed detecting "SMART Support is: Enabled", for white spaces.
-#   - Changed IGNORE DRIVES to a String Format to clean up and simplify programming.
-#   - Added MultiZone_Errors support for up to eight drives.
-#   - Added sectorWarn variable to complement the sectorCrit variable.
-#   - Added ignoreSeekError variable to ignore some of those wild Seek Error Rate values.
-#   - Added ignoreUDMA CRC Errors due to the "Known Problem"
-#   - Fixed md5/sha256 error on TrueNAS Scale (only used during config backups).
-#   - Added selectable config backup periodicity by day vice every run.
-#   - Added Exporting statistical data for trend analysis.
-#   -- Can be setup to email statistics weekly, monthly, or not at all.
-#   -- The -s switch will run Data Collection Only, no email generated.  Note: Do Not run two instances at once, the temp files do not survive.
-#   - Fixed the Capacity to remove the brackets "[]", thanks Jeff Alperin.
-#   - Fixed Scrub Age failure due to 1 day or longer repair time, now shows anything >24 hours.
-#
-#   - Known Problem: One user reported UDMA_CRC_Errors is not subtracting correctly, have not been able to personally replicate it.
-#   -- This error seems to occur around line #1027
-# v1.4b:
-#   - Added SMART test remaining percentage if Last Test has a SMART Test is in progress.
-#   - Fix for empty SMART fields, typically for unsupported SSD's.
-#   - Added IGNORE SMART Drive so you can ignore specific drives that may cause you weird readings.
-#   --- Updated so blank SSD table header is removed when you ignore all the drives (just crazy talk).
-# v1.4a:
-#   - Fixed report errors for if a SCRUB is in progress, now shows estimated completion time.
-#   - Fixed report error for a Canceled SCRUB.
-#   - Fixed FreeBSD/Linux use for SCRUB report (minor oversight).
-# v1.4:
-#   - Run on CRON JOB using /path/multi_report_v1.4.sh
-#   - Fixed for automatic running between FreeBSD and Linux Debian (aka SCALE) as of this date.
-#   - All SMART Devices will report.
-#   - Added conditional Subject Line (Good/Critical/Warning).
-#   - Added Automatic SSD Support.
-#   --- Some updates may need to be made to fit some of SSD's. Code in the area of about line 530 will
-#   --- need to be adjusted to add new attributes for the desired SSD's fields.
-#   - UDMA_CRC_ERROR Override because once a drive encounters this type of error, it cannot be cleared
-#   --- so you can offset it now vice having an alarm condition for old UDMA_CRC_Errors.
-#   - Added listing NON-SMART Supported Drives.  Use only if useful to you, some drives will
-#   --- still output some relevant data, many will not.
-# v1.3:
-#   - Added scrub duration column
-#   - Fixed for FreeNAS 11.1 (thanks reven!)
-#   - Fixed fields parsed out of zpool status
-#   - Buffered zpool status to reduce calls to script
-# v1.2:
-#   - Added switch for power-on time format
-#   - Slimmed down table columns
-#   - Fixed some shellcheck errors & other misc stuff
-#   - Added .tar.gz to backup file attached to email
-#   - (Still coming) Better SSD SMART support
-# v1.1:
-#   - Config backup now attached to report email
-#   - Added option to turn off config backup
-#   - Added option to save backup configs in a specified directory
-#   - Power-on hours in SMART summary table now listed as YY-MM-DD-HH
-#   - Changed filename of config backup to exclude timestamp (just uses datestamp now)
-#   - Config backup and checksum files now zipped (was just .tar before; now .tar.gz)
-#   - Fixed degrees symbol in SMART table (rendered weird for a lot of people); replaced with a *
-#   - Added switch to enable or disable SSDs in SMART table (SSD reporting still needs work)
-#   - Added most recent Extended & Short SMART tests in drive details section (only listed one before, whichever was more recent)
-#   - Reformatted user-definable parameters section
-#   - Added more general comments to code
-# v1.0:
-#   - Initial release
