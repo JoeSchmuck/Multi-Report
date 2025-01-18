@@ -6,7 +6,7 @@ TrueNASConfigEmailEncryption=""	 # Set this to "" for no encryption, MUST REMAIN
 # NOTE: Some email providers will not send some encrypted file types, such as GMAIL, but .zip files are okay.
 # NOTE: 7zip is used for the compression/encryption and will not be installed unless encryption is enabled.
 
-##### Version 3.1
+##### Version 3.11
 
 ###### Get Config File Name and Location
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
@@ -84,6 +84,12 @@ fi
 # Version
 ### Changelog:
 #
+
+# V3.11 (18 January 2025)
+#
+# Fixed gdisk and sgdisk installation on CORE, resolving drive errors on LINE 4434 error messages.
+#
+
 # V3.1 (17 January 2025)
 #
 # THIS WAS BETA 7, HOWEVER IT SEEMS TO WORK SO I REMOVED THE BETA.
@@ -1125,22 +1131,16 @@ if [[ $Debug_Steps == "true" ]]; then echo "check_gdisk"; fi
 	if [[ $softver != "Linux" ]]; then
 		if ! [[ "$(find /usr/ -name "gdisk")" ]]; then
 			echo "gdisk not found"							# WE NEED TO COPY THE FILE
-			if ! test -e "/tmp/Multi-Report"; then
-				if [[ "$(curl -is https://github.com | head -n 1)" ]]; then
-					# Go git the file
-					( mkdir /tmp/Multi-Report
-					cd /tmp/Multi-Report
-			#		git clone -q https://github.com/JoeSchmuck/Multi-Report.git
-					curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/gdisk
-					curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/sgdisk
-					)
-				fi
-			else
-				echo "/tmp/Multi-Report present, files should be on the system."
+			if [[ "$(curl -is https://github.com | head -n 1)" ]]; then
+				# Go git the file
+				(
+				cd /tmp
+				curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/gdisk
+				curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/sgdisk
+				)
 			fi
-
-			cp /tmp/Multi-Report/gdisk /usr/local/sbin
-			cp /tmp/Multi-Report/sgdisk /usr/local/sbin
+			cp /tmp/gdisk /usr/local/sbin
+			cp /tmp/sgdisk /usr/local/sbin
 			chmod +x /usr/local/sbin/gdisk
 			chmod +x /usr/local/sbin/sgdisk
 			echo "gdisk and sgdisk copied to /usr/local/sbin and made executable."
@@ -11154,7 +11154,7 @@ fi
 		)
 	fi
 
-if [[ $Partition_Check == "true" ]]; then	# Check to see if the files needed are there.
+if [[ $Partition_Check == "true" ]] || [[ $Partition_Backup == "true" ]]; then	# Check to see if the files needed are there.
 	check_gdisk
 fi
 
