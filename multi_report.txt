@@ -2,11 +2,11 @@
 # shellcheck disable=SC1075,SC2027,SC2034,SC2128,SC2002,SC2004,SC2086,SC2162
 LANG="en_US.UTF-8"
 #
-TrueNASConfigEmailEncryption=""	 # Set this to "" for no encryption, MUST REMAIN ON LINE 5.
+TrueNASConfigEmailEncryption="Tiger"	 # Set this to "" for no encryption, MUST REMAIN ON LINE 5.
 # NOTE: Some email providers will not send some encrypted file types, such as GMAIL, but .zip files are okay.
 # NOTE: 7zip is used for the compression/encryption and will not be installed unless encryption is enabled.
 
-##### Version 3.11
+##### Version 3.12
 
 ###### Get Config File Name and Location
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
@@ -717,7 +717,7 @@ logfile_header="/tmp/${tempfilepath}smart_report_header.tmp"
 logfile_temp="/tmp/${tempfilepath}smart_report_temp.tmp"
 boundary="gc0p4Jq0M2Yt08jU534c0p"
 
-CurrentFilename="multi_report_v3.11_2025_01_18.txt"
+CurrentFilename="multi_report_v3.12_2025_01_18BB.txt"
 valid_config_version_date="2025-01-17"	# Configuration file valid date
 progverdate="$(echo $CurrentFilename | cut -d '_' -f4,5,6 | cut -d '.' -f1 | sed -r 's/[_]+/-/g')"
 progname="Multi-Report "$(echo $CurrentFilename | cut -d '_' -f3)" dtd:"
@@ -1179,15 +1179,10 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_MR_script"; fi
 		curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/Multi_Report_User_Guide.pdf
 		curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/Multi_Report_Quick_Start_Guide.pdf
 		curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/changelog.txt
-
-
-#		curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/drive_selftest.txt
-		
-# FOR OXYDE GITHUB
-#		curl -LJOs https://raw.githubusercontent.com/oxyde1989/standalone-tn-send-email/refs/heads/main/multireport_sendemail.py
 		)
+
 		GitVersion="$(cat "/tmp/Multi-Report/multi_report.txt" | grep "##### Version" | cut -d 'n' -f2 | cut -d '_' -f 1 | head -1)"
-		VersionFilename="$(echo $CurrentFilename | cut -d 'v' -f 2 | cut -d '_' -f 1)"
+		VersionFilename="$(cat "$SCRIPT_DIR/multi_report.txt" | grep "##### Version" | cut -d 'n' -f2 | cut -d '_' -f 1 | head -1)"
 		echo " "
 		echo "Multi-Report current version is: "$VersionFilename
 		echo "The new version is: "$GitVersion 
@@ -1203,7 +1198,9 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_MR_script"; fi
 		if [[ $Keyboard_yn == "y" ]] || [[ $Keyboard_yn == "Y" ]]; then
 			echo "Updating Script..."
 			echo "3"
+
 			sed '5s/.*/TrueNASConfigEmailEncryption="'$TrueNASConfigEmailEncryption'"	 # Set this to "" for no encryption, MUST REMAIN ON LINE 5./' /tmp/Multi-Report/multi_report.txt > /tmp/multi_report_update.txt
+
 			sleep .5
 			# Generate the full file name minus the .txt
 			VersionFilename="$(echo $CurrentFilename | rev | cut -d '.' -f 2,3,4,5 | rev)"
