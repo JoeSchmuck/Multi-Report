@@ -1203,7 +1203,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_MR_script"; fi
 		if [[ $Keyboard_yn == "y" ]] || [[ $Keyboard_yn == "Y" ]]; then
 			echo "Updating Script..."
 			echo "3"
-			sed '5s/.*/TrueNASConfigEmailEncryption="'$TrueNASConfigEmailEncryption'"	 # Set this to "" for no encryption, MUST REMAIN ON LINE 5./' /tmp/Multi-Report/$GitVersion > /tmp/multi_report_update.txt
+			sed '5s/.*/TrueNASConfigEmailEncryption="'$TrueNASConfigEmailEncryption'"	 # Set this to "" for no encryption, MUST REMAIN ON LINE 5./' /tmp/Multi-Report/multi_report.txt > /tmp/multi_report_update.txt
 			sleep .5
 			# Generate the full file name minus the .txt
 			VersionFilename="$(echo $CurrentFilename | rev | cut -d '.' -f 2,3,4,5 | rev)"
