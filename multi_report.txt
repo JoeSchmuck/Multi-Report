@@ -1203,13 +1203,13 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_MR_script"; fi
 
 			sleep .5
 			# Generate the full file name minus the .txt
-			VersionFilename="$(echo $CurrentFilename | rev | cut -d '.' -f 2,3,4,5 | rev)"
+			VersionRenameFilename="$(echo $CurrentFilename | rev | cut -d '.' -f 2,3,4,5 | rev)"
 			echo "2"
 			sleep .5
 
 			# Backup the original multi_report.sh file and config file to save
 			if test -e $SCRIPT_DIR"/multi_report.sh"; then cp $SCRIPT_DIR"/multi_report.sh" $SCRIPT_DIR"/"$CurrentFilename; fi
-			cp $SCRIPT_DIR"/multi_report_config.txt" $SCRIPT_DIR"/"$VersionFilename"_config.txt"
+			cp $SCRIPT_DIR"/multi_report_config.txt" $SCRIPT_DIR"/"$VersionRenameFilename"_config.txt"
 
 			# Check if old multi_report.sh file exists and delete
 			if test -e $SCRIPT_DIR"/"$runfilename; then
