@@ -1417,55 +1417,90 @@ if [[ $Debug_Steps == "true" ]]; then echo "checkforupdate"; fi
 
 		if test -e "/tmp/Multi-Report/multi_report.txt"; then
 			GitVersion="$(cat "/tmp/Multi-Report/multi_report.txt" | grep "##### Version" | cut -d 'n' -f2 | cut -d '_' -f 1 | head -1)"
+			GitMajorVersionNumber="$(echo $GitVersion | cut -d '.' -f1)"
+			GitMinorVersionNumber="$(echo $GitVersion | cut -d '.' -f2)"
+			
 			VersionFilename="$(echo $CurrentFilename | cut -d 'v' -f 2 | cut -d '_' -f 1)"
+			MajorVersionFilename="$(echo $VersionFilename | cut -d '.' -f1)"
+			MinorVersionFilename="$(echo $VersionFilename | cut -d '.' -f2)"
+			
 			echo "   1. Multi-Report - Installed: "$VersionFilename", GitHub: "$GitVersion
-			if [[ $GitVersion > $VersionFilename ]] && [[ $VersionFilename != "" ]]; then
+			if [[ $GitMajorVersionNumber -gt $MajorVersionFilename ]] && [[ $VersionFilename != "" ]]; then
 				UpdateAvailable="true"
+				echo "Major Update"
 				rm /tmp/Multi-Report/multi_report.txt
+			elif [[ $GitMajorVersionNumber -eq $MajorVersionFilename ]] && [[ $GitMinorVersionNumber -gt $MinorVersionFilename ]]; then
+				UpdateAvailable="true"
+				echo "Minor Update"
+				rm /tmp/Multi-Report/multi_report.txt
+			else
+				echo "No Update"
 			fi
 		else
 			echo "No GitHub Version File Available"
 		fi
+		
 		if test -e "/tmp/Multi-Report/drive_selftest.txt"; then
 			GitDriveVersion=$(cat "/tmp/Multi-Report/drive_selftest.txt" | grep "##### Version" | cut -d 'n' -f2 | tr -d ' ' | head -1)
-			if test -e $SCRIPT_DIR"/drive_selftest.sh"; then
-				VersionDriveFilename=$(cat $SCRIPT_DIR"/drive_selftest.sh" | grep "##### Version" | cut -d 'n' -f2 | tr -d ' ' | head -1)
-			else
-				VersionDriveFilename=0
-			fi
+			GitDriveMajorVersionNumber="$(echo $GitDriveVersion | cut -d '.' -f1)"
+			GitDriveMinorVersionNumber="$(echo $GitDriveVersion | cut -d '.' -f2)"
+			
+			VersionDriveFilename="$(cat $SCRIPT_DIR"/drive_selftest.sh" | grep "##### Version" | cut -d 'n' -f2 | tr -d ' ' | head -1)"
+			MajorDriveVersionFilename="$(echo $VersionDriveFilename | cut -d '.' -f1)"
+			MinorDriveVersionFilename="$(echo $VersionDriveFilename | cut -d '.' -f2)"
+
 			echo "   2. Drive_Selftest - Installed: "$VersionDriveFilename", GitHub: "$GitDriveVersion
-			if [[ $GitDriveVersion > $VersionDriveFilename ]] && [[ $VersionDriveFilename != "" ]]; then
+			if [[ $GitDriveMajorVersionNumber -gt $MajorDriveVersionFilename ]] && [[ $VersionDriveFilename != "" ]]; then
+				echo "Major Update"
 				UpdateDriveAvailable="true"
 				rm /tmp/Multi-Report/drive_selftest.txt
+			elif [[ $GitDriveMajorVersionNumber -eq $MajorDriveVersionFilename ]] && [[ $GitDriveMinorVersionNumber -gt $MinorDriveVersionFilename ]]; then
+				UpdateDriveAvailable="true"
+				echo "Minor Update"
+				rm /tmp/Multi-Report/drive_selftest.txt
+			else
+				echo "No Update"
 			fi
 		else
 			echo "No GitHub Version File Available"
-		fi	
-		# Check sendemail.py for version.
-		GitSendemailVersion=$(cat /tmp/Multi-Report/multireport_sendemail.py | grep "##### V" | cut -d 'V' -f2 | tr -d ' ')
-		if test -e $SCRIPT_DIR"/mr_sendemail.py"; then
-			VersionSendemailFilename=$(cat $SCRIPT_DIR"/mr_sendemail.py" | grep "##### V" | cut -d 'V' -f2 | tr -d ' ')
-		else
-			VersionSendemailFilename=0
 		fi
-		echo "   3. sendemail.py - Installed: "$VersionSendemailFilename", Github: "$GitSendemailVersion
-		if [[ "$GitSendemailVersion" > "$VersionSendemailFilename" ]]; then
-			UpdateSendemailAvailable="true"
-			rm /tmp/Multi-Report/multireport_sendemail.py
+		
+		if test -e "/tmp/Multi-Report/multireport_sendemail.py"; then
+			GitSendemailVersion=$(cat "/tmp/Multi-Report/multireport_sendemail.py" | grep "##### V" | cut -d 'V' -f2 | tr -d ' ' | head -1)
+			GitSendemailMajorVersionNumber="$(echo $GitSendemailVersion | cut -d '.' -f1)"
+			GitSendemailMinorVersionNumber="$(echo $GitSendemailVersion | cut -d '.' -f2)"
+			
+			VersionSendemailFilename="$(cat $SCRIPT_DIR"/mr_sendemail.py" | grep "##### V" | cut -d 'V' -f2 | tr -d ' ' | head -1)"
+			MajorSendemailVersionFilename="$(echo $VersionSendemailFilename | cut -d '.' -f1)"
+			MinorSendemailVersionFilename="$(echo $VersionSendemailFilename | cut -d '.' -f2)"
+
+			echo "   3. Sendemail - Installed: "$VersionSendemailFilename", GitHub: "$GitSendemailVersion
+			if [[ $GitSendemailMajorVersionNumber -gt $MajorSendemailVersionFilename ]] && [[ $VersionSendemailFilename != "" ]]; then
+				echo "Major Update"
+				UpdateSendemailAvailable="true"
+				rm /tmp/Multi-Report/multireport_sendemail.py
+			elif [[ $GitSendemailMajorVersionNumber -eq $MajorSendemailVersionFilename ]] && [[ $GitSendemailMinorVersionNumber -gt $MinorSendemailVersionFilename ]]; then
+				echo "Minor Update"
+				UpdateSendemailAvailable="true"
+				rm /tmp/Multi-Report/multireport_sendemail.py
+			else
+				echo "No Update"
+			fi
+		else
+			echo "No GitHub Version File Available"
 		fi		
-	else
-		echo "GitHub.com Not Available"
-	fi
-	if test -e "/tmp/Multi-Report/messages.txt"; then
-		Messages="$(cat "/tmp/Multi-Report/messages.txt")"
-		if [[ $Messages != "" ]]; then echo "Message from Joe"; fi
-	else
-		echo "No GitHub Message Available"
-	fi
-	if [[ $UpdateAvailable == "true" ]] || [[ $UpdateDriveAvailable == "true" ]] || [[ $UpdateSendemailAvailable == "true" ]]; then
-		echo "UPDATE AVAILABLE"
-	else
-		echo "NO UPDATES AVAILABLE"
+		
+		if test -e "/tmp/Multi-Report/messages.txt"; then
+			Messages="$(cat "/tmp/Multi-Report/messages.txt")"
+			if [[ $Messages != "" ]]; then echo "Message from Joe"; fi
+		else
+			echo "No GitHub Message Available"
+		fi
+		if [[ $UpdateAvailable == "true" ]] || [[ $UpdateDriveAvailable == "true" ]] || [[ $UpdateSendemailAvailable == "true" ]]; then
+			echo "UPDATE AVAILABLE"
+		else
+			echo "NO UPDATES AVAILABLE"
+		fi
 	fi
 
 	}
