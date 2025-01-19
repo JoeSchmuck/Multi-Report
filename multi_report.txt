@@ -85,6 +85,11 @@ fi
 ### Changelog:
 #
 
+# V3.11
+#
+# Fixed Updating Script, for the most part.  Automatic and `-update` , `-update_selftest` , and `-updated_sendemail` work.
+#
+
 # V3.11 (18 January 2025)
 #
 # Fixed gdisk and sgdisk installation on CORE, resolving drive errors on LINE 4434 error messages.
