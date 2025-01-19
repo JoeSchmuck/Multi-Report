@@ -2,7 +2,7 @@
 # shellcheck disable=SC1075,SC2027,SC2034,SC2128,SC2002,SC2004,SC2086,SC2162
 LANG="en_US.UTF-8"
 #
-TrueNASConfigEmailEncryption="Tiger"	 # Set this to "" for no encryption, MUST REMAIN ON LINE 5.
+TrueNASConfigEmailEncryption=""	 # Set this to "" for no encryption, MUST REMAIN ON LINE 5.
 # NOTE: Some email providers will not send some encrypted file types, such as GMAIL, but .zip files are okay.
 # NOTE: 7zip is used for the compression/encryption and will not be installed unless encryption is enabled.
 
@@ -1228,6 +1228,8 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_MR_script"; fi
 			cp "/tmp/Multi-Report/changelog.txt" $SCRIPT_DIR"/."
 			echo " "
 			echo "Your script has been updated and a copy of the User Guide and changelog is in your directory."
+#			MR_Updated="UPDATED"
+			MR_Updated="UPDATED: V"$VersionFilename
 			sleep 1
 				
 			### THIS IS NOT COMPLETE AND IS INTENTIONED TO UPDATE THE DRIVE SELF-TEST SCRIPT.
@@ -1239,6 +1241,8 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_MR_script"; fi
 			if test -e "/tmp/multi_report_update.txt"; then	rm "/tmp/multi_report_update.txt"; fi
 		else
 			echo "Aborted"
+#			MR_Updated="ABORTED"
+			MR_Updated="ABORTED: V"$VersionFilename
 			if test -e "/tmp/Multi-Report"; then rm -R "/tmp/Multi-Report"; fi
 			exit 0
 		fi
@@ -1301,6 +1305,8 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_Drive_script"; fi
 			cp "/tmp/Multi-Report/Drive_Selftest_User_Guide.pdf" $SCRIPT_DIR"/."
 			echo " "
 			echo "Your script has been updated and a copy of the User Guide and changelog is in your directory."
+#			Drive_Updated="UPDATED"
+			Drive_Updated="UPDATED: V"$VersionDriveFilename
 			sleep 1
 				
 			### THIS IS NOT COMPLETE AND IS INTENTIONED TO UPDATE THE DRIVE SELF-TEST SCRIPT.
@@ -1312,6 +1318,8 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_Drive_script"; fi
 			if test -e "/tmp/multi_report_update.txt"; then	rm "/tmp/multi_report_update.txt"; fi
 		else
 			echo "Aborted"
+#			Drive_Updated="ABORTED"
+			Drive_Updated="ABORTED: V"$VersionDriveFilename
 			if test -e "/tmp/Multi-Report"; then rm -R "/tmp/Multi-Report"; fi
 			exit 0
 		fi
@@ -1365,11 +1373,12 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_Sendemail_script"; fi
 		fi
 		if [[ $Keyboard_yn == "y" ]] || [[ $Keyboard_yn == "Y" ]]; then
 			echo "Updating Script..."
-
 			# Copy the new multi_report.sh file and set permissions
 			cp /tmp/Multi-Report/multireport_sendemail.py $SCRIPT_DIR"/mr_sendemail.py"
 			echo " "
 			echo "Your script has been updated."
+#			Sendemail_Updated="UPDATED"
+			Sendemail_Updated="UPDATED: V"$VersionSendemailFilename
 			sleep 1
 		
 			# Cleanup Leftover Files
@@ -1377,6 +1386,8 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_Sendemail_script"; fi
 			if test -e "/tmp/multi_report_update.txt"; then	rm "/tmp/multi_report_update.txt"; fi
 		else
 			echo "Aborted"
+#			Sendemail_Updated="ABORTED"
+			Sendemail_Updated="ABORTED: V"$VersionSendemailFilename
 			if test -e "/tmp/Multi-Report"; then rm -R "/tmp/Multi-Report"; fi
 			exit 0
 		fi
@@ -1398,6 +1409,8 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_Sendemail_script"; fi
 
 checkforupdate () {
 if [[ $Debug_Steps == "true" ]]; then echo "checkforupdate"; fi
+
+	Sendemail_Updated="AVAILABLE"
 	echo "Checking for Updates"
 	if test -e "/tmp/Multi-Report"; then rm -R "/tmp/Multi-Report"; fi
 	if [[ "$(curl -is https://github.com | head -n 1)" ]]; then
@@ -1428,8 +1441,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "checkforupdate"; fi
 			MajorVersionFilenamer=$Return_Value
 			convert_to_decimal $MinorVersionFilename
 			MinorVersionFilename=$Return_Value
-
-			
+			MR_Updated="AVAILABLE: V"$VersionFilename
 			echo "   1. Multi-Report - Installed: "$VersionFilename", GitHub: "$GitVersion
 			if [[ $GitMajorVersionNumber -gt $MajorVersionFilename ]] && [[ $VersionFilename != "" ]]; then
 				UpdateAvailable="true"
@@ -1441,6 +1453,10 @@ if [[ $Debug_Steps == "true" ]]; then echo "checkforupdate"; fi
 				rm /tmp/Multi-Report/multi_report.txt
 			else
 				echo "No Update"
+			fi
+			if [[ $Automatic_MR_Update == "true" ]] && [[ $UpdateAvailable == "true" ]]; then
+				echo "Minor Update --> Automatic Update Enabled"
+				update_MR_script
 			fi
 		else
 			echo "No GitHub Version File Available"
@@ -1462,7 +1478,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "checkforupdate"; fi
 			MajorDriveVersionFilenamer=$Return_Value
 			convert_to_decimal $MinorDriveVersionFilename
 			MinorDriveVersionFilename=$Return_Value
-			
+			Drive_Updated="AVAILABLE: V"$VersionDriveFilename
 			echo "   2. Drive_Selftest - Installed: "$VersionDriveFilename", GitHub: "$GitDriveVersion
 			if [[ $GitDriveMajorVersionNumber -gt $MajorDriveVersionFilename ]] && [[ $VersionDriveFilename != "" ]]; then
 				echo "Major Update"
@@ -1475,6 +1491,12 @@ if [[ $Debug_Steps == "true" ]]; then echo "checkforupdate"; fi
 			else
 				echo "No Update"
 			fi
+			
+			if [[ $Automatic_Selftest_Update == "true" ]] && [[ $UpdateDriveAvailable == "true" ]]; then
+				echo "Minor Update --> Automatic Update Enabled"
+				update_Drive_script
+			fi			
+			
 		else
 			echo "No GitHub Version File Available"
 		fi
@@ -1495,7 +1517,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "checkforupdate"; fi
 			MajorSendemailVersionFilenamer=$Return_Value
 			convert_to_decimal $MinorSendemailVersionFilename
 			MinorSendemailVersionFilename=$Return_Value
-
+			Sendemail_Updated="AVAILABLE: V"$VersionSendemailFilename
 			echo "   3. Sendemail - Installed: "$VersionSendemailFilename", GitHub: "$GitSendemailVersion
 			if [[ $GitSendemailMajorVersionNumber -gt $MajorSendemailVersionFilename ]] && [[ $VersionSendemailFilename != "" ]]; then
 				echo "Major Update"
@@ -1508,6 +1530,11 @@ if [[ $Debug_Steps == "true" ]]; then echo "checkforupdate"; fi
 			else
 				echo "No Update"
 			fi
+			
+			if [[ $Automatic_Sendemail_Update == "true" ]] && [[ $UpdateSendemailAvailable == "true" ]]; then
+				echo "Minor Update --> Automatic Update Enabled"
+				update_Sendemail_script
+			fi	
 		else
 			echo "No GitHub Version File Available"
 		fi		
@@ -2225,9 +2252,9 @@ if [[ $Debug_Steps == "true" ]]; then echo "create_Email"; fi
 				else
 					echo "Script Execution Time: $(($duration / 60)) Minutes : $(($duration % 60)) Seconds"
 				fi
-				if [[ $UpdateAvailable == "true" ]]; then echo "<br>MULTI-REPORT UPDATE AVAILABLE --> "$GitVersion; fi
-				if [[ $UpdateDriveAvailable == "true" ]]; then echo "<br>DRIVE_SELFTEST UPDATE AVAILABLE --> "$GitDriveVersion; fi
-				if [[ $UpdateSendemailAvailable == "true" ]]; then echo "<br>SENDEMAIL.PY UPDATE AVAILABLE --> "$GitSendemailVersion; fi
+				if [[ $UpdateAvailable == "true" ]]; then echo "<br>MULTI-REPORT UPDATE "$MR_Updated" --> V"$GitVersion; fi
+				if [[ $UpdateDriveAvailable == "true" ]]; then echo "<br>DRIVE_SELFTEST UPDATE "$Drive_Updated" --> V"$GitDriveVersion; fi
+				if [[ $UpdateSendemailAvailable == "true" ]]; then echo "<br>SENDEMAIL.PY UPDATE "$Sendemail_Updated" --> V"$GitSendemailVersion; fi
 				if [[ $Messages != "" ]]; then echo "<br>Message from Joe: "$Messages"<br>"; fi
 			if [[ "$(echo $programver | grep -i "beta")" ]] || [[ $UpdateAvailable == "true" ]] || [[ $UpdateDriveAvailable == "true" ]] || [[ $UpdateSendemailAvailable == "true" ]]; then echo "</span></b>"; fi
 			if [[ $TrueNASConfigEmailEncryption != "" ]] && [[ $Config_Encrypted == "true" ]]; then echo "<br>Attached zip file is encrypted."; fi
@@ -11158,38 +11185,39 @@ if [[ $Check_For_Updates == "true" ]] && [[ "$1" != "-t" && "$1" != "-m" && "$1"
 fi
 
 # Let's Update Automatically if allowed.
-if [[ $UpdateAvailable == "true" ]] && [[ $Automatic_MR_Update == "true" ]]; then
-	# We are updating automatically
-	update_MR_script
-	if [[ $Automatic_Update == "true" ]]; then
-		rm -rf /tmp/multi_report.lock
-		echo "Running script normally."
-	# How do we run the script when the script is the same name?  Temporarily copy the new script to a new name and run that name.
-		(
-		cd $SCRIPT_DIR"/"
-		cp $SCRIPT_DIR"/"$runfilename $SCRIPT_DIR"/"temprunfile.sh ; chmod 755 $SCRIPT_DIR"/"temprunfile.sh
-		./temprunfile.sh $1
-		sleep 2
-		rm $SCRIPT_DIR"/"temprunfile.sh
-		)
-		exit 0
-	else
-		echo "Script Not Updated"
-		echo "Running script normally..."
-	fi
-fi
-if [[ $UpdateDriveAvailable == "true" ]] && [[ $Automatic_Selftest_Update == "true" ]]; then
-	update_Drive_script
-fi
+#if [[ $UpdateAvailable == "true" ]] && [[ $Automatic_MR_Update == "true" ]]; then
+#	# We are updating automatically
+#	update_MR_script
+#	if [[ $Automatic_Update == "true" ]]; then
+#		rm -rf /tmp/multi_report.lock
+#		echo "Running script normally."
+#	# How do we run the script when the script is the same name?  Temporarily copy the new script to a new name and run that name.
+#		(
+#		cd $SCRIPT_DIR"/"
+#		cp $SCRIPT_DIR"/"$runfilename $SCRIPT_DIR"/"temprunfile.sh ; chmod 755 $SCRIPT_DIR"/"temprunfile.sh
+#		./temprunfile.sh $1
+#		sleep 2
+#		rm $SCRIPT_DIR"/"temprunfile.sh
+#		)
+#		exit 0
+#	else
+#		echo "Script Not Updated"
+#		echo "Running script normally..."
+#	fi
+#fi
 
-if [[ $UpdateSendemailAvailable == "true" ]] && [[ $Automatic_Sendemail_Update == "true" ]]; then
-	update_Sendemail_script
-fi
+#if [[ $UpdateDriveAvailable == "true" ]] && [[ $Automatic_Selftest_Update == "true" ]]; then
+#	update_Drive_script
+#fi
 
-if ! test -e $SCRIPT_DIR"/mr_sendemail.py"; then
-	Automatic_Sendemail_Update="true"
-	update_Sendemail_script
-fi
+#if [[ $UpdateSendemailAvailable == "true" ]] && [[ $Automatic_Sendemail_Update == "true" ]]; then
+#	update_Sendemail_script
+#fi
+
+#if ! test -e $SCRIPT_DIR"/mr_sendemail.py"; then
+#	Automatic_Sendemail_Update="true"
+#	update_Sendemail_script
+#fi
 
 
 # GRAB DRIVE-SELFTEST SCRIPT THIS ONE TIME, ONLY BECASUE IT IS NEW.  IN NEXT VERSION, MAKE THIS AN AUTOMATIC UPDATE IF THE FILE IS MISSING.
