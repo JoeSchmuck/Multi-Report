@@ -1416,10 +1416,19 @@ if [[ $Debug_Steps == "true" ]]; then echo "checkforupdate"; fi
 			GitVersion="$(cat "/tmp/Multi-Report/multi_report.txt" | grep "##### Version" | cut -d 'n' -f2 | cut -d '_' -f 1 | head -1)"
 			GitMajorVersionNumber="$(echo $GitVersion | cut -d '.' -f1)"
 			GitMinorVersionNumber="$(echo $GitVersion | cut -d '.' -f2)"
+			convert_to_decimal $GitMajorVersionNumber
+			GitMajorVersionNumber=$Return_Value
+			convert_to_decimal $GitMinorVersionNumber
+			GitMinorVersionNumber=$Return_Value
 			
-			VersionFilename="$(echo $CurrentFilename | cut -d 'v' -f 2 | cut -d '_' -f 1)"
+			VersionFilename="$(cat $SCRIPT_DIR"/Multi-Report/multi_report.txt" | grep "##### Version" | cut -d 'n' -f2 | cut -d '_' -f 1 | head -1)"
 			MajorVersionFilename="$(echo $VersionFilename | cut -d '.' -f1)"
 			MinorVersionFilename="$(echo $VersionFilename | cut -d '.' -f2)"
+			convert_to_decimal $MajorVersionFilename
+			MajorVersionFilenamer=$Return_Value
+			convert_to_decimal $MinorVersionFilename
+			MinorVersionFilename=$Return_Value
+
 			
 			echo "   1. Multi-Report - Installed: "$VersionFilename", GitHub: "$GitVersion
 			if [[ $GitMajorVersionNumber -gt $MajorVersionFilename ]] && [[ $VersionFilename != "" ]]; then
@@ -1441,11 +1450,19 @@ if [[ $Debug_Steps == "true" ]]; then echo "checkforupdate"; fi
 			GitDriveVersion=$(cat "/tmp/Multi-Report/drive_selftest.txt" | grep "##### Version" | cut -d 'n' -f2 | tr -d ' ' | head -1)
 			GitDriveMajorVersionNumber="$(echo $GitDriveVersion | cut -d '.' -f1)"
 			GitDriveMinorVersionNumber="$(echo $GitDriveVersion | cut -d '.' -f2)"
+			convert_to_decimal $GitDriveMajorVersionNumber
+			GitDriveMajorVersionNumber=$Return_Value
+			convert_to_decimal $GitDriveMinorVersionNumber
+			GitDriveMinorVersionNumber=$Return_Value
 			
 			VersionDriveFilename="$(cat $SCRIPT_DIR"/drive_selftest.sh" | grep "##### Version" | cut -d 'n' -f2 | tr -d ' ' | head -1)"
 			MajorDriveVersionFilename="$(echo $VersionDriveFilename | cut -d '.' -f1)"
 			MinorDriveVersionFilename="$(echo $VersionDriveFilename | cut -d '.' -f2)"
-
+			convert_to_decimal $MajorDriveVersionFilename
+			MajorDriveVersionFilenamer=$Return_Value
+			convert_to_decimal $MinorDriveVersionFilename
+			MinorDriveVersionFilename=$Return_Value
+			
 			echo "   2. Drive_Selftest - Installed: "$VersionDriveFilename", GitHub: "$GitDriveVersion
 			if [[ $GitDriveMajorVersionNumber -gt $MajorDriveVersionFilename ]] && [[ $VersionDriveFilename != "" ]]; then
 				echo "Major Update"
@@ -1464,12 +1481,20 @@ if [[ $Debug_Steps == "true" ]]; then echo "checkforupdate"; fi
 		
 		if test -e "/tmp/Multi-Report/multireport_sendemail.py"; then
 			GitSendemailVersion=$(cat "/tmp/Multi-Report/multireport_sendemail.py" | grep "##### V" | cut -d 'V' -f2 | tr -d ' ' | head -1)
-			GitSendemailMajorVersionNumber="$(echo $GitSendemailVersion | cut -d '.' -f1)"
+			GitSendemailMajorVersionNumber="$(echo $GitSendemailVersion | cut -d '.' -f1)"		
 			GitSendemailMinorVersionNumber="$(echo $GitSendemailVersion | cut -d '.' -f2)"
+			convert_to_decimal $GitSendemailMajorVersionNumber
+			GitSendemailMajorVersionNumber=$Return_Value
+			convert_to_decimal $GitSendemailMinorVersionNumber
+			GitSendemailMinorVersionNumber=$Return_Value		
 			
 			VersionSendemailFilename="$(cat $SCRIPT_DIR"/mr_sendemail.py" | grep "##### V" | cut -d 'V' -f2 | tr -d ' ' | head -1)"
 			MajorSendemailVersionFilename="$(echo $VersionSendemailFilename | cut -d '.' -f1)"
 			MinorSendemailVersionFilename="$(echo $VersionSendemailFilename | cut -d '.' -f2)"
+			convert_to_decimal $MajorSendemailVersionFilename
+			MajorSendemailVersionFilenamer=$Return_Value
+			convert_to_decimal $MinorSendemailVersionFilename
+			MinorSendemailVersionFilename=$Return_Value
 
 			echo "   3. Sendemail - Installed: "$VersionSendemailFilename", GitHub: "$GitSendemailVersion
 			if [[ $GitSendemailMajorVersionNumber -gt $MajorSendemailVersionFilename ]] && [[ $VersionSendemailFilename != "" ]]; then
