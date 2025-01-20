@@ -1,6 +1,8 @@
 # Script for FreeNAS/TrueNAS Core & Scale
 
-New in Version 3.1
+# NOTE: Versions 3.1 and 3.11 failed during updates.  Use veriosn 3.12.
+
+New in Version 3.12
 
 This script will perform four main functions:
 1) Generate a report and send an email on your drive(s) status. 
