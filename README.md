@@ -1,6 +1,6 @@
 # Script for FreeNAS/TrueNAS Core & Scale
 
-# NOTE: Versions 3.1 and 3.11 failed during updates.  Use veriosn 3.12.
+# NOTE: Versions 3.1 and 3.11 failed during updates.  Use version 3.12.
 
 New in Version 3.12
 
