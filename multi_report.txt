@@ -6,7 +6,7 @@ TrueNASConfigEmailEncryption=""	 # Set this to "" for no encryption, MUST REMAIN
 # NOTE: Some email providers will not send some encrypted file types, such as GMAIL, but .zip files are okay.
 # NOTE: 7zip is used for the compression/encryption and will not be installed unless encryption is enabled.
 
-##### Version 3.12
+##### Version 3.13
 
 ###### Get Config File Name and Location
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
@@ -84,10 +84,20 @@ fi
 # Version
 ### Changelog:
 #
-
-# V3.11
 #
-# Fixed Updating Script, for the most part.  Automatic and `-update` , `-update_selftest` , and `-updated_sendemail` work.
+# V3.13 (26 January 2025)
+#
+# - Re-added Multipath which was commented out and not restored.
+# - Fixed Spencer operation.
+# - Fixed the automatic update feature.
+# - Sendemail.py no longer instralled on CORE system (not required).
+# - Minor formatting changes.
+# - Added NVMe ONLY or All Drive Testing variable for Drive_Selftest script (version 1.03).
+# 
+
+# V3.12 (19 January 2025)
+#
+# Fixed Updating Script, for the most part.  `-update` , `-update_selftest` , and `-updated_sendemail` work.
 #
 
 # V3.11 (18 January 2025)
@@ -293,6 +303,12 @@ spencer_existing_warning_level="None"			# What to do for an existing error.		Def
 spencer_enable="true"							# To call the Spencer.py script if "true" or "false" to not run the Spencer.py script.  Default = "true"
 spencer_script_name="$SCRIPT_DIR/spencer.py"	# The default is "spencer.py" located in the default script directory.
 
+##### Multipath Enable/Disable
+### When active this will (read below options):
+Multipath="off"		# 'off' = No processing of serial numbers and is the default value.
+			# 'normal' = Automatically remove duplicate serial numbers.
+			# 'Exos2x' = Remove duplicate serial numbers ONLY IF the gptid matches.
+			# 'serial' = Sort by serial numbers.
 
 ###### GENERAL THRESHOLDS ######
 
@@ -669,6 +685,8 @@ pohColor="#ffffcc"      # Hex code for pale yellow.
 Allow_Drive_Selftest_Script_Update="true"	# When set to "true" then the script will automatically update itself if a new update is present.
 
 ###### HDD/SSD/NVMe SMART Testing
+Test_ONLY_NVMe_Drives="false"				# This option when set to "true" will only test NVMe drives, HDD/SSD will not be tested. Default = "false"
+
 ### SHORT SETTINGS
 Short_Test_Mode=3                           # 1 = Use Short_Drives_to_Test_Per_Day value, 2 = All Drives Tested (Ignores other options), 3 = No Drives Tested.
 Short_Time_Delay_Between_Drives=1           # Tests will have a XX second delay between the drives starting testing. If drives are always spinning, this can be "0".
@@ -722,8 +740,8 @@ logfile_header="/tmp/${tempfilepath}smart_report_header.tmp"
 logfile_temp="/tmp/${tempfilepath}smart_report_temp.tmp"
 boundary="gc0p4Jq0M2Yt08jU534c0p"
 
-CurrentFilename="multi_report_v3.12_2025_01_19.txt"
-valid_config_version_date="2025-01-17"	# Configuration file valid date
+CurrentFilename="multi_report_v3.13_2025_01_26.txt"
+valid_config_version_date="2025-01-26"	# Configuration file valid date
 progverdate="$(echo $CurrentFilename | cut -d '_' -f4,5,6 | cut -d '.' -f1 | sed -r 's/[_]+/-/g')"
 progname="Multi-Report "$(echo $CurrentFilename | cut -d '_' -f3)" dtd:"
 
@@ -774,11 +792,13 @@ truenas_ver_low=$(echo $truenas_ver | cut -d"." -f3)
 truenas_ver_sub=$(echo $truenas_ver | cut -d"." -f4)
 
 if [[ $truenas_ver > 24.10.0.2 ]]; then
-	echo "TrueNAS does not support sendmail function, using sendemail.py to send you your email."
+#	echo "TrueNAS does not support (psudo) sendmail function, using sendemail.py to send your email."
 	truenas_sendmail_support="No"
 else
 	truenas_sendmail_support="Yes"
 fi
+
+# echo "truenas_sendmail_support="$truenas_sendmail_support
 
 	(echo " "
 	echo "Pysical Memory from API"
@@ -889,6 +909,10 @@ fi
 trap 'rm -rf /tmp/multi_report.lock' EXIT 	# Remove the lock directory on exit
 
 #################### FUNCTIONS ####################
+
+
+
+
 
 ########## CREATE ATTACHMENT FILE ##########
 # This file will convert and create any required attachments.
@@ -1063,13 +1087,15 @@ if [[ $Debug_Steps == "true" ]]; then echo "nvm_power"; fi
 		lowest_power_state=$(($(nvmecontrol power -l $drive | tail -1 | cut -c1-2)))
 		if [[ $current_power_state -ne $lowest_power_state ]]; then
 			echo "Changing "$drive" power state from "$current_power_state" to "$lowest_power_state"."
+			sleep 2
+			nvmecontrol power -p $lowest_power_state $drive
+			sleep 1.5
+			echo "Checking to see if NVMe drives remained at power state "$lowest_power_state
+			current_power_state=$(($(nvmecontrol power $drive | head -1 | rev | cut -c1-2 | rev)))
+			echo "Power state is "$current_power_state
+		else
+			echo "NVMe drive "$drive" is in lowest power state: "$current_power_state
 		fi
-		sleep 2
-		nvmecontrol power -p $lowest_power_state $drive
-		sleep 1.5
-		echo "Checking to see if we remained at power state "$lowest_power_state
-		current_power_state=$(($(nvmecontrol power $drive | head -1 | rev | cut -c1-2 | rev)))
-		echo "Power state is "$current_power_state
 	done
 
 	}
@@ -1161,21 +1187,20 @@ if [[ $Debug_Steps == "true" ]]; then echo "check_gdisk"; fi
 # This will update the script with any newer script on GitHub and is manually evoked [-update]
 #
 # How it works or might work
-#   Check GitHub for Date on script, if that is possible.
-#   If date/time is more current than this current script is, download the new script.
+#   Check GitHub Version Number on script.
 #   Next write the new file over the current file name.
 #   Edit line #5 with a password if one was present.
 
 update_MR_script () {
 if [[ $Debug_Steps == "true" ]]; then echo "update_MR_script"; fi
-	echo "Update Script Routine"
+	echo "      - Update Script Routine"
 #
 # ENSURE WE DELETE /TMP/MULTI-REPORT DIRECTORY WHEN EITHER WE END THE SCRIPT OR START THE SCRIPT.  MAYBE IN THE UPDATE?
 #
-	echo "Removing Old Script Source if it exists"
+	echo "      - Removing Old Script Source if it exists"
 	if test -e "/tmp/Multi-Report"; then rm -R "/tmp/Multi-Report"; fi
 	if test -e "/tmp/multi_report_update.txt"; then rm "/tmp/multi_report_update.txt"; fi
-	echo "Downloading new script files"
+	echo "      - Downloading new script files"
 	if [[ "$(curl -is https://github.com | head -n 1)" ]]; then
 		# Go git the file
 		( mkdir /tmp/Multi-Report
@@ -1189,29 +1214,25 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_MR_script"; fi
 		GitVersion="$(cat "/tmp/Multi-Report/multi_report.txt" | grep "##### Version" | cut -d 'n' -f2 | cut -d '_' -f 1 | head -1)"
 		VersionFilename="$(cat "$SCRIPT_DIR/multi_report.sh" | grep "##### Version" | cut -d 'n' -f2 | cut -d '_' -f 1 | head -1)"
 		echo " "
-		echo "Multi-Report current version is: "$VersionFilename
-		echo "The new version is: "$GitVersion 
+		echo "      - Multi-Report current version is: "$VersionFilename
+		echo "      - The new version is: "$GitVersion 
 		echo " "
-
+		VersionFilename=$GitVersion
 		if [[ $Automatic_MR_Update != "true" ]]; then
 			echo "Enter 'y' to commit or any other key to abort."
 			read Keyboard_yn
 		else
-			echo "Automatic Update is Enabled..."
 			Keyboard_yn="y"
 		fi
 		if [[ $Keyboard_yn == "y" ]] || [[ $Keyboard_yn == "Y" ]]; then
-			echo "Updating Script..."
-			echo "3"
+			echo "      - Updating Script..."
 
 			sed '5s/.*/TrueNASConfigEmailEncryption="'$TrueNASConfigEmailEncryption'"	 # Set this to "" for no encryption, MUST REMAIN ON LINE 5./' /tmp/Multi-Report/multi_report.txt > /tmp/multi_report_update.txt
 
-			sleep .5
+			sleep .2
 			# Generate the full file name minus the .txt
 			VersionRenameFilename="$(echo $CurrentFilename | rev | cut -d '.' -f 2,3,4,5 | rev)"
-			echo "2"
-			sleep .5
-
+			sleep .2
 			# Backup the original multi_report.sh file and config file to save
 			if test -e $SCRIPT_DIR"/multi_report.sh"; then cp $SCRIPT_DIR"/multi_report.sh" $SCRIPT_DIR"/"$CurrentFilename; fi
 			cp $SCRIPT_DIR"/multi_report_config.txt" $SCRIPT_DIR"/"$VersionRenameFilename"_config.txt"
@@ -1226,27 +1247,22 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_MR_script"; fi
 			chmod 755 $SCRIPT_DIR"/"$runfilename > /dev/null 2<&1
 
 			# Copy the User Guide
-			echo "1"
-			sleep .5
 			cp "/tmp/Multi-Report/Multi_Report_User_Guide.pdf" $SCRIPT_DIR"/."
 			cp "/tmp/Multi-Report/Multi_Report_Quick_Start_Guide.pdf" $SCRIPT_DIR"/." > /dev/null 2<&1
 			cp "/tmp/Multi-Report/changelog.txt" $SCRIPT_DIR"/."
 			echo " "
-			echo "Your script has been updated and a copy of the User Guide and changelog is in your directory."
-#			MR_Updated="UPDATED"
+			echo "      - Script updated, copy of the 'Multi-Report User Guide'"
+			echo "        and 'Quick Start Guide' in your directory."
+			echo " "
 			MR_Updated="UPDATED: V"$VersionFilename
+			UpdateAvailable="update"
 			sleep 1
 				
 			### THIS IS NOT COMPLETE AND IS INTENTIONED TO UPDATE THE DRIVE SELF-TEST SCRIPT.
 			# Copy the drive_selftest.sh script.  When it runs, if it sees a newer version, it will automatically update itself.
 			#    cp "/tmp/Multi-Report/drive_selftest.up" $SCRIPT_DIR"/drive_selftest.sh"	# Temporary to get the script on systems.
-		
-			# Cleanup Leftover Files
-			if test -e "/tmp/Multi-Report"; then rm -R "/tmp/Multi-Report"; fi
-			if test -e "/tmp/multi_report_update.txt"; then	rm "/tmp/multi_report_update.txt"; fi
 		else
 			echo "Aborted"
-#			MR_Updated="ABORTED"
 			MR_Updated="ABORTED: V"$VersionFilename
 			if test -e "/tmp/Multi-Report"; then rm -R "/tmp/Multi-Report"; fi
 			exit 0
@@ -1254,7 +1270,9 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_MR_script"; fi
 	else
 		echo "GitHub is Not Available"
 	fi
-	if [[ $Automatic_MR_Update != "true" ]] || [[ $update_all != "true" ]]; then 
+	
+	# Exit if we are not doing an automatic update
+	if [[ $Automatic_MR_Update == "false" ]] && [[ $update_all == "" ]]; then 
 		echo "Exiting..."
 		exit 0
 	fi
@@ -1264,14 +1282,14 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_MR_script"; fi
 	
 	update_Drive_script () {
 if [[ $Debug_Steps == "true" ]]; then echo "update_Drive_script"; fi
-	echo "Update Script Routine"
+	echo "      - Update Script Routine"
 #
 # ENSURE WE DELETE /TMP/MULTI-REPORT DIRECTORY WHEN EITHER WE END THE SCRIPT OR START THE SCRIPT.  MAYBE IN THE UPDATE?
 #
-	echo "Removing Old Script Source if it exists"
+	echo "      - Removing Old Script Source if it exists"
 	if test -e "/tmp/Multi-Report"; then rm -R "/tmp/Multi-Report"; fi
 	if test -e "/tmp/multi_report_update.txt"; then rm "/tmp/multi_report_update.txt"; fi
-	echo "Downloading new script files"
+	echo "      - Downloading new script files"
 	if [[ "$(curl -is https://github.com | head -n 1)" ]]; then
 		# Go git the file
 		( mkdir /tmp/Multi-Report
@@ -1286,44 +1304,39 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_Drive_script"; fi
 			VersionDriveFilename=0
 		fi
 		echo " "
-		echo "Drive_Selftest current version is: "$VersionDriveFilename
-		echo "The new version is: "$GitDriveVersion 
+		echo "      - Drive_Selftest current version is: "$VersionDriveFilename
+		echo "      - The new version is: "$GitDriveVersion 
 		echo " "
-
+		VersionDriveFilename=$GitDriveVersion
 		if [[ $Automatic_Selftest_Update != "true" ]]; then
 			echo "Enter 'y' to commit or any other key to abort."
 			read Keyboard_yn
 		else
-			echo "Automatic Update is Enabled..."
+#			echo "Automatic Update is Enabled..."
 			Keyboard_yn="y"
 		fi
 		if [[ $Keyboard_yn == "y" ]] || [[ $Keyboard_yn == "Y" ]]; then
-			echo "Updating Script..."
+			echo "      - Updating Script..."
 
 			# Copy the new multi_report.sh file and set permissions
 			cp /tmp/Multi-Report/drive_selftest.txt $SCRIPT_DIR"/drive_selftest.sh"
 			chmod 755 $SCRIPT_DIR"/drive_selftest.sh" > /dev/null 2<&1
 
 			# Copy the User Guide
-			echo "1"
-			sleep .5
 			cp "/tmp/Multi-Report/Drive_Selftest_User_Guide.pdf" $SCRIPT_DIR"/."
 			echo " "
-			echo "Your script has been updated and a copy of the User Guide and changelog is in your directory."
-#			Drive_Updated="UPDATED"
+			echo "      - Script updated, copy of the 'Drive-Selftest User Guide'"
+			echo "        is in your directory."
+			echo " "
 			Drive_Updated="UPDATED: V"$VersionDriveFilename
+			UpdateDriveAvailable="update"
 			sleep 1
 				
 			### THIS IS NOT COMPLETE AND IS INTENTIONED TO UPDATE THE DRIVE SELF-TEST SCRIPT.
 			# Copy the drive_selftest.sh script.  When it runs, if it sees a newer version, it will automatically update itself.
 			#    cp "/tmp/Multi-Report/drive_selftest.up" $SCRIPT_DIR"/drive_selftest.sh"	# Temporary to get the script on systems.
-		
-			# Cleanup Leftover Files
-			if test -e "/tmp/Multi-Report"; then rm -R "/tmp/Multi-Report"; fi
-			if test -e "/tmp/multi_report_update.txt"; then	rm "/tmp/multi_report_update.txt"; fi
 		else
 			echo "Aborted"
-#			Drive_Updated="ABORTED"
 			Drive_Updated="ABORTED: V"$VersionDriveFilename
 			if test -e "/tmp/Multi-Report"; then rm -R "/tmp/Multi-Report"; fi
 			exit 0
@@ -1331,7 +1344,8 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_Drive_script"; fi
 	else
 		echo "GitHub is Not Available"
 	fi
-	if [[ $Automatic_Selftest_Update != "true" ]] || [[ $update_all != "true" ]]; then 
+	# Exit if not an automatic update
+	if [[ $Automatic_Selftest_Update == "false" ]] && [[ $update_all == "" ]]; then 
 		echo "Exiting..."
 		exit 0
 	fi
@@ -1341,14 +1355,14 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_Drive_script"; fi
 	
 	update_Sendemail_script () {
 if [[ $Debug_Steps == "true" ]]; then echo "update_Sendemail_script"; fi
-	echo "Update Script Routine"
+	echo "      - Update Script Routine"
 #
 # ENSURE WE DELETE /TMP/MULTI-REPORT DIRECTORY WHEN EITHER WE END THE SCRIPT OR START THE SCRIPT.  MAYBE IN THE UPDATE?
 #
-	echo "Removing Old Script Source if it exists"
+	echo "      - Removing Old Script Source if it exists"
 	if test -e "/tmp/Multi-Report"; then rm -R "/tmp/Multi-Report"; fi
 	if test -e "/tmp/multi_report_update.txt"; then rm "/tmp/multi_report_update.txt"; fi
-	echo "Downloading new script files"
+	echo "      - Downloading new script files"
 	if [[ "$(curl -is https://github.com | head -n 1)" ]]; then
 		# Go git the file
 		( mkdir /tmp/Multi-Report
@@ -1360,38 +1374,32 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_Sendemail_script"; fi
 		if test -e $SCRIPT_DIR"/mr_sendemail.py"; then
 			VersionSendemailFilename=$(cat $SCRIPT_DIR"/mr_sendemail.py" | grep "##### V" | cut -d 'V' -f2 | tr -d ' ')
 		else
-			VersionSendemailFilename=0
+			VersionSendemailFilename="Not Installed"
 		fi
 		echo " "
-		echo "Sendemail.py current version is: "$VersionSendemailFilename
-		echo "The new version is: "$GitSendemailVersion 
+		echo "      - Sendemail.py current version is: "$VersionSendemailFilename
+		echo "      - The new version is: "$GitSendemailVersion 
 		echo " "
-
-#		if test -e $SCRIPT_DIR"/mr_sendemail.py"; then sleep .1; else Automatic_Sendemail_Update="true"; fi
+		VersionSendemailFilename=$GitSendemailVersion
 
 		if [[ $Automatic_Sendemail_Update != "true" ]]; then
 			echo "Enter 'y' to commit or any other key to abort."
 			read Keyboard_yn
 		else
-			echo "Automatic Update is Enabled..."
 			Keyboard_yn="y"
 		fi
 		if [[ $Keyboard_yn == "y" ]] || [[ $Keyboard_yn == "Y" ]]; then
-			echo "Updating Script..."
+			echo "      - Updating Script..."
 			# Copy the new multi_report.sh file and set permissions
 			cp /tmp/Multi-Report/multireport_sendemail.py $SCRIPT_DIR"/mr_sendemail.py"
 			echo " "
-			echo "Your script has been updated."
-#			Sendemail_Updated="UPDATED"
+			echo "      - Your script has been updated."
+			echo " "
 			Sendemail_Updated="UPDATED: V"$VersionSendemailFilename
+			UpdateSendemailAvailable="update"
 			sleep 1
-		
-			# Cleanup Leftover Files
-			if test -e "/tmp/Multi-Report"; then rm -R "/tmp/Multi-Report"; fi
-			if test -e "/tmp/multi_report_update.txt"; then	rm "/tmp/multi_report_update.txt"; fi
 		else
 			echo "Aborted"
-#			Sendemail_Updated="ABORTED"
 			Sendemail_Updated="ABORTED: V"$VersionSendemailFilename
 			if test -e "/tmp/Multi-Report"; then rm -R "/tmp/Multi-Report"; fi
 			exit 0
@@ -1399,7 +1407,8 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_Sendemail_script"; fi
 	else
 		echo "GitHub is Not Available"
 	fi
-	if [[ $Automatic_Sendemail_Update != "true" ]] || [[ $update_all != "true" ]]; then 
+	# Exit if not an automatic update
+	if [[ $Automatic_Sendemail_Update == "false" ]] && [[ $update_all == "" ]]; then 
 		echo "Exiting..."
 		exit 0
 	fi
@@ -1415,19 +1424,19 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_Sendemail_script"; fi
 checkforupdate () {
 if [[ $Debug_Steps == "true" ]]; then echo "checkforupdate"; fi
 
-	Sendemail_Updated="AVAILABLE"
+#	Sendemail_Updated="AVAILABLE"
 	echo "Checking for Updates"
 	if test -e "/tmp/Multi-Report"; then rm -R "/tmp/Multi-Report"; fi
 	if [[ "$(curl -is https://github.com | head -n 1)" ]]; then
 		# Go git the file
 		(
 			cd /tmp
-			mkdir Multi-Report
+			if ! test -e "Multi-Report"; then
+				mkdir Multi-Report
+			fi
 			cd Multi-Report
 			curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/messages.txt
 			curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/multi_report.txt
-			curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/drive_selftest.txt			
-			curl -LJOs https://raw.githubusercontent.com/oxyde1989/standalone-tn-send-email/refs/heads/main/multireport_sendemail.py
 		)
 
 		if test -e "/tmp/Multi-Report/multi_report.txt"; then
@@ -1447,26 +1456,36 @@ if [[ $Debug_Steps == "true" ]]; then echo "checkforupdate"; fi
 			convert_to_decimal $MinorVersionFilename
 			MinorVersionFilename=$Return_Value
 			MR_Updated="AVAILABLE: V"$VersionFilename
-			echo "   1. Multi-Report - Installed: "$VersionFilename", GitHub: "$GitVersion
+			echo -n "   1. Multi-Report - Installed: "$VersionFilename", GitHub: "$GitVersion
 			if [[ $GitMajorVersionNumber -gt $MajorVersionFilename ]] && [[ $VersionFilename != "" ]]; then
 				UpdateAvailable="true"
-				echo "Major Update"
+				echo " - Major Update"
 				rm /tmp/Multi-Report/multi_report.txt
 			elif [[ $GitMajorVersionNumber -eq $MajorVersionFilename ]] && [[ $GitMinorVersionNumber -gt $MinorVersionFilename ]]; then
 				UpdateAvailable="true"
-				echo "Minor Update"
+				echo " - Minor Update"
 				rm /tmp/Multi-Report/multi_report.txt
 			else
-				echo "No Update"
+				echo " - No Update"
 			fi
 			if [[ $Automatic_MR_Update == "true" ]] && [[ $UpdateAvailable == "true" ]]; then
-				echo "Minor Update --> Automatic Update Enabled"
+				echo "      Automatic Update Enabled"
 				update_MR_script
 			fi
 		else
 			echo "No GitHub Version File Available"
 		fi
-		
+
+
+# Go git the file
+		(
+			cd /tmp
+			if ! test -e "Multi-Report"; then
+				mkdir Multi-Report
+			fi
+			cd Multi-Report
+			curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/drive_selftest.txt			
+		)	
 		if test -e "/tmp/Multi-Report/drive_selftest.txt"; then
 			GitDriveVersion=$(cat "/tmp/Multi-Report/drive_selftest.txt" | grep "##### Version" | cut -d 'n' -f2 | tr -d ' ' | head -1)
 			GitDriveMajorVersionNumber="$(echo $GitDriveVersion | cut -d '.' -f1)"
@@ -1475,86 +1494,116 @@ if [[ $Debug_Steps == "true" ]]; then echo "checkforupdate"; fi
 			GitDriveMajorVersionNumber=$Return_Value
 			convert_to_decimal $GitDriveMinorVersionNumber
 			GitDriveMinorVersionNumber=$Return_Value
-			
-			VersionDriveFilename="$(cat $SCRIPT_DIR"/drive_selftest.sh" | grep "##### Version" | cut -d 'n' -f2 | tr -d ' ' | head -1)"
-			MajorDriveVersionFilename="$(echo $VersionDriveFilename | cut -d '.' -f1)"
-			MinorDriveVersionFilename="$(echo $VersionDriveFilename | cut -d '.' -f2)"
-			convert_to_decimal $MajorDriveVersionFilename
-			MajorDriveVersionFilenamer=$Return_Value
-			convert_to_decimal $MinorDriveVersionFilename
-			MinorDriveVersionFilename=$Return_Value
+			if test -e $SCRIPT_DIR"/drive_selftest.sh"; then
+				VersionDriveFilename="$(cat $SCRIPT_DIR"/drive_selftest.sh" | grep "##### Version" | cut -d 'n' -f2 | tr -d ' ' | head -1)"
+				MajorDriveVersionFilename="$(echo $VersionDriveFilename | cut -d '.' -f1)"
+				MinorDriveVersionFilename="$(echo $VersionDriveFilename | cut -d '.' -f2)"
+				convert_to_decimal $MajorDriveVersionFilename
+				MajorDriveVersionFilenamer=$Return_Value
+				convert_to_decimal $MinorDriveVersionFilename
+				MinorDriveVersionFilename=$Return_Value
+			else
+				VersionDriveFilename="Nothing Is Here"
+			fi
 			Drive_Updated="AVAILABLE: V"$VersionDriveFilename
-			echo "   2. Drive_Selftest - Installed: "$VersionDriveFilename", GitHub: "$GitDriveVersion
+			echo -n "   2. Drive_Selftest - Installed: "$VersionDriveFilename", GitHub: "$GitDriveVersion
 			if [[ $GitDriveMajorVersionNumber -gt $MajorDriveVersionFilename ]] && [[ $VersionDriveFilename != "" ]]; then
-				echo "Major Update"
+				echo " - Major Update"
 				UpdateDriveAvailable="true"
 				rm /tmp/Multi-Report/drive_selftest.txt
 			elif [[ $GitDriveMajorVersionNumber -eq $MajorDriveVersionFilename ]] && [[ $GitDriveMinorVersionNumber -gt $MinorDriveVersionFilename ]]; then
 				UpdateDriveAvailable="true"
-				echo "Minor Update"
+				echo " - Minor Update"
 				rm /tmp/Multi-Report/drive_selftest.txt
 			else
-				echo "No Update"
-			fi
-			
+				echo " - No Update"
+			fi		
 			if [[ $Automatic_Selftest_Update == "true" ]] && [[ $UpdateDriveAvailable == "true" ]]; then
-				echo "Minor Update --> Automatic Update Enabled"
+				echo "      Automatic Update Enabled"
 				update_Drive_script
-			fi			
-			
+			fi					
 		else
 			echo "No GitHub Version File Available"
 		fi
-		
-		if test -e "/tmp/Multi-Report/multireport_sendemail.py"; then
-			GitSendemailVersion=$(cat "/tmp/Multi-Report/multireport_sendemail.py" | grep "##### V" | cut -d 'V' -f2 | tr -d ' ' | head -1)
-			GitSendemailMajorVersionNumber="$(echo $GitSendemailVersion | cut -d '.' -f1)"		
-			GitSendemailMinorVersionNumber="$(echo $GitSendemailVersion | cut -d '.' -f2)"
-			convert_to_decimal $GitSendemailMajorVersionNumber
-			GitSendemailMajorVersionNumber=$Return_Value
-			convert_to_decimal $GitSendemailMinorVersionNumber
-			GitSendemailMinorVersionNumber=$Return_Value		
+
+# Go git the file
+		if [[ $SoftVer == "Linux" ]]; then
+			(
+				cd /tmp
+				if ! test -e "Multi-Report"; then
+					mkdir Multi-Report
+				fi
+				cd Multi-Report
+				curl -LJOs https://raw.githubusercontent.com/oxyde1989/standalone-tn-send-email/refs/heads/main/multireport_sendemail.py
+			)
+			if test -e "/tmp/Multi-Report/multireport_sendemail.py"; then
+				GitSendemailVersion=$(cat "/tmp/Multi-Report/multireport_sendemail.py" | grep "##### V" | cut -d 'V' -f2 | tr -d ' ' | head -1)
+				GitSendemailMajorVersionNumber="$(echo $GitSendemailVersion | cut -d '.' -f1)"		
+				GitSendemailMinorVersionNumber="$(echo $GitSendemailVersion | cut -d '.' -f2)"
+				convert_to_decimal $GitSendemailMajorVersionNumber
+				GitSendemailMajorVersionNumber=$Return_Value
+				convert_to_decimal $GitSendemailMinorVersionNumber
+				GitSendemailMinorVersionNumber=$Return_Value		
 			
-			VersionSendemailFilename="$(cat $SCRIPT_DIR"/mr_sendemail.py" | grep "##### V" | cut -d 'V' -f2 | tr -d ' ' | head -1)"
-			MajorSendemailVersionFilename="$(echo $VersionSendemailFilename | cut -d '.' -f1)"
-			MinorSendemailVersionFilename="$(echo $VersionSendemailFilename | cut -d '.' -f2)"
-			convert_to_decimal $MajorSendemailVersionFilename
-			MajorSendemailVersionFilenamer=$Return_Value
-			convert_to_decimal $MinorSendemailVersionFilename
-			MinorSendemailVersionFilename=$Return_Value
-			Sendemail_Updated="AVAILABLE: V"$VersionSendemailFilename
-			echo "   3. Sendemail - Installed: "$VersionSendemailFilename", GitHub: "$GitSendemailVersion
-			if [[ $GitSendemailMajorVersionNumber -gt $MajorSendemailVersionFilename ]] && [[ $VersionSendemailFilename != "" ]]; then
-				echo "Major Update"
-				UpdateSendemailAvailable="true"
-				rm /tmp/Multi-Report/multireport_sendemail.py
-			elif [[ $GitSendemailMajorVersionNumber -eq $MajorSendemailVersionFilename ]] && [[ $GitSendemailMinorVersionNumber -gt $MinorSendemailVersionFilename ]]; then
-				echo "Minor Update"
-				UpdateSendemailAvailable="true"
-				rm /tmp/Multi-Report/multireport_sendemail.py
-			else
-				echo "No Update"
+				if test -e $SCRIPT_DIR"/mr_sendemail.py"; then
+					VersionSendemailFilename="$(cat $SCRIPT_DIR"/mr_sendemail.py" | grep "##### V" | cut -d 'V' -f2 | tr -d ' ' | head -1)"
+					MajorSendemailVersionFilename="$(echo $VersionSendemailFilename | cut -d '.' -f1)"
+					MinorSendemailVersionFilename="$(echo $VersionSendemailFilename | cut -d '.' -f2)"
+					convert_to_decimal $MajorSendemailVersionFilename
+					MajorSendemailVersionFilenamer=$Return_Value
+					convert_to_decimal $MinorSendemailVersionFilename
+					MinorSendemailVersionFilename=$Return_Value
+				else
+					VersionSendemailFilename="Nothing At All, Fetching..."
+					Automatic_Sendemail_Update="true"
+				fi
+				Sendemail_Updated="AVAILABLE: V"$VersionSendemailFilename
+				echo -n "   3. Sendemail - Installed: "$VersionSendemailFilename", GitHub: "$GitSendemailVersion
+				if [[ $GitSendemailMajorVersionNumber -gt $MajorSendemailVersionFilename ]] && [[ $VersionSendemailFilename != "" ]]; then
+					echo " - Major Update"
+					UpdateSendemailAvailable="true"
+					rm /tmp/Multi-Report/multireport_sendemail.py
+				elif [[ $GitSendemailMajorVersionNumber -eq $MajorSendemailVersionFilename ]] && [[ $GitSendemailMinorVersionNumber -gt $MinorSendemailVersionFilename ]]; then
+					echo " - Minor Update"
+					UpdateSendemailAvailable="true"
+					rm /tmp/Multi-Report/multireport_sendemail.py
+				else
+					echo " - No Update"
+				fi		
+				if [[ $Automatic_Sendemail_Update == "true" ]] && [[ $UpdateSendemailAvailable == "true" ]]; then
+					echo "      Automatic Update Enabled"
+					update_Sendemail_script
+				fi	
+#		else
+#			echo "No GitHub Version File Available"
 			fi
-			
-			if [[ $Automatic_Sendemail_Update == "true" ]] && [[ $UpdateSendemailAvailable == "true" ]]; then
-				echo "Minor Update --> Automatic Update Enabled"
-				update_Sendemail_script
-			fi	
 		else
-			echo "No GitHub Version File Available"
-		fi		
-		
+			echo "   3. Sendemail - Not Required on CORE"
+		fi
+# Go git the file
+		(
+			cd /tmp
+			if ! test -e "Multi-Report"; then
+				mkdir Multi-Report
+			fi
+			cd Multi-Report
+			curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/messages.txt
+		)		
 		if test -e "/tmp/Multi-Report/messages.txt"; then
 			Messages="$(cat "/tmp/Multi-Report/messages.txt")"
 			if [[ $Messages != "" ]]; then echo "Message from Joe"; fi
-		else
-			echo "No GitHub Message Available"
+#		else
+#			echo "No GitHub Message Available"
 		fi
+		echo " "
 		if [[ $UpdateAvailable == "true" ]] || [[ $UpdateDriveAvailable == "true" ]] || [[ $UpdateSendemailAvailable == "true" ]]; then
-			echo "UPDATE AVAILABLE"
-		else
-			echo "NO UPDATES AVAILABLE"
+			echo "UPDATE(s) AVAILABLE"
+		elif [[ $UpdateAvailable == "update" ]] || [[ $UpdateDriveAvailable == "update" ]] || [[ $UpdateSendemailAvailable == "update" ]]; then
+			echo "UPDATES MADE"
+#		else
+#			echo "NO UPDATES AVAILABLE"
 		fi
+		echo " "
 	fi
 
 	}
@@ -2311,8 +2360,10 @@ fi
 
 if ! test -e "/tmp/attachment.json"; then
 	if [[ $truenas_sendmail_support == "Yes" ]]; then
+		echo "using sendmail function"
 		sendmail -t -oi < "$logfile_header"		# I have no idea if the format will be good or not.
 	else
+		echo "using midclt call -job mail.send"
 		#echo "Must be SCALE - No Attachments"
 		(
 	midclt call -job mail.send "{
@@ -2323,6 +2374,7 @@ if ! test -e "/tmp/attachment.json"; then
 		) #> /dev/null 2<&1
 	fi
 else
+	echo "using mr_sendemail.py"
 	#echo "Must be SCALE - With Attachments"
 	# With Attachments (works)
 
@@ -2336,16 +2388,20 @@ else
 		attachment+=("$line")
 	done < /tmp/attachment_files2.txt
 	
-#echo ${attachment[@]} > test.txt
+# Sendemail Courtesy of @oxyde
 
-echo "Sending Email Courtesy of @oxyde"
-(
 python3 mr_sendemail.py \
 	--subject "$subject" \
 	--to_address "$Email" \
 	--mail_body_html "$logfile_header" \
-	--attachment_files "${attachment[@]}" 
-) > /dev/null 2<&1
+	--attachment_files "${attachment[@]}" > /dev/null 2<&1
+
+# Check Exit Code
+	if [[ $? -ne 0 ]]; then
+		echo "Sendemail had a problem.  Check the file log at "$SCRIPTS"/sendmail_log"
+	else
+		echo "Email Sent"
+	fi
 
 #(	curl -k –location-trusted -i -u $curl_account:$curl_password --form-string 'data={"method": "mail.send", "params": [{"subject": "'"${subject}"'", "to": ["'"${Email}"'"], "html": "'"${html_data}"'", "attachments": true}]}' -F "file=@/tmp/attachment.json" http://127.0.0.1:${port_address}/_upload/) > /dev/null 2<&1
 fi
@@ -3451,13 +3507,13 @@ if [[ $Debug_Steps == "true" ]]; then echo "get_smartHDD_listings"; fi
 
 	# Call Sort Routine with the drive string.
 ### DUPLICATE DRIVES ARE REMOVED IN DRIVE_SELFTEST SCRIPT AUTOMATICALLY
-#	if [[ "$smartdrives" != "" ]]; then
-#		if [[ "$Multipath" != "off" ]]; then	# 'off' means skip the remove_duplicate code
-#			duplicate_list=$smartdrives
-#			remove_duplicate		# Remove duplicate serial numbers for MultiPath
-#			smartdrives=$duplicate_list
-#		fi
-#	fi
+	if [[ "$smartdrives" != "" ]]; then
+		if [[ "$Multipath" != "off" ]]; then	# 'off' means skip the remove_duplicate code
+			duplicate_list=$smartdrives
+			remove_duplicate		# Remove duplicate serial numbers for MultiPath
+			smartdrives=$duplicate_list
+		fi
+	fi
 	}
 
 ########## GET SMART SOLID DISK DRIVES ##########
@@ -3487,13 +3543,13 @@ if [[ $Debug_Steps == "true" ]]; then echo "get_smartSSD_listings"; fi
 
 	# Call Sort Routine with the drive string.
 ### DUPLICATE DRIVES ARE REMOVED IN DRIVE_SELFTEST SCRIPT AUTOMATICALLY
-#	if [[ "$smartdrivesSSD" != "" ]]; then
-#		if [[ "$Multipath" != "off" ]]; then
-#			duplicate_list=$smartdrivesSSD
-#			remove_duplicate		# Remove duplicate serial numbers
-#			smartdrivesSSD=$duplicate_list
-#		fi
-#	fi
+	if [[ "$smartdrivesSSD" != "" ]]; then
+		if [[ "$Multipath" != "off" ]]; then
+			duplicate_list=$smartdrivesSSD
+			remove_duplicate		# Remove duplicate serial numbers
+			smartdrivesSSD=$duplicate_list
+		fi
+	fi
 
 	}
 
@@ -3539,11 +3595,11 @@ if [[ $Debug_Steps == "true" ]]; then echo "get_smartNVM_listings"; fi
 
 		# Call Sort Routine with the drive string.
 ### DUPLICATE DRIVES ARE REMOVED IN DRIVE_SELFTEST SCRIPT AUTOMATICALLY
-#		if [[ "$Multipath" != "off" ]]; then
-#			duplicate_list=$smartdrivesNVM
-#			remove_duplicate		# Remove duplicate serial numbers
-#			smartdrivesNVM=$duplicate_list
-#		fi
+		if [[ "$Multipath" != "off" ]]; then
+			duplicate_list=$smartdrivesNVM
+			remove_duplicate		# Remove duplicate serial numbers
+			smartdrivesNVM=$duplicate_list
+		fi
 	fi
 	}
 
@@ -3576,13 +3632,13 @@ if [[ $Debug_Steps == "true" ]]; then echo "get_smartOther_listings"; fi
 
 	# Call Sort Routine with the drive string.
 ### DUPLICATE DRIVES ARE REMOVED IN DRIVE_SELFTEST SCRIPT AUTOMATICALLY
-#	if [[ "$nonsmartdrives" != "" ]]; then
-#		if [[ "$Multipath" != "false" ]]; then
-#			duplicate_list=$nonsmartdrives
-#			remove_duplicate		# Remove duplicate serial numbers
-#			nonsmartdrives=$duplicate_list
-#		fi
-#	fi
+	if [[ "$nonsmartdrives" != "" ]]; then
+		if [[ "$Multipath" != "false" ]]; then
+			duplicate_list=$nonsmartdrives
+			remove_duplicate		# Remove duplicate serial numbers
+			nonsmartdrives=$duplicate_list
+		fi
+	fi
 	}
 
 
@@ -5030,8 +5086,13 @@ if [[ $Debug_Steps == "true" ]]; then echo "detailed_report"; fi
 		if [[ $SDF_DataEmail == "true" ]]; then echo "<b>3) Statistical Log ($SDF_DataEmailDay) - (Enabled)</b>" >> "$logfile"; else echo "<b>3) Statistical Log ($SDF_DataEmailDay) - (Disabled)</b>" >> "$logfile"; fi
 
 		if [[ $Partition_Backup == "true" ]]; then echo "<b>4) HDD/SSD Partition Backup ($TrueNASConfigEmailDay) - (Enabled)</b>" >> "$logfile"; else echo "<b>4) HDD/SSD Partition Backup ($TrueNASConfigEmailDay) - (Disabled)</b>" >> "$logfile"; fi
+		if [[ $SoftVer == "Linux" ]]; then
+			echo "<b>5) Sendemail (v"$VersionSendemailFilename")</b>" >> "$logfile"
+		else
+			echo "<b>5) Sendemail (Not Required)</b>" >> "$logfile"
+		fi
 
-		if [[ $dump_type != "" ]]; then echo "<b>5) Dump Files ($dump_type)</b>" >> "$logfile"; fi
+		if [[ $dump_type != "" ]]; then echo "<b>6) Dump Files ($dump_type)</b>" >> "$logfile"; fi
 		echo " " >> "$logfile"
 		echo "<b>Checks/Tests:</b>" >> "$logfile"
 		if [[ $SMR_Enable == "true" ]]; then
@@ -5057,7 +5118,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "detailed_report"; fi
 		fi		
 
 		if [[ $External_SMART_Testing == "true" ]]; then
-			echo "<b>4) S.M.A.R.T Testing External File - (Enabled)</b>" >> "$logfile"
+			echo "<b>4) S.M.A.R.T. Testing External File (v"$VersionDriveFilename") - (Enabled)</b>" >> "$logfile"
 			if [ -f "/tmp/smartdrive_selftest_text.txt" ]; then
 				cat /tmp/smartdrive_selftest_text.txt >> "$logfile"
 				rm /tmp/smartdrive_selftest_text.txt				# Let's clean it up.
@@ -6514,8 +6575,8 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_config_file"; fi
 
 		# version 3.0
 		if [[ "$Ignore_Drives_List" == "none" ]]; then Ignore_Drives_List=""; fi
-#		if [[ "$Multipath" == "true" ]]; then Multipath="normal"; fi
-#		if [[ "$Multipath" == "false" ]]; then Multipath="off"; fi
+		if [[ "$Multipath" == "true" ]]; then Multipath="normal"; fi
+		if [[ "$Multipath" == "false" ]]; then Multipath="off"; fi
 
 		# Lets write the configuration file.
 		echo "#" $programver
@@ -6574,6 +6635,13 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_config_file"; fi
 		echo 'spencer_existing_warning_level="'$spencer_existing_warning_level'"			# What to do for an existing error.  Default = "None"'
 		echo 'spencer_enable="'$spencer_enable'"					# To call the Spencer.py script if "true" or "false" to not run the Spencer.py script. Default = "true"'
 		echo 'spencer_script_name="'$spencer_script_name'"	# The default is "spencer.py" located in the default script directory.'
+		echo " "
+		echo "##### Multipath Enable/Disable"
+		echo "### When active this will (read below options):"
+		echo "Multipath='"$Multipath"'		# 'off' = No processing of serial numbers and is the default value."
+		echo "								# 'normal' = Automatically remove duplicate serial numbers."
+		echo "								# 'Exos2x' = Remove duplicate serial numbers ONLY IF the gptid matches."
+		echo "								# 'serial' = Sort by serial numbers."
 		echo " "
 		echo "###### GENERAL THRESHOLDS ######"
 		echo " "
@@ -6957,6 +7025,8 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_config_file"; fi
 		echo 'Allow_Drive_Selftest_Script_Update="'$Allow_Drive_Selftest_Script_Update'"	# When set to "true" then the script will automatically update itself if a new update is present.'
 		echo " "
 		echo "###### HDD/SSD/NVMe SMART Testing"
+		echo 'Test_ONLY_NVMe_Drives="'$Test_ONLY_NVMe_Drives'"				# This option when set to "true" will only test NVMe drives, HDD/SSD will not be tested. Default = "false"'
+		echo " "
 		echo "### SHORT SETTINGS"
 		echo "Short_Test_Mode=$Short_Test_Mode                           # 1 = Use Short_Drives_to_Test_Per_Day value, 2 = All Drives Tested (Ignores other options), 3 = No Drives Tested."
 		echo "Short_Time_Delay_Between_Drives=$Short_Time_Delay_Between_Drives           # Tests will have a XX second delay between the drives starting testing."
@@ -9625,6 +9695,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file"; fi
 					echo "   R)eports (Logging)"
 					echo "   A)utomatic Update"
 					echo "   E)nable Drive Self-test Script"
+					echo "   N)vme Only or All Drives Testing"
 					echo "   W)rite to configuration file  (NOTE: Any changes will be lost if you do not write the file NOW)"
 					echo "   X) Exit"
 					echo " "
@@ -9632,6 +9703,37 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file"; fi
 					read -s -n 1 Keyboard_loop2
 					echo " "
 					case $Keyboard_loop2 in
+						N)
+							for (( u=1; u<=50; u++ )); do
+								clear
+								echo "            NVMe SMART Test Setup"
+								echo " "
+								echo "This setting affects if Normal all drive testing is performed"
+								echo "or ONLY NVMe testing will  be performed."
+								echo " "
+								echo "This option would be desired if all your HDD/SSD's were already"
+								echo "being tested by TrueNAS, and since TrueNAS (as of 24.10.1) does"
+								echo "not schedule NVMe testing, this would be the method to have"
+								echo "all your NVMe SMART testing accomplished."
+								echo " "
+								if [[ $Test_ONLY_NVMe_Drives == "true" ]]; then 
+									echo "The current setting is: Test ONLY NVMe Drives"
+								else
+									echo "The current setting is: Test ALL Drives"
+								fi
+								echo " "
+								echo -n "Press 'A' for All Drives, 'N' for NVMe Only, Enter to reamin unchanged."
+								read -s -n 1 Keyboard
+								echo " "
+								if [[ $Keyboard == "n" ]] || [[ $Keyboard == "N" ]]; then Test_ONLY_NVMe_Drives="true"; echo "New value: NVMe ONLY"; fi
+								if [[ $Keyboard == "a" ]] || [[ $Keyboard == "A" ]]; then Test_ONLY_NVMe_Drives="false"; echo "New value: ALL Drives"; fi
+								echo " "
+								echo "Press any key to continue"
+								read -s -n 1 Keyboard
+								u=100
+							done
+						;;
+						
 						S)
 						for (( u=1; u<=50; u++ )); do
 						clear
@@ -10909,15 +11011,18 @@ if [[ $Debug_Steps == "true" ]]; then echo "display_help_commands"; fi
 # The -s switch will just collect statistical data.
 # The -t switch will allow a raw text file for smartctl -a, -x, and .json, followed by the input path.
 SECONDS=0
+echo " "
 echo $programver
+echo " "
 smartdata=""  # Don't think we need this here.
 
-# Verify all the commands are available. Thanks @dak180
+# Verify all the required_commands are available.
 # If not, generate a message.
 if [[ $softver != "Linux" ]]; then
 	# FreeBSD
-	commands=(	# FreeBSD Unique
+	required_commands=(	# FreeBSD Unique
 	md5
+	sendmail
 	sha256	
 	sysctl
 	glabel
@@ -10925,8 +11030,9 @@ if [[ $softver != "Linux" ]]; then
 	)
 else
 	# Debian
-	commands=(	# Debian Unique
+	required_commands=(	# Debian Unique
 	fdisk
+	free
 	lsblk
 	md5sum
 	sha256sum
@@ -10934,27 +11040,41 @@ else
 	)
 fi
 
-commands+=(	#Common Commands
+required_commands+=(	#Common Commands
 awk
 base64
+break
 case
+cat
 chmod
 clear
+continue
 curl
 cut
+cp
 date
 egrep
+exit
+find
+for
 git
 grep
 head
 hostname
+if
 jq
+ln
+midclt
+mkdir
 mount
 printf
+python3
 read
+return
 rev
+rm
 sed
-sendmail
+set
 shopt
 sleep
 smartctl
@@ -10963,12 +11083,26 @@ sqlite3
 tail
 tar
 test
+touch
+top
+tr
 trap
+type
 uname
 wc
+while
 wget
 zfs
 zpool
+)
+
+auxillary_commands=( # Auxillary Commands - Just the basic commands I expect anyone to have
+awk
+)
+
+optional_commands=( # Optional Commands CORE
+gdisk
+sgdisk
 )
 
 #if ! test -e mr_sendemail.py; then
@@ -10980,13 +11114,32 @@ zpool
 #Temporary testing location, move to end of script.
 #smart_selftest
 
-# Test if the commands exist
-for command in "${commands[@]}"; do
+# Test if the commands are usable
+for command in "${required_commands[@]}"; do
 	if ! type "${command}" &> /dev/null; then
-		echo "'${command}' is missing, FIRST ensure you have elevated privileges -root- and if that fails, Contact Joe referencing this message." >&2
-		exit 1
+		echo "'${command}' You either do not have elevated privledges or the REQUIRED file is missing." >&2
+#		exit 1
 	fi
 done
+
+# Test if the auxillary_commands are usable
+for command in "${auxillary_commands[@]}"; do
+	if ! type "${command}" &> /dev/null; then
+		echo "'${command}' You either do not have elevated privledges or the AUXILLARY file is missing." >&2
+#		exit 1
+	fi
+done
+
+if [[ $Partition_Check == "true" ]] || [[ $Partition_Backup == "true" ]]; then
+	# Test if the Optional commands are usable
+	for command in "${optional_commands[@]}"; do
+		if ! type "${command}" &> /dev/null; then
+			echo "'${command}' - Optional Command - file is missing. No Partition Data will be available." >&2
+			Partition_Backup="false"
+			Partition_Check="false"
+		fi
+	done
+fi
 
 if ! [[ "$1" == "-config" || "$1" == "-help" || "$1" == "-delete" || "$1" == "-s" || "$1" == "" || "$1" == "-dump" || "$1" == "-purge" || "$1" == "-h" || "$1" == "-t" || "$1" == "-m" || "$1" == "-u7zip" || "$1" == "-update" || "$1" == "-update_selftest" || "$1" == "-update_sendemail" || "$1" == "-update_all" || "$1" == "-ignore_lock" || "$1" == "-cleanup" || "$1" == "-scsismart" || "$1" == "-smr_update" || "$1" == "-check_smr"  || "$1" == "-disable_smr" || "$1" == "-enable_smr" || "$1" == "-disable_smr_alarm" || "$1" == "-enable_smr_alarm" ]]; then
 	echo '"'$1'" is not a valid option.'
@@ -11149,7 +11302,9 @@ if [[ "$1" == "-update_all" ]]; then
 	update_all="true"
 	update_MR_script
 	update_Drive_script
-	update_Sendemail_script
+	if [[ $SoftVer == "Linux" ]]; then		# Sendemail.py is not required in CORE.
+		update_Sendemail_script
+	fi
 	echo "All scripts have been updated.  Exiting."
 	sleep 1
 	exit 0
@@ -11422,7 +11577,8 @@ sas_message=""
 if [[ $External_SMART_Testing == "true" ]]; then
 	echo "Running Drive Self-test Script: "$External_Script_Name
 else
-	echo "SMART Testing not enabled."
+	echo "SMART Testing not enabled in 'multi_report_config.txt' file."
+	echo "Drive-Selftest script will not be run."
 fi
 
 echo " "
@@ -11454,7 +11610,7 @@ if [[ $External_SMART_Testing == "true" ]]; then
 	fi
 fi
 
-echo "Collecting Report Data..."
+echo "Collecting Multi-Report Data..."
 
 # Generate SMART HDD Report
 SER1=""
@@ -11529,8 +11685,8 @@ if [[ "$Enable_Text_Section" == "true" ]]; then
 	if [[ $spencer_enable == "true" ]]; then
 		if test -e "$spencer_script_name"; then
 			cd $SCRIPT_DIR && python3 "$spencer_script_name" multi_report
+			spencer
 		fi
-		spencer
 	fi
 
 	detailed_report $2
@@ -11599,8 +11755,11 @@ if [[ $NVM_Low_Power == "true" ]]; then
 fi
 
 cleanup_files
-# For some odd reason thsi cannot be left in the cleanup_files function or the attachment never happens.  Very odd.  Look into this.
+# For some odd reason this cannot be left in the cleanup_files function or the attachment never happens.  Very odd.  Look into this.
 if test -e "/tmp/Old_multi_report_config.txt"; then rm "/tmp/Old_multi_report_config.txt"; fi
+# There are here becasue it was simple.  Will more to appropriate cleanup area later.
+if test -e "/tmp/Multi-Report"; then rm -R "/tmp/Multi-Report"; fi
+if test -e "/tmp/multi_report_update.txt"; then	rm "/tmp/multi_report_update.txt"; fi
 
 duration=$SECONDS
 if [[ $Develop == "true" ]]; then echo "$(($duration / 60)) minutes and $(($duration % 60)) seconds elapsed."; fi
