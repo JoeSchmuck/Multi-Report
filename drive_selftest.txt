@@ -4,7 +4,7 @@ LANG="en_US.UTF-8"
 if [[ $TERM == "dumb" ]]; then          # Set a terminal as the script may generate an error message if using 'dumb'.
     export TERM=unknown
 fi
-##### Version 1.02
+##### Version 1.03
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
@@ -52,6 +52,13 @@ SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 # Change Log
 #
 
+# Version 1.03 (26 January 2025)
+#
+# - Added Test NVMe Drives Only option (by request).
+# - Improved the Update feature.
+# - Streamlined the CRON JOB output a bit.
+#
+
 # Version 1.02 (16 January 2025)
 #
 # 27 December - Addressed invalid drives for SMART testing.
@@ -95,10 +102,12 @@ Use_multi_report_config_values="true"		# A "true" value here will use the $Confi
 Automatic_Selftest_Update="false"	# WARNING !!!  This option will automatically update the Drive_Selftest script if a newer version exists on GitHub with no user interaction. Default = "false"
 
 ###### HDD/SSD/NVMe SMART Testing
+Test_ONLY_NVMe_Drives="false"				# This option when set to "true" will only test NVMe drives, HDD/SSD will not be tested. Default = "false"
+
 ### SHORT SETTINGS
 Short_Test_Mode=2                           # 1 = Use Short_Drives_to_Test_Per_Day value, 2 = All Drives Tested (Ignores other options), 3 = No Drives Tested.
 Short_Time_Delay_Between_Drives=1           # Tests will have a XX second delay between the drives starting testing. If drives are always spinning, this can be "0".
-Short_SMART_Testing_Order="DriveID"         # Test order is for Test Mode 1 ONLY, select "Serial" or "DriveID" for sort order.  Default = 'Serial'
+Short_SMART_Testing_Order="DriveID"         # Test order is for Test Mode 1 ONLY, select "Serial" or "DriveID" for sort order.  Default = "Serial"
 Short_Drives_to_Test_Per_Day=1              # For Test_Mode 1) How many drives to run each day minimum?
 Short_Drives_Test_Period="Week"             # "Week" (7 days) or "Month" (28 days)
 Short_Drives_Tested_Days_of_the_Week="1,2,3,4,5,6,7"    # Days of the week to run, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat, 7=Sun.  # This takes over for number of days variable.
@@ -110,8 +119,9 @@ Long_Test_Mode=1                            # 1 = Use Long_Drives_to_Test_Per_Da
 Long_Time_Delay_Between_Drives=1            # Tests will have a XX second delay between the drives starting the next test.
 Long_SMART_Testing_Order="Serial"           # Test order is either "Serial" or "DriveID".  Default = 'Serial'
 Long_Drives_to_Test_Per_Day=1               # For Test_Mode 1) How many drives to run each day minimum?
-Long_Drives_Test_Period="Month"             # "Week" (7 days) or "Month" (28 days)
+Long_Drives_Test_Period="Week"             # "Week" (7 days) or "Month" (28 days)
 Long_Drives_Tested_Days_of_the_Week="1,2,3,4,5,6,7"     # Days of the week to run, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat, 7=Sun. # This takes over for number of days variable.
+
 
 ### IGNORE DRIVES LIST
 # IF YOU HAVE A DRIVE THAT YOU DO NOT WANT THIS SCRIPT TO TOUCH (RUN ANY TESTS ON), THEN INCLUDE THE DRIVE SERIAL NUMBER
@@ -165,8 +175,8 @@ fi
 programver3=$(( programver3 + 0 ))		# Make Base 10
 programver4=$(( programver4 + 0 ))
 Program_Name="drive_selftest.sh"
-Version="1.02"							# Current version of the script
-Version_Date="(17 January 2025)"
+Version="1.03"							# Current version of the script
+Version_Date="(26 January 2025)"
 
 # GLOBAL VARIABLES - MUST BE DEFINED EARLY BEFORE FUNCTION TO BE GLOBAL
 Drive_Disk_Query=""				# Valid
@@ -217,32 +227,62 @@ smartctlscan=$(smartctl --scan-open)
 checkforupdate () {
 	echo "Checking for Updates"
 	if test -e "/tmp/Multi-Report"; then rm -R "/tmp/Multi-Report"; fi
+
 	if [[ "$(curl -is https://github.com | head -n 1)" ]]; then
-		# Go git the file
 		(
 			cd /tmp
-			mkdir Multi-Report
+			if ! test -e "Multi-Report"; then
+				mkdir Multi-Report
+			fi
 			cd Multi-Report
 			curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/drive_selftest.txt			
-		)
-
+		)	
 		if test -e "/tmp/Multi-Report/drive_selftest.txt"; then
 			GitDriveVersion=$(cat "/tmp/Multi-Report/drive_selftest.txt" | grep "##### Version" | cut -d 'n' -f2 | tr -d ' ' | head -1)
-			VersionDriveFilename=$(cat $SCRIPT_DIR"/drive_selftest.sh" | grep "##### Version" | cut -d 'n' -f2 | tr -d ' ' | head -1)
-			echo "   Drive_Selftest - Installed: "$VersionDriveFilename", GitHub: "$GitDriveVersion
-			if [[ $GitDriveVersion > $VersionDriveFilename ]] && [[ $VersionDriveFilename != "" ]]; then
+			GitDriveMajorVersionNumber="$(echo $GitDriveVersion | cut -d '.' -f1)"
+			GitDriveMinorVersionNumber="$(echo $GitDriveVersion | cut -d '.' -f2)"
+			convert_to_decimal $GitDriveMajorVersionNumber
+			GitDriveMajorVersionNumber=$Return_Value
+			convert_to_decimal $GitDriveMinorVersionNumber
+			GitDriveMinorVersionNumber=$Return_Value
+			if test -e $SCRIPT_DIR"/drive_selftest.sh"; then
+				VersionDriveFilename="$(cat $SCRIPT_DIR"/drive_selftest.sh" | grep "##### Version" | cut -d 'n' -f2 | tr -d ' ' | head -1)"
+				MajorDriveVersionFilename="$(echo $VersionDriveFilename | cut -d '.' -f1)"
+				MinorDriveVersionFilename="$(echo $VersionDriveFilename | cut -d '.' -f2)"
+				convert_to_decimal $MajorDriveVersionFilename
+				MajorDriveVersionFilenamer=$Return_Value
+				convert_to_decimal $MinorDriveVersionFilename
+				MinorDriveVersionFilename=$Return_Value
+			else
+				VersionDriveFilename="Nothing Is Here"
+			fi
+			Drive_Updated="AVAILABLE: V"$VersionDriveFilename
+			echo -n "    Drive_Selftest - Installed: "$VersionDriveFilename", GitHub: "$GitDriveVersion
+			if [[ $GitDriveMajorVersionNumber -gt $MajorDriveVersionFilename ]] && [[ $VersionDriveFilename != "" ]]; then
+				echo " - Major Update"
 				UpdateDriveAvailable="true"
 				rm /tmp/Multi-Report/drive_selftest.txt
-			fi
+			elif [[ $GitDriveMajorVersionNumber -eq $MajorDriveVersionFilename ]] && [[ $GitDriveMinorVersionNumber -gt $MinorDriveVersionFilename ]]; then
+				UpdateDriveAvailable="true"
+				echo " - Minor Update"
+				rm /tmp/Multi-Report/drive_selftest.txt
+			else
+				echo " - No Update"
+			fi		
+			if [[ $Automatic_Selftest_Update == "true" ]] && [[ $UpdateDriveAvailable == "true" ]]; then
+				echo "      Automatic Update Enabled"
+				update_Drive_script
+			fi					
 		else
 			echo "No GitHub Version File Available"
 		fi
+
 	fi
 
 	if [[ $UpdateDriveAvailable == "true" ]]; then
-		echo "UPDATE AVAILABLE -- Use the '-update' switch to force the update."
-	else
-		echo "NO UPDATES AVAILABLE"
+		echo "Update is Available -- Use the '-update' switch to force an update."
+#	else
+#		echo "NO Updates Available"
 	fi
 
 	}
@@ -266,8 +306,8 @@ checkforupdate () {
 		GitDriveVersion=$(cat "/tmp/Multi-Report/drive_selftest.txt" | grep "##### Version" | cut -d 'n' -f2 | tr -d ' ' | head -1)
 		VersionDriveFilename=$(cat $SCRIPT_DIR"/drive_selftest.sh" | grep "##### Version" | cut -d 'n' -f2 | tr -d ' ' | head -1)
 		echo " "
-		echo "Your current version is: "$VersionDriveFilename
-		echo "     The new version is: "$GitDriveVersion 
+		echo "      - Drive_Selftest current version is: "$VersionDriveFilename
+		echo "      - The new version is: "$GitDriveVersion
 		echo " "
 
 		if [[ $Automatic_Selftest_Update != "true" ]]; then
@@ -313,7 +353,16 @@ checkforupdate () {
 	fi
 
 	}
-	
+
+convert_to_decimal () {
+if [[ $Debug_Steps == "true" ]]; then echo "convert_to_decimal"; fi
+	if [[ "$1" == "" ]]; then return; fi
+	Converting_Value=${1#0}
+	Converting_Value="${Converting_Value//,}"
+	Return_Value=$Converting_Value
+	if [[ $1 == "0" ]]; then Return_Value=0; fi
+
+	}
 
 remove_duplicate_tests () {
 # THIS WILL COMPARE BOTH SHORT AND LONG TESTS AND REMOVE DUPLICATE SHORT TESTS FROM THE TESTING LIST.
@@ -821,9 +870,12 @@ list_monthly_output () {
                 if [[ $drives_to_list == "" ]]; then drives_to_list=" Nothing To Test This Day"; fi
                 echo -e $pretext$drives_to_list | tee -a /tmp/drive_test_temp.txt
             fi
-
+echo $day_of_month" --- "$today_day" --- "$drives_tested_demo
             if [[ $(( 10#$day_of_month )) -lt $(( 10#$today_day )) ]]; then
+			echo "k"
+#				if ! [[ $drives_tested_demo =~ $drives_to_list ]]; then
                 drives_tested_demo=$drives_tested_demo" "$drives_to_list
+#				fi
             fi
 
             if [[ $Demo != "true" ]] && [[ $(( 10#$day_of_month )) -eq $(( 10#$today_day )) ]]; then break; fi        # THIS SHOULD EXIT WHEN WE HIT TODAY
@@ -881,6 +933,14 @@ list_weekly_output () {
     valid_today=0
     test_it=0                # If set to other than 0, testing is needed.
     drives_already_tested=0            # Total number of drives previously scheduled tested.  The next number is the drive to be tested if test_it != 0.
+	if [[ $Debug == "true" ]]; then
+		echo "Debug - Drive Names="$Drives_name
+		echo "Debug - Drive Count="$Drive_Count
+		echo "Debug - Drives Already Tested="$drives_already_tested
+		echo "Debug - Drives To Test="$drives_to_test
+	
+	fi
+
     while [ $First_DOM -le 7 ]; do
         valid_today=0
         if [[ $First_DOM -lt $DOW ]]; then                        # Is it less than today, then allow evaluation for previous matches.
@@ -1214,7 +1274,9 @@ get_API_Drives () {
 	skip_drives_count=0
 
     if [[ $Debug == "true" ]]; then    echo "Debug - Function 'get_API_Drives'"; echo " "; fi
-
+		if [[ $Test_ONLY_NVMe_Drives == "true" ]]; then
+			echo "Testing ONLY NVMe Drives" | tee -a /tmp/drive_test_temp.txt
+		fi
     Drive_Disk_Query=$(midclt call disk.query)
 
     # 1. Get all API data in a variable, one call. -- Can we find API that says SMART Self-test is supported or not?  May need to use smartctl for one thing.
@@ -1227,6 +1289,22 @@ get_API_Drives () {
         drives_model[index]=$(echo $Drive_Disk_Query | jq -Mre '.'[$increment]'.model')
         drives_name[index]=$(echo $Drive_Disk_Query | jq -Mre '.'[$increment]'.name')
         drives_serial[index]=$(echo $Drive_Disk_Query | jq -Mre '.'[$increment]'.serial' | tr -d ' ')		# "td -d ' '" removes any white space from the serial number
+
+	# WE NEED TO WEED OUT ALL BUT NVD/NVME DRIVES IF NVME TEST ONLY OPTION SET
+		if [[ $Test_ONLY_NVMe_Drives == "true" ]]; then
+			# WE NEED TO LET PASS ONLY NVD/NVME HERE
+			if [[ ${drives_name[$index]} == "nvme"* ]] || [[ ${drives_name[$index]} == "nvd"* ]]; then
+				if [[ $Debug == "true" ]]; then
+					echo "continue "$i
+				fi
+			else
+				if [[ $Debug == "true" ]]; then
+					echo "Virtual "$i
+				fi
+				drives_model[$index]="Virtual"			# Change all non NVD/NVME drives to Virtual, Crappy Hack But it Works?
+			fi
+		fi
+
 
     # WE NEED TO WEED OUT VIRTUAL AND CD DRIVES AND IGNORE LIST DRIVES
         if [[ ${drives_model[$index]} == *"Virtual"* ]] || [[ ${drives_name[$index]} == "cd"* ]] || [[ $Ignore_Drives_List =~ ${drives_serial[$index]} ]]; then
@@ -1258,6 +1336,7 @@ get_API_Drives () {
         (( index ++ ))
         (( increment ++ ))
     done
+	
 
     # If the last drive at the end jumps out and is a virtual or cd drive, remove it.
 	if [[ ${drives_model[$index]} == *"Virtual"* ]] || [[ ${drives_name[$index]} == "cd"* ]] || [[ $Ignore_Drives_List =~ ${drives_serial[$index]} ]]; then drives_name[index]=""; drives_serial[index]=""; fi
@@ -1302,6 +1381,8 @@ get_API_Drives () {
 			echo " seconds elapsed."
 		fi
 		echo " ") >> /tmp/drive_test_timer_temp.txt
+		
+echo 
 
     }
 
@@ -1611,22 +1692,30 @@ troubleshooting_help () {
 # If the file does not exist, script values will be used and no error message will be generated.
 # Either setting the Use_multi_report_config_values="true" (at top of script), or switch will use the Multi-Report file, if it exists.
 # First line finds out if this script was called by Multi-Report.
-[[ $SHLVL -gt 2 ]] &&
-	sleep .1  ||
+
+#echo "Shell Level:"$SHLVL
+
+# Abort "this" Check for update if being run from another shell.
+if [[ $SHLVL -eq 1 ]]; then
 	checkforupdate
+fi
 
 if test -e "$Config_File_Name" || [[ $1 == "-use_external_file" ]]; then
-	Use_multi_report_config_values="true"
-	if test -e "$Config_File_Name"; then
-		. "$Config_File_Name"
-	else
-		echo "External File Does Not Exist ($Config_File_Name)"
-		echo "Using script values..."
+	if [[ $Use_multi_report_config_values == "true" ]]; then
+		if test -e "$Config_File_Name"; then
+			. "$Config_File_Name"
+		else
+			echo "Using script values..."
+		fi
 	fi
 fi
 
-if [[ $Automatic_Selftest_Update == "true" ]] && [[ $UpdateDriveAvailable == "true" ]]; then update_script; fi
-if [[ $1 == "-update" ]]; then update_script; fi
+if [[ $Automatic_Selftest_Update == "true" ]] && [[ $UpdateDriveAvailable == "true" ]]; then checkforupdate; fi
+if [[ $1 == "-update" ]]; then
+	checkforupdate
+	sleep 1
+	exit 0
+fi
 
 ### DELETE ANY LEFTOVER TEMPORARY FILES IF THEY EXIST
 rm "/tmp/drive_test_timer_temp.txt" > /dev/null 2<&1
