@@ -6,7 +6,7 @@ TrueNASConfigEmailEncryption=""	 # Set this to "" for no encryption, MUST REMAIN
 # NOTE: Some email providers will not send some encrypted file types, such as GMAIL, but .zip files are okay.
 # NOTE: 7zip is used for the compression/encryption and will not be installed unless encryption is enabled.
 
-##### Version 3.13
+##### Version 3.14
 
 ###### Get Config File Name and Location
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
@@ -83,8 +83,15 @@ fi
 
 # Version
 ### Changelog:
+
+# V3.14 (28 January 2025)
+#
+# - Added if sendemail.py error message, send full sendem,ail.py error message to the console. (1/27/25)
+# - Fixed inadvertant 'gdisk' and 'sgdisk' not installed error messages for CORE.  (1/28/25)
 #
 #
+#
+
 # V3.13 (26 January 2025)
 #
 # - Re-added Multipath which was commented out and not restored.
@@ -293,7 +300,7 @@ SMR_New_Drive_Det_Count=14	# The SMR script will check the statistical_data_file
 ### PARTITION CHECK AND BACKUP
 Partition_Check="false"	# Run sgdisk on each drive. Default = "false", this will install gdisk/sgdisk on TrueNAS CORE if not present.
 			#  -- It is "false" because you should choose to control what is installed or not.
-Partition_Backup="true"	# Set to "true" to save each partition table with the TrueNAS configuration backup.
+Partition_Backup="false"	# Set to "true" to save each partition table with the TrueNAS configuration backup.
 			# NOTE: You need sgdisk installed, run the Partition Check once to install on CORE.
 
 ### Spencer Integration
@@ -740,7 +747,7 @@ logfile_header="/tmp/${tempfilepath}smart_report_header.tmp"
 logfile_temp="/tmp/${tempfilepath}smart_report_temp.tmp"
 boundary="gc0p4Jq0M2Yt08jU534c0p"
 
-CurrentFilename="multi_report_v3.13_2025_01_26.txt"
+CurrentFilename="multi_report_v3.14_2025_01_28.txt"
 valid_config_version_date="2025-01-26"	# Configuration file valid date
 progverdate="$(echo $CurrentFilename | cut -d '_' -f4,5,6 | cut -d '.' -f1 | sed -r 's/[_]+/-/g')"
 progname="Multi-Report "$(echo $CurrentFilename | cut -d '_' -f3)" dtd:"
@@ -1257,10 +1264,6 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_MR_script"; fi
 			MR_Updated="UPDATED: V"$VersionFilename
 			UpdateAvailable="update"
 			sleep 1
-				
-			### THIS IS NOT COMPLETE AND IS INTENTIONED TO UPDATE THE DRIVE SELF-TEST SCRIPT.
-			# Copy the drive_selftest.sh script.  When it runs, if it sees a newer version, it will automatically update itself.
-			#    cp "/tmp/Multi-Report/drive_selftest.up" $SCRIPT_DIR"/drive_selftest.sh"	# Temporary to get the script on systems.
 		else
 			echo "Aborted"
 			MR_Updated="ABORTED: V"$VersionFilename
@@ -2308,9 +2311,9 @@ if [[ $Debug_Steps == "true" ]]; then echo "create_Email"; fi
 				else
 					echo "Script Execution Time: $(($duration / 60)) Minutes : $(($duration % 60)) Seconds"
 				fi
-				if [[ $UpdateAvailable == "true" ]]; then echo "<br>MULTI-REPORT UPDATE "$MR_Updated" --> V"$GitVersion; fi
-				if [[ $UpdateDriveAvailable == "true" ]]; then echo "<br>DRIVE_SELFTEST UPDATE "$Drive_Updated" --> V"$GitDriveVersion; fi
-				if [[ $UpdateSendemailAvailable == "true" ]]; then echo "<br>SENDEMAIL.PY UPDATE "$Sendemail_Updated" --> V"$GitSendemailVersion; fi
+				if [[ $UpdateAvailable == "true" ]] || [[ $UpdateAvailable == "update" ]]; then echo "<br>MULTI-REPORT UPDATE "$MR_Updated" --> V"$GitVersion; fi
+				if [[ $UpdateDriveAvailable == "true" ]] || [[ $UpdateDriveAvailable == "update" ]]; then echo "<br>DRIVE_SELFTEST UPDATE "$Drive_Updated" --> V"$GitDriveVersion; fi
+				if [[ $UpdateSendemailAvailable == "true" ]] || [[ $UpdateSendemailAvailable == "update" ]]; then echo "<br>SENDEMAIL.PY UPDATE "$Sendemail_Updated" --> V"$GitSendemailVersion; fi
 				if [[ $Messages != "" ]]; then echo "<br>Message from Joe: "$Messages"<br>"; fi
 			if [[ "$(echo $programver | grep -i "beta")" ]] || [[ $UpdateAvailable == "true" ]] || [[ $UpdateDriveAvailable == "true" ]] || [[ $UpdateSendemailAvailable == "true" ]]; then echo "</span></b>"; fi
 			if [[ $TrueNASConfigEmailEncryption != "" ]] && [[ $Config_Encrypted == "true" ]]; then echo "<br>Attached zip file is encrypted."; fi
@@ -2376,7 +2379,7 @@ if ! test -e "/tmp/attachment.json"; then
 		) #> /dev/null 2<&1
 	fi
 else
-	echo "using mr_sendemail.py"
+	echo "Using mr_sendemail.py"
 	#echo "Must be SCALE - With Attachments"
 	# With Attachments (works)
 
@@ -2396,14 +2399,16 @@ python3 mr_sendemail.py \
 	--subject "$subject" \
 	--to_address "$Email" \
 	--mail_body_html "$logfile_header" \
-	--attachment_files "${attachment[@]}" > /dev/null 2<&1
+	--attachment_files "${attachment[@]}" > /tmp/sendemail_error.txt
 
 # Check Exit Code
 	if [[ $? -ne 0 ]]; then
 		echo "Sendemail had a problem.  Check the file log at "$SCRIPTS"/sendmail_log"
+		cat /tmp/sendemail_error.txt
 	else
 		echo "Email Sent"
 	fi
+	if test -e "/tmp/sendemail_error.txt"; then rm /tmp/sendemail_error.txt; fi
 
 #(	curl -k –location-trusted -i -u $curl_account:$curl_password --form-string 'data={"method": "mail.send", "params": [{"subject": "'"${subject}"'", "to": ["'"${Email}"'"], "html": "'"${html_data}"'", "attachments": true}]}' -F "file=@/tmp/attachment.json" http://127.0.0.1:${port_address}/_upload/) > /dev/null 2<&1
 fi
@@ -11132,17 +11137,6 @@ for command in "${auxillary_commands[@]}"; do
 	fi
 done
 
-if [[ $Partition_Check == "true" ]] || [[ $Partition_Backup == "true" ]]; then
-	# Test if the Optional commands are usable
-	for command in "${optional_commands[@]}"; do
-		if ! type "${command}" &> /dev/null; then
-			echo "'${command}' - Optional Command - file is missing. No Partition Data will be available." >&2
-			Partition_Backup="false"
-			Partition_Check="false"
-		fi
-	done
-fi
-
 if ! [[ "$1" == "-config" || "$1" == "-help" || "$1" == "-delete" || "$1" == "-s" || "$1" == "" || "$1" == "-dump" || "$1" == "-purge" || "$1" == "-h" || "$1" == "-t" || "$1" == "-m" || "$1" == "-u7zip" || "$1" == "-update" || "$1" == "-update_selftest" || "$1" == "-update_sendemail" || "$1" == "-update_all" || "$1" == "-ignore_lock" || "$1" == "-cleanup" || "$1" == "-scsismart" || "$1" == "-smr_update" || "$1" == "-check_smr"  || "$1" == "-disable_smr" || "$1" == "-enable_smr" || "$1" == "-disable_smr_alarm" || "$1" == "-enable_smr_alarm" ]]; then
 	echo '"'$1'" is not a valid option.'
 	echo "Use -h for help and look under OPTIONS."
@@ -11314,6 +11308,17 @@ fi
 
 load_config
 
+if [[ $Partition_Check == "true" ]] || [[ $Partition_Backup == "true" ]]; then
+	# Test if the Optional commands are usable
+	for command in "${optional_commands[@]}"; do
+		if ! type "${command}" &> /dev/null; then
+			echo "'${command}' - Optional Command - file is missing. No Partition Data will be available." >&2
+			Partition_Backup="false"
+			Partition_Check="false"
+		fi
+	done
+fi
+
 if [[ "$1" == "-disable_smr" ]]; then
 	echo "Disabling SMR Checking.  Use '-check_smr' for a onetime check."
 	echo "or use '-enable_smr' to perform a check with each run."
@@ -11346,42 +11351,6 @@ cleanup_files
 if [[ $Check_For_Updates == "true" ]] && [[ "$1" != "-t" && "$1" != "-m" && "$1" != "-dump" ]]; then
 	checkforupdate
 fi
-
-# Let's Update Automatically if allowed.
-#if [[ $UpdateAvailable == "true" ]] && [[ $Automatic_MR_Update == "true" ]]; then
-#	# We are updating automatically
-#	update_MR_script
-#	if [[ $Automatic_Update == "true" ]]; then
-#		rm -rf /tmp/multi_report.lock
-#		echo "Running script normally."
-#	# How do we run the script when the script is the same name?  Temporarily copy the new script to a new name and run that name.
-#		(
-#		cd $SCRIPT_DIR"/"
-#		cp $SCRIPT_DIR"/"$runfilename $SCRIPT_DIR"/"temprunfile.sh ; chmod 755 $SCRIPT_DIR"/"temprunfile.sh
-#		./temprunfile.sh $1
-#		sleep 2
-#		rm $SCRIPT_DIR"/"temprunfile.sh
-#		)
-#		exit 0
-#	else
-#		echo "Script Not Updated"
-#		echo "Running script normally..."
-#	fi
-#fi
-
-#if [[ $UpdateDriveAvailable == "true" ]] && [[ $Automatic_Selftest_Update == "true" ]]; then
-#	update_Drive_script
-#fi
-
-#if [[ $UpdateSendemailAvailable == "true" ]] && [[ $Automatic_Sendemail_Update == "true" ]]; then
-#	update_Sendemail_script
-#fi
-
-#if ! test -e $SCRIPT_DIR"/mr_sendemail.py"; then
-#	Automatic_Sendemail_Update="true"
-#	update_Sendemail_script
-#fi
-
 
 # GRAB DRIVE-SELFTEST SCRIPT THIS ONE TIME, ONLY BECASUE IT IS NEW.  IN NEXT VERSION, MAKE THIS AN AUTOMATIC UPDATE IF THE FILE IS MISSING.
 # THIS GOES AWAY IN THE NEXT VERSION OR SOMETHING SIMILAR NEEDS TO HAPPEN.  ALSO VERSION CHECKING IS NEEDED TO ENSURE
