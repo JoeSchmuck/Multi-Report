@@ -55,6 +55,9 @@ SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 # Change Log
 #
 #  FIX THE TEST FILE NAME BEFORE DISTRIBUTION
+#  ADD SETTING TO NOT ALLOW ANY SMART TESTS DURING SCRUB/RESILVER.
+#  SHOULD I ADD THIS TO BE POOL SPECIFIC?  COMPARE THE TESTED DRIVE TO SEE IF IT IS IN THE AFFECTED POOL?  I LIKE IT.
+#
 
 # Version 1.04 (3 February 2025)
 #
@@ -104,9 +107,10 @@ Automatic_Selftest_Update="false"           # WARNING !!!  This option will auto
 
 ###### HDD/SSD/NVMe SMART Testing
 Test_ONLY_NVMe_Drives="false"               # This option when set to "true" will only test NVMe drives, HDD/SSD will not be tested. Default = "false"
-SCRUB_RESILVER_Minutes_Remaining=180        # This option will not run a SMART LONG test if a SCRUB/RESILVER has longer than xx minutes remaining, and a SMART SHORT 
+SCRUB_RESILVER_Minutes_Remaining=10000        # This option will not run a SMART LONG test if a SCRUB/RESILVER has longer than xx minutes remaining, and a SMART SHORT 
                                             #  test will be run instead to cause minimal impact to the SCRUB/RESILVER operation. Default=180 minutes (3 hours).
-                                            # NOTE: RESILVERING RECOGNITION NOT COMPLETED...
+                                            #  A value of 10000 will disable a SMART test all together during a SCRUB/RESILVER operation.
+
 ### SHORT SETTINGS
 Short_Test_Mode=2                           # 1 = Use Short_Drives_to_Test_Per_Day value, 2 = All Drives Tested (Ignores other options), 3 = No Drives Tested.
 Short_Time_Delay_Between_Drives=1           # Tests will have a XX second delay between the drives starting testing. If drives are always spinning, this can be "0".
@@ -419,7 +423,13 @@ check_scrub () {
         Function_Pool_Name=$(midclt call pool.query | jq -r '.['$i'].name')
         Function=$(midclt call pool.query | jq -r '.['$i'].scan.function')
         Function_Time_Left=$(midclt call pool.query | jq -r '.['$i'].scan.total_secs_left')
-
+###
+### cat pool_query_degraded.txt | jq -r '.[0].topology.data.[].children.[].status' GETS A LIST OF DRIVE ONLINE STATUS
+### cat pool_query_degraded.txt | jq -r '.[0].topology.data.[].children.[].disk' GETS A LIST OF DRIVE NAMES
+### cat pool_query_degraded.txt | jq -r '.[0].topology.data.[].children.[].serial' GETS A LIST OF SERIAL NUMBERS FOR UNAVAILABLE DRIVES
+### cat pool_query_degraded.txt | jq -r '.[0].topology.data.[].children.[].unavail_disk.serial'  GETS ALL SERIAL NUMBERS UNAVAILABLE (OFFLINE?)
+### 
+###        
         if [[ $Function == "SCRUB" ]] || [[ $Function == "RESILVER" ]]; then
             if [[ $Function_Time_Left != "null" ]]; then         # We should have a number, lets convert it to hours.
                 Function_Time_Left_Min=$((Function_Time_Left / 60))    # Seconds to Minutes
@@ -427,22 +437,29 @@ check_scrub () {
                 Function_Time_Left_Whole0=$((Function_Time_Left_Hour / 60))
                 Function_Time_Left_Whole1=$((Function_Time_Left_Whole0 / 10))
                 Function_Time_Left_Fraction=$((Function_Time_Left_Whole0 - $((Function_Time_Left_Whole1 * 10 ))))
-                if [[ $Function_Time_Left_Min -gt $SCRUB_RESILVER_Minutes_Remaining ]]; then        # SCRUB Too Long
-                    Function_In_Progress="true"
-                    echo "  Pool: "$Function_Pool_Name | tee -a /tmp/drive_test_temp.txt
-                    if [[ $Function_Time_Left_Min -gt 59 ]]; then    # JUST TO FORMAT TIME CORRECTLY
-                        # OVER 1 HOUR
-                        echo "  Scrub/Resilver In Progress: ~"$Function_Time_Left_Whole1"."$Function_Time_Left_Fraction" Hours remain. " | tee -a /tmp/drive_test_temp.txt
-                        echo "  The SCRUB remaining time exceeds "$SCRUB_RESILVER_Minutes_Remaining" minutes, running SMART SHORT tests vice any pending LONG tests." | tee -a /tmp/drive_test_temp.txt
+				if [[ $SCRUB_RESILVER_Minutes_Remaining -lt 10000 ]]; then
+                    if [[ $Function_Time_Left_Min -gt $SCRUB_RESILVER_Minutes_Remaining ]]; then        # SCRUB Too Long
+                        Function_In_Progress="true"
+                        echo "  Pool: "$Function_Pool_Name | tee -a /tmp/drive_test_temp.txt
+                        if [[ $Function_Time_Left_Min -gt 59 ]]; then    # JUST TO FORMAT TIME CORRECTLY
+                            # OVER 1 HOUR
+                            echo "  "$Function" In Progress: ~"$Function_Time_Left_Whole1"."$Function_Time_Left_Fraction" Hours remain. " | tee -a /tmp/drive_test_temp.txt
+                            echo "  The "$Function" remaining time exceeds "$SCRUB_RESILVER_Minutes_Remaining" minutes, running SMART SHORT tests vice any pending LONG tests." | tee -a /tmp/drive_test_temp.txt
+                        else
+                            # LESS THAN 1 HOUR
+                            echo $Function" In Progress: "$Function_Time_Left" minutes remain." | tee -a /tmp/drive_test_temp.txt
+                        fi
                     else
-                        # LESS THAN 1 HOUR
-                        echo "Scrub/Resilver In Progress: "$Function_Time_Left" minutes remain." | tee -a /tmp/drive_test_temp.txt
+                        # LESS THAN MAX TIME - WE CAN RUN A LONG TEST
+                        echo "  Pool: "$Function_Pool_Name | tee -a /tmp/drive_test_temp.txt
+                        echo "  "$Function" In Progress: ~"$Function_Time_Left_Whole1"."$Function_Time_Left_Fraction" Hours remain. " | tee -a /tmp/drive_test_temp.txt
+                        echo "  The "$Function" remaining time is less than "$SCRUB_RESILVER_Minutes_Remaining" minutes, running any pending SMART LONG tests as planned." | tee -a /tmp/drive_test_temp.txt
                     fi
                 else
-                    # LESS THAN MAX TIME - WE CAN RUN A LONG TEST
+                    # SCRUB/RESILVER IN PROGRESS - NO SMARTT TESTING AT ALL
                     echo "  Pool: "$Function_Pool_Name | tee -a /tmp/drive_test_temp.txt
-                    echo "  Scrub/Resilver In Progress: ~"$Function_Time_Left_Whole1"."$Function_Time_Left_Fraction" Hours remain. " | tee -a /tmp/drive_test_temp.txt
-                    echo "  The SCRUB remaining time is less than "$SCRUB_RESILVER_Minutes_Remaining" minutes, running any pending SMART LONG tests as planned." | tee -a /tmp/drive_test_temp.txt
+                    echo "  "$Function" In Progress: ~"$Function_Time_Left_Whole1"."$Function_Time_Left_Fraction" Hours remain. " | tee -a /tmp/drive_test_temp.txt
+                    echo "  No SMART test will be run to speed up the "$Function"." | tee -a /tmp/drive_test_temp.txt
                 fi
             fi
         elif [[ $Function == "null" ]]; then    # We exit, no more pools in the list.
@@ -459,7 +476,7 @@ remove_duplicate_tests () {
 # Global Variables: selftest_drives_short, selftest_drives_long
 
 # Local Variables: s_drives, short_modified_drives
-#echo -n "1"
+
     (echo "            "$start_time_display":  START remove_duplicate_tests"; echo " ") >> /tmp/drive_test_timer_temp.txt
 
     for s_drives in $selftest_drives_short ; do                     # Loop through all the Long drives to test
@@ -478,9 +495,11 @@ remove_duplicate_tests () {
     # Move from LONG to SHORT During a SCRUB
     if [[ $Function_In_Progress == "true" ]]; then
         for l_drives in $selftest_drives_long ; do                     # Loop through all the Long drives to test
+            if [[ $SCRUB_RESILVER_Minutes_Remaining -lt 10000 ]]; then
                 short_modified_drives=$short_modified_drives" "$l_drives
-        done    
-        selftest_drives_long=""
+            fi
+        done
+            selftest_drives_long=""
     fi
     
     if [[ $s_drives != "" ]] && [[ $Function_In_Progress != "true" ]]; then
@@ -974,7 +993,7 @@ list_monthly_output () {
         test_it=1
         if [[ $Silent != "true" ]]; then
             echo "    Drive(s) previously scheduled to be tested: "$drives_tested_demo | tee -a /tmp/drive_test_temp.txt
-            echo -e $(wc -w <<< "$drives_to_list" | xargs)" Drive(s) testing today: "$drives_to_list | tee -a /tmp/drive_test_temp.txt
+            echo -e "    "$(wc -w <<< "$drives_to_list" | xargs)" Drive(s) testing today: "$drives_to_list | tee -a /tmp/drive_test_temp.txt
         fi
         drives_to_test=$drives_to_list
     else
