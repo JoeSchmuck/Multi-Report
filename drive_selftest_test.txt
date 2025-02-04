@@ -1707,31 +1707,31 @@ troubleshooting_help () {
 #fi
 
 ### DELETE ANY LEFTOVER TEMPORARY FILES IF THEY EXIST
-rm "/tmp/drive_test_timer_temp.txt" > /dev/null 2<&1
-rm "/tmp/drive_test_temp.txt" > /dev/null 2<&1
+if test -e "/tmp/drive_test_timer_temp.txt"; then rm "/tmp/drive_test_timer_temp.txt"; fi
+if test -e "/tmp/drive_test_temp.txt"; then rm "/tmp/drive_test_temp.txt"; fi
 
-(echo "Joe's SMART Drive Self-test Script - Run: "$today_day" "$Full_Month_Name" "$(date +%r)
-echo "Script Version: "$Version" "$Version_Date", "$programver
+echo "Joe's SMART Drive Self-test Script - Run: "$today_day" "$Full_Month_Name" "$(date +%r) | tee /tmp/drive_test_temp.txt /tmp/drive_test_timer_temp.txt
+echo "Script Version: "$Version" "$Version_Date", "$programver | tee /tmp/drive_test_temp.txt /tmp/drive_test_timer_temp.txt
 
 if [[ $Enable_Logging == "true" ]]; then
     if ! test -e "$LOG_DIR"; then
-        echo "'"$LOG_DIR"' does not exist, attempting to create it..."
+        echo "'"$LOG_DIR"' does not exist, attempting to create it..." | tee /tmp/drive_test_temp.txt /tmp/drive_test_timer_temp.txt
         mkdir $LOG_DIR
         if test -e "$LOG_DIR"; then
-            echo "Success"
+            echo "Success" | tee /tmp/drive_test_temp.txt /tmp/drive_test_timer_temp.txt
         else
-            echo "Failed to create '"$LOG_DIR"', using script default directory of "$SCRIPT_DIR
+            echo "Failed to create '"$LOG_DIR"', using script default directory of "$SCRIPT_DIR | tee /tmp/drive_test_temp.txt /tmp/drive_test_timer_temp.txt
             LOG_DIR=$SCRIPT_DIR
         fi
     fi
     if [[ $Silent != "true" ]]; then
         echo " "
-        echo "Logging Enabled"
+        echo "Logging Enabled" | tee /tmp/drive_test_temp.txt /tmp/drive_test_timer_temp.txt
     fi
 fi
 
 if [[ $Silent == "true" ]]; then
-    echo "Silent Enabled - Only Errors Will Be Reported"
+    echo "Silent Enabled - Only Errors Will Be Reported" | tee /tmp/drive_test_temp.txt /tmp/drive_test_timer_temp.txt
 fi
 
 if test -e "$Config_File_Name" || [[ $1 == "-use_external_file" ]]; then
@@ -1739,13 +1739,14 @@ if test -e "$Config_File_Name" || [[ $1 == "-use_external_file" ]]; then
         if test -e "$Config_File_Name"; then
             . "$Config_File_Name"
         else
-            echo "Using script values..."
+            echo "Using script values..." | tee /tmp/drive_test_temp.txt /tmp/drive_test_timer_temp.txt
         fi
     fi
 fi
 
 if [[ $Check_For_Updates == "true" ]]; then
     checkforupdate
+
 fi
 
 if [[ $Automatic_Selftest_Update == "true" ]] && [[ $UpdateDriveAvailable == "true" ]]; then checkforupdate; fi
@@ -1754,7 +1755,7 @@ if [[ $1 == "-update" ]]; then
     update_Drive_script
     sleep 1
     exit 0
-fi ) | tee /tmp/drive_test_temp.txt /tmp/drive_test_timer_temp.txt
+fi
 
 SECONDS=0            # Lets start the timer
 if [[ $softver != "Linux" ]]; then start_time_display=$(date '+%H:%M:%S'); else start_time_display=$(date +"%H:%M:%S.%2N"); fi
@@ -1856,7 +1857,7 @@ if [[ $1 == "-demo" ]]; then
     Demo="true"
     echo "Demo Mode: Below is the simulated testing schedule based on current settings."
     echo " "
-    (    echo "Demo Mode: Below is the simulated testing schedule based on current settings."
+    (echo "Demo Mode: Below is the simulated testing schedule based on current settings."
     echo " ") >> /tmp/drive_test_temp.txt
 fi
 
