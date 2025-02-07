@@ -11,7 +11,7 @@ from email import message_from_string
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
 
-##### V 0.14
+##### V 0.15
 ##### Stand alone script to send email via Truenas
 
 def validate_arguments(args):
@@ -40,9 +40,9 @@ def is_secure_directory(directory_to_check=None):
         stat_info  = os.stat(directory_to_check)
         append_message = ""
         if stat_info .st_uid != os.getuid():
-            append_message = f"\nSecurity Warning: The current user (UID={os.getuid()}) is not the owner of the directory '{directory_to_check}' (Owner UID={stat_info .st_uid})."
+            append_message = f"Security Advice: The current user (UID={os.getuid()}) is not the owner of the directory '{directory_to_check}' (Owner UID={stat_info .st_uid})."
         if bool(stat_info .st_mode & stat.S_IWOTH):
-            append_message = append_message + "\nSecurity Warning: this folder is accessible to non-priviliged users that are nor owner or in group"
+            append_message = append_message + "SECURITY WARNING: this folder is accessible to non-priviliged users that are nor owner or in group"
         return append_message  
     except Exception as e:
         print(f"Something wrong checking security issue: {e} checking {directory_to_check}")
@@ -233,8 +233,9 @@ def send_email(subject, to_address, mail_body_html, attachment_files, email_conf
             smtp_port = email_config["port"]
             smtp_user = email_config["user"]
             smtp_password = email_config["pass"]
-            smtp_fromemail = email_config['fromemail']
-            smtp_fromname = email_config['fromname']
+            smtp_fromemail = email_config["fromemail"]
+            smtp_fromname = email_config["fromname"]
+            smtp_login = email_config["smtp"]
             
             append_log("switch from classic send and bulk email")    
             if mail_body_html:
@@ -318,8 +319,12 @@ def send_email(subject, to_address, mail_body_html, attachment_files, email_conf
                         server.ehlo(hostname)      
                     append_log("establing TLS connection")    
                     server.starttls()
-                    append_log("entering credentials") 
-                    server.login(smtp_user, smtp_password)
+                    if smtp_login:
+                        append_log("entering credentials") 
+                        server.login(smtp_user, smtp_password)
+                    else:
+                        smtp_user = smtp_fromemail
+                        append_log(f"smtp set to {smtp_login}")
                     append_log(f"sending {smtp_security} email") 
                     server.sendmail(smtp_user, to_address, msg.as_string())
             elif smtp_security == "SSL":
@@ -327,9 +332,13 @@ def send_email(subject, to_address, mail_body_html, attachment_files, email_conf
                     append_log(f"entered {smtp_security} path")   
                     if hostname:        
                         append_log("adding ehlo to the message")          
-                        server.ehlo(hostname)          
-                    append_log("entering credentials") 
-                    server.login(smtp_user, smtp_password)
+                        server.ehlo(hostname)   
+                    if smtp_login:           
+                        append_log("entering credentials") 
+                        server.login(smtp_user, smtp_password)
+                    else:
+                        smtp_user = smtp_fromemail
+                        append_log(f"smtp set to {smtp_login}")
                     append_log(f"sending {smtp_security} email") 
                     server.sendmail(smtp_user, to_address, msg.as_string())
             elif smtp_security == "PLAIN":
@@ -338,8 +347,12 @@ def send_email(subject, to_address, mail_body_html, attachment_files, email_conf
                     if hostname:        
                         append_log("adding ehlo to the message")          
                         server.ehlo(hostname)  
-                    append_log("entering credentials")
-                    server.login(smtp_user, smtp_password)
+                    if smtp_login:    
+                        append_log("entering credentials")
+                        server.login(smtp_user, smtp_password)
+                    else:
+                        smtp_user = smtp_fromemail
+                        append_log(f"smtp set to {smtp_login}")    
                     append_log(f"sending {smtp_security} email") 
                     server.sendmail(smtp_user, to_address, msg.as_string())        
             else:
@@ -441,7 +454,10 @@ if __name__ == "__main__":
             append_log("** SMTP Version **")    
         elif "oauth" in email_config and email_config["oauth"]:
             provider = "gmail"
-            append_log("** Gmail OAuth version **")                     
+            append_log("** Gmail OAuth version **")         
+        elif not email_config["smtp"] and email_config["fromemail"] and not email_config.get("oauth"):     
+            provider = "smtp"
+            append_log("** SMTP Version - without login **")         
         else:
             process_output(True, "Can't switch provider", 1)
             
