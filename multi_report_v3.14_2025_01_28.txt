@@ -2395,6 +2395,7 @@ else
 	
 # Sendemail Courtesy of @oxyde
 
+cd $SCRIPT_DIR
 python3 mr_sendemail.py \
 	--subject "$subject" \
 	--to_address "$Email" \
@@ -2403,7 +2404,7 @@ python3 mr_sendemail.py \
 
 # Check Exit Code
 	if [[ $? -ne 0 ]]; then
-		echo "Sendemail had a problem.  Check the file log at "$SCRIPTS"/sendmail_log"
+		echo "Sendemail had a problem.  Check the file log at "$SCRIPT_DIR"/sendmail_log"
 		cat /tmp/sendemail_error.txt
 	else
 		echo "Email Sent"
