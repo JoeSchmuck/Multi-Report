@@ -1,6 +1,6 @@
 # Multi-Report for FreeNAS/TrueNAS Core & Scale
 
-New in Version 3.1x
+New in Version 3.15
 
 This script will perform five main functions:
 1) Generate a report and send an email on your drive(s) status. 
