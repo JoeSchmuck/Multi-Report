@@ -2,11 +2,12 @@
 
 New in Version 3.1x
 
-This script will perform four main functions:
+This script will perform five main functions:
 1) Generate a report and send an email on your drive(s) status. 
 2) Create a copy of your TrueNAS Config File and attach to the same email. 
 3) Create a statistical database and attach to the same email.
 4) Test the drives on a routine basis.
+5) Check drives for being SMR or Seagate Drive Flood SCAM by China.
 
 In version 3.1 I have removed drive testing from the Multi-Report script
 and move testing into it's own script.  This makes it easy to remove
