@@ -1,4 +1,40 @@
 # CHANGE LOG FOR MULTI-REPORT
+# V3.15 (22 February 2025)
+#
+#  -- Added Seagate Drive SCAM check.
+#  -- Updated SMR function to utilize Joe Schmuck hosted SMR script, due to security concerns.
+#  -- Removed Parition Check and Backup from CORE due to script security concerns.
+#  -- Modified the Alert Email option '-m' to include Warning messages to go along with Critical and Drive High Temp.
+#  -- Fixed to allow the -update_all switch to selectivly update each of the three scripts (Multi-Report, Drive_Selftest, or Sendemail.py).
+#  -- When adding an unknown drive, added parameter to use 'actual' or 'zero' the drive total read/write throughput, default="actual".
+#  -- Updated Variables and Config File to line up with Drive_Selftest Version 1.04.
+#
+
+# V3.14 (28 January 2025)
+#
+# - Added if sendemail.py error message, send full sendem,ail.py error message to the console. (1/27/25)
+# - Fixed inadvertant 'gdisk' and 'sgdisk' not installed error messages for CORE.  (1/28/25)
+#
+
+# V3.13 (26 January 2025)
+#
+# - Re-added Multipath which was commented out and not restored.
+# - Fixed Spencer operation.
+# - Fixed the automatic update feature.
+# - Sendemail.py no longer instralled on CORE system (not required).
+# - Minor formatting changes.
+# - Added NVMe ONLY or All Drive Testing variable for Drive_Selftest script (version 1.03).
+# 
+
+# V3.12 (19 January 2025)
+#
+# Fixed Updating Script, for the most part.  `-update` , `-update_selftest` , and `-updated_sendemail` work.
+#
+
+# V3.11 (18 January 2025)
+#
+# Fixed gdisk and sgdisk installation on CORE, resolving drive errors on LINE 4434 error messages.
+#
 #
 #
 # V3.1 Beta 7 (17 January 2025)
