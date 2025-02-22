@@ -11,7 +11,7 @@ from email import message_from_string
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
 
-##### V 0.15
+##### V 0.16
 ##### Stand alone script to send email via Truenas
 
 def validate_arguments(args):
@@ -272,8 +272,7 @@ def send_email(subject, to_address, mail_body_html, attachment_files, email_conf
                 messageid = f"<{messageid_uuid}@{messageid_domain}>"
                 append_log(f"messageid: {messageid}")
                 msg['Message-ID'] = messageid
-                msg['Date'] = formatdate(localtime=True) #
-                
+                msg['Date'] = formatdate(localtime=True)                
                 
                 append_log("check for attachements...") 
                 if attachment_files:
@@ -286,6 +285,12 @@ def send_email(subject, to_address, mail_body_html, attachment_files, email_conf
                 if not hostname:
                     hostname = socket.gethostname()  
                 append_log(f"hostname retrieved: {hostname}")   
+                
+                append_log("tryng retrieving if more recipient are set")
+                try:    
+                    to_address = [email.strip() for email in to_address.split(",")] if "," in to_address else to_address.strip()
+                except Exception as e:
+                    process_output(True, f"Error parsing recipient: {e}", 1)                 
             
             elif bulk_email:
                 append_log("using bulk email provided")
@@ -308,7 +313,7 @@ def send_email(subject, to_address, mail_body_html, attachment_files, email_conf
                     process_output(True, f"Error decoding Base64 content: {e}", 1)                
                  
             else:
-                process_output(True, "Something wrong with the data input", 1)
+                process_output(True, "Something wrong with the data input", 1)                
 
             append_log(f"establing connection based on security level set on TN: {smtp_security}") 
             if smtp_security == "TLS":
