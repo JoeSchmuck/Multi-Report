@@ -6,7 +6,7 @@ TrueNASConfigEmailEncryption=""	 # Set this to "" for no encryption, MUST REMAIN
 # NOTE: Some email providers will not send some encrypted file types, such as GMAIL, but .zip files are okay.
 # NOTE: 7zip is used for the compression/encryption and will not be installed unless encryption is enabled.
 
-##### Version 3.14
+##### Version 3.15
 
 ###### Get Config File Name and Location
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
@@ -84,12 +84,21 @@ fi
 # Version
 ### Changelog:
 
+# V3.15 (22 February 2025)
+#
+#  -- Added Seagate Drive SCAM check.
+#  -- Updated SMR function to utilize Joe Schmuck hosted SMR script, due to security concerns.
+#  -- Removed Parition Check and Backup from CORE due to script security concerns.
+#  -- Modified the Alert Email option '-m' to include Warning messages to go along with Critical and Drive High Temp.
+#  -- Fixed to allow the -update_all switch to selectivly update each of the three scripts (Multi-Report, Drive_Selftest, or Sendemail.py).
+#  -- When adding an unknown drive, added parameter to use 'actual' or 'zero' the drive total read/write throughput, default="actual".
+#  -- Updated Variables and Config File to line up with Drive_Selftest Version 1.04.
+#
+
 # V3.14 (28 January 2025)
 #
 # - Added if sendemail.py error message, send full sendem,ail.py error message to the console. (1/27/25)
 # - Fixed inadvertant 'gdisk' and 'sgdisk' not installed error messages for CORE.  (1/28/25)
-#
-#
 #
 
 # V3.13 (26 January 2025)
@@ -267,6 +276,7 @@ From="TrueNAS@local.com"			# From address (default works for many)
 ### You must use the '-m' switch
 AlertEmail="YourAlertEmail@Address.com"		# Alert email address used with the '-m' switch.
 AlertOnWarningTemp="true"			# Send alert on Warning Temp. Default = "true"
+AlertOnWarningError="true"			# Send alert on Warning Error. Default = "true"
 AlertOnCriticalError="true"			# Send alert on Critical Error. Default = "true"
 
 ###### EMAIL ON ALARM ONLY ######
@@ -295,13 +305,12 @@ SMR_Enable="true"			# Will enable SMR operations if set to "true".  Default = "t
 SMR_Update="true"			# Will automatically download Basil Hendroff's smr-check.sh file from Github if the file does not exist.  Default = "true"
 SMR_Ignore_Alarm="false"	# When "true" will not generate an alarm condition, however the Drive ID will still change the background color.  Default = "false"
 SMR_New_Drive_Det_Count=14	# The SMR script will check the statistical_data_file for how many times the drive serial number has been listed.  Default = 14
-						# - If it is less than or equal to this value, then run the SMR script.  0=Disable (Run SMR Check every time).
+                            # - If it is less than or equal to this value, then run the SMR script.  0=Disable (Run SMR Check every time).
 
-### PARTITION CHECK AND BACKUP
-Partition_Check="false"	# Run sgdisk on each drive. Default = "false", this will install gdisk/sgdisk on TrueNAS CORE if not present.
-			#  -- It is "false" because you should choose to control what is installed or not.
-Partition_Backup="false"	# Set to "true" to save each partition table with the TrueNAS configuration backup.
-			# NOTE: You need sgdisk installed, run the Partition Check once to install on CORE.
+### PARTITION CHECK AND BACKUP - NOT ON CORE
+Partition_Check="false"	    # Run sgdisk on each drive. Default = "false".
+Partition_Backup="false"    # Set to "true" to save each partition table with the TrueNAS configuration backup.
+
 
 ### Spencer Integration
 # Warning Levels are: None, Warning, Critical -- This only affects the Email Subject Line, if any errors are present, an attachment will occur.
@@ -375,6 +384,7 @@ Run_SMART_No_power_on_time="false"	# Some SCSI drives do not report power_on_tim
 
 ###### General Settings ######
 ### Output Formats
+DriveSCAMCheck="true"			# When "true" will check all drives with F.A.R.M. data with S.M.A.R.T. data.  Default="true"
 PowerTimeFormat="h"				# Format for power-on hours string, valid options are "ymdh", "ymd", "ym", "y", or "h" (year month day hour).
 TempDisplay="*C"				# The format you desire the temperature to be displayed. Common formats are: "*C", "^C", or "^c". Choose your own.
 Non_Exist_Value="---"			# How do you desire non-existent data to be displayed.  The Default is "---", popular options are "N/A" or " ".
@@ -403,7 +413,7 @@ Enable_Zpool_Messages="true"	# This will list all 'zpool -v status' and identify
 Enable_SMART_Messages="true"	# This will output SMART data if available.  Default="true".
 
 ### Total Data Written - 30 Day or Current Month
-Total_Data_Written_Month="30Days"	# Options are: "month" for Current Month, or "30Days" for the rolling previous 30 days.
+Total_Data_Written_Month="30Days"	# Options are: "month" for Current Month, or "30Days" for the rolling previous 30 days. (See 'add_new_drive_factor' below)
 
 ###### Statistical Data File
 statistical_data_file="$SCRIPT_DIR/statisticalsmartdata.csv"  # Default location is where the script is located.
@@ -411,6 +421,8 @@ SDF_DataRecordEnable="true"	# Set to "true" will save all drive data into a CSV 
 SDF_DataEmail="true"		# Set to "true" to have an attachment of the file emailed to you. Default is true.
 SDF_DataPurgeDays=730		# Set to the number of day you wish to keep in the data.  Older data will be purged. Default is 730 days (2 years). 0=Disable.
 SDF_DataEmailDay="Mon"		# Set to the day of the week the statistical report is emailed.  (All, Mon, Tue, Wed, Thu, Fri, Sat, Sun, Month)
+add_new_drive_factor="actual"	# This setting will add a new drive to the statistical data file using either "zero" (0) or "actual" drive read/write throughput.
+								# This will impact only the 30 Day or Month Average, until 30 days have passed.  Default="actual"
  
 ###### TrueNAS config backup settings
 TrueNASConfigEmailEnable="true"		# Set to "true" to save config backup (which renders next two options operational); "false" to keep disable config backups.
@@ -693,9 +705,13 @@ Allow_Drive_Selftest_Script_Update="true"	# When set to "true" then the script w
 
 ###### HDD/SSD/NVMe SMART Testing
 Test_ONLY_NVMe_Drives="false"				# This option when set to "true" will only test NVMe drives, HDD/SSD will not be tested. Default = "false"
-
+SCRUB_Minutes_Remaining=0                   # This option when set between 1 and 9999 (in minutes) will not run a SMART LONG test if a SCRUB has longer than xx minutes
+                                            #  remaining, and a SMART SHORT test will be run instead to provide minimal impact to the SCRUB operation.
+                                            #  A value of 0 (zero) will disable all SMART test(s) during a SCRUB operation.  Default=0 (Disabled).
+											#  NOTE: Any RESILVER operation automatically cancels SMART testing to put priority on rebuilding the pool.
+											
 ### SHORT SETTINGS
-Short_Test_Mode=3                           # 1 = Use Short_Drives_to_Test_Per_Day value, 2 = All Drives Tested (Ignores other options), 3 = No Drives Tested.
+Short_Test_Mode=2                           # 1 = Use Short_Drives_to_Test_Per_Day value, 2 = All Drives Tested (Ignores other options), 3 = No Drives Tested.
 Short_Time_Delay_Between_Drives=1           # Tests will have a XX second delay between the drives starting testing. If drives are always spinning, this can be "0".
 Short_SMART_Testing_Order="DriveID"         # Test order is for Test Mode 1 ONLY, select "Serial" or "DriveID" for sort order.  Default = 'Serial'
 Short_Drives_to_Test_Per_Day=1              # For Test_Mode 1) How many drives to run each day minimum?
@@ -704,7 +720,7 @@ Short_Drives_Tested_Days_of_the_Week="1,2,3,4,5,6,7"    # Days of the week to ru
 Short_Drives_Test_Delay=130					# How long to delay when running Short tests, before exiting to controlling procedure.  Default is 130 second should allow.
 											# Short tests to complete before continuing.  If using without Mulit-Report, set this value to 1.
 ### LONG SETTINGS
-Long_Test_Mode=3                            # 1 = Use Long_Drives_to_Test_Per_Day value, 2 = All Drives Tested (Ignores other options), 3 = No Drives Tested.
+Long_Test_Mode=1                            # 1 = Use Long_Drives_to_Test_Per_Day value, 2 = All Drives Tested (Ignores other options), 3 = No Drives Tested.
 Long_Time_Delay_Between_Drives=1            # Tests will have a XX second delay between the drives starting the next test.
 Long_SMART_Testing_Order="Serial"           # Test order is either "Serial" or "DriveID".  Default = 'Serial'
 Long_Drives_to_Test_Per_Day=1               # For Test_Mode 1) How many drives to run each day minimum?
@@ -717,8 +733,11 @@ Enable_Logging="true"                       # This will create a text file named
 LOG_DIR=$SCRIPT_DIR"/DS_Logs"   			# The default log directory is the script directory.
 
 ### EXTERNAL CONFIGURATION FILE
-Use_multi_report_config_values="true"		# A "true" value here will use the $Config_File_Name file values to override the values defined above.
-											# This allows the values to be retained between versions.  A "false" will utilize the values above.
+Use_multi_report_config_values="true"		# A "true" value here will use the $Config_File_Name file values to override the values defined within the Drive_Selftest script.
+											# A "false" will not trigger the Drive_Selftest script to use the external configuration file, however the external configuration
+											# file can be used if this value in Drive_Selftest is "true".  Default="true" in both scripts.
+											# NOTE: DRIVE_SELFTEST SCRIPT MUST HAVE THIS VALUE ="TRUE" WITHIN IT'S SCRIPT TO ALLOW USE OF THE EXTERNAL CONFIGURATION FILE,
+											# OTHERWISE IT WILL IGNORE THE FILE.
 
 
 ##########################
@@ -747,8 +766,8 @@ logfile_header="/tmp/${tempfilepath}smart_report_header.tmp"
 logfile_temp="/tmp/${tempfilepath}smart_report_temp.tmp"
 boundary="gc0p4Jq0M2Yt08jU534c0p"
 
-CurrentFilename="multi_report_v3.14_2025_01_28.txt"
-valid_config_version_date="2025-01-26"	# Configuration file valid date
+CurrentFilename="multi_report_v3.15_2025_02_22.txt"
+valid_config_version_date="2025-02-22"	# Configuration file valid date
 progverdate="$(echo $CurrentFilename | cut -d '_' -f4,5,6 | cut -d '.' -f1 | sed -r 's/[_]+/-/g')"
 progname="Multi-Report "$(echo $CurrentFilename | cut -d '_' -f3)" dtd:"
 
@@ -917,9 +936,46 @@ trap 'rm -rf /tmp/multi_report.lock' EXIT 	# Remove the lock directory on exit
 
 #################### FUNCTIONS ####################
 
+########## CHECK SEAGATE FARM DATA ##########
+# This will check the Seagate FARM data to ensure it matches the SMART data.
+# If it doesn't the drive data has been modified and we need to alert the user.
+# Pass $drive variable to this function.
+# Set Warning Flag if drive appears to be false.
+# Have an Enable/Disable for this function as well.
 
+check_farm_data () {
+if [[ $Debug_Steps == "true" ]]; then echo "check_farm_data"; fi
 
+#temp_POH=$onHours
+#onHours=234
+#temp_Serial=$serial
+#serial="yrhdg565"
 
+# Check if FARM data is available.
+	farm_data=$(smartctl -l farm /dev/$drive)
+	if $farm_data | grep -i "serial"; then
+		# Collect FARM Data
+		farm_serial=$(smartctl -l farm /dev/$drive | grep -i "serial")
+		farm_power_on_hours=$(smartctl -l farm /dev/$drive | grep -i "power on hours" | grep -vi "spindle")
+#		farm_spindle_power_on_hours=$(smartctl -l farm /dev/$drive | grep -i "power on hours" | grep -i "spindle")  # Not Using This Yet
+		
+		if [[ "$farm_serial" == *"$serial"* ]]; then
+			:
+		else
+			logfile_warning=$logfile_warning"$(printf "Drive: ${drive} Serial Number Does Not Match ... ### S.M.A.R.T.: ${serial} ### ... ### F.A.R.M.:${farm_serial} ###<br>")"
+			serialColor=$warnColor
+		fi
+		if [[ "$farm_power_on_hours" == *"$onHours"* ]]; then
+			:
+		else
+			logfile_warning=$logfile_warning"$(printf "Drive: ${drive} Power On Hours Does NOT Match ... ### S.M.A.R.T.: ${onHours} ### ... ### F.A.R.M.:${farm_power_on_hours} ###<br>")"
+			onTimeColor=$warnColor
+		fi
+	fi > /dev/null 2<&1
+#onHours=$temp_POH
+#serial=$temp_Serial
+
+	}
 
 ########## CREATE ATTACHMENT FILE ##########
 # This file will convert and create any required attachments.
@@ -1151,8 +1207,10 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_smr"; fi
 	echo "Downloading new script files"
 	if [[ "$(curl -is https://github.com | head -n 1)" ]]; then
 		# Go git the file
-		( cd /tmp
-		git clone -q https://github.com/basilhendroff/truenas-smr-check.git
+		
+		(
+			cd /tmp
+			curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/smr-check.sh
 		)
 		cp /tmp/truenas-smr-check/smr-check.sh $SCRIPT_DIR"/."
 	fi
@@ -1268,7 +1326,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_MR_script"; fi
 			echo "Aborted"
 			MR_Updated="ABORTED: V"$VersionFilename
 			if test -e "/tmp/Multi-Report"; then rm -R "/tmp/Multi-Report"; fi
-			exit 0
+#			exit 0
 		fi
 	else
 		echo "GitHub is Not Available"
@@ -1342,7 +1400,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_Drive_script"; fi
 			echo "Aborted"
 			Drive_Updated="ABORTED: V"$VersionDriveFilename
 			if test -e "/tmp/Multi-Report"; then rm -R "/tmp/Multi-Report"; fi
-			exit 0
+#			exit 0
 		fi
 	else
 		echo "GitHub is Not Available"
@@ -1405,7 +1463,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_Sendemail_script"; fi
 			echo "Aborted"
 			Sendemail_Updated="ABORTED: V"$VersionSendemailFilename
 			if test -e "/tmp/Multi-Report"; then rm -R "/tmp/Multi-Report"; fi
-			exit 0
+#			exit 0
 		fi
 	else
 		echo "GitHub is Not Available"
@@ -1730,6 +1788,8 @@ if [[ $Debug_Steps == "true" ]]; then echo "clear_variables"; fi
 	WarrantyBackgroundColor=$bgColor
 	WarrantyBoxColor="black"
 	wearLevelColor=$bgColor
+	serialColor=$bgColor
+
 
 	}
 
@@ -2004,7 +2064,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "number_to_letters"; fi
 	}
 
 ########## PURGE OLD DATA FROM CSV FILE ##########
-# This routine will purge the "statistical_data_file" of data older then "SDF_DataPurgeDays".
+# This routine will purge the "statistical_data_file" of data older than "SDF_DataPurgeDays".
 
 purge_exportdata () {
 if [[ $Debug_Steps == "true" ]]; then echo "purge_exportdata"; fi
@@ -2037,7 +2097,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "purge_testdata"; fi
 	}
 
 ########## UPDATE CSV HEADER ##########
-# This will rewrite the log file header first line automatically is the goal.
+# This will rewrite the log file header first line automatically.
 
 
 rewrite_csv () {
@@ -2095,7 +2155,10 @@ if [[ $Debug_Steps == "true" ]]; then echo "read_csv"; fi
 # Place a fake zero in place of a null for the older file structure
 	if [[ $tdw_read == "" ]]; then
 		tdw_read="0"
-		logfile_warning=$logfile_warning"$(printf "No Statistical data on file for this drive "$drive".<br>If this is the first time testing this drive with Multi-Report, you can ignore this message.<br>")"
+		logfile_warning=$logfile_warning"$(printf "No Statistical data on file for this drive "$drive".<br>If this is the first time using this drive with Multi-Report, you can ignore this message.<br>")"
+		# HERE WE WANT TO MAKE AN EARLIER ENTRY, 35 DAYS EARLIER AND PLACE A ZERO (0) VALUE FOR ALL VALUES FOR THIS DRIVE
+		# THIS CAN BE PLACED AT THE BEGINNING OF THE CSV FILE IF NEEDED, SHOULD STILL WORK FINE.
+		add_new_drive="true"
 	fi
 	
 	if [[ $tdr_read == "" ]]; then tdr_read="0"; fi   #  echo "No Statistical data on file for this drive."; fi
@@ -2184,6 +2247,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "cleanup_files"; fi
 
 Email_datafile () {
 if [[ $Debug_Steps == "true" ]]; then echo "Email_datafile"; fi
+
 	if [ "$SDF_DataEmail" == "true" ]; then
 		Now=$(date +"%a")
 		doit="false"
@@ -2244,6 +2308,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "Email_datafile"; fi
 
 get_sendemail () {
 if [[ $Debug_Steps == "true" ]]; then echo "get_sendemail"; fi
+
 	# Fetch the Python based sendemail.py file.  THIS SHOULD ONLY RUN ONCE TO GET THJE FILE ON THE SYSTEM, AFTER THAT THE UPDAES SECTION TAKES CARE OF IT.
 	# Big thanks goes out to @oxyde
 
@@ -2265,6 +2330,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "get_sendemail"; fi
 
 create_Email () {
 if [[ $Debug_Steps == "true" ]]; then echo "create_Email"; fi
+
 	# Test if there is a Warning Message and Setup Subject Line
 
 	if [[ $logfile_critical != "" ]]; then
@@ -2365,7 +2431,7 @@ fi
 
 if ! test -e "/tmp/attachment.json"; then
 	if [[ $truenas_sendmail_support == "Yes" ]]; then
-		echo "using sendmail function"
+		echo "Using TrueNAS sendmail function"
 		sendmail -t -oi < "$logfile_header"		# I have no idea if the format will be good or not.
 	else
 		echo "using midclt call -job mail.send"
@@ -2395,7 +2461,7 @@ else
 	
 # Sendemail Courtesy of @oxyde
 
-python3 mr_sendemail.py \
+python3 $SCRIPT_DIR/mr_sendemail.py \
 	--subject "$subject" \
 	--to_address "$Email" \
 	--mail_body_html "$logfile_header" \
@@ -2403,7 +2469,7 @@ python3 mr_sendemail.py \
 
 # Check Exit Code
 	if [[ $? -ne 0 ]]; then
-		echo "Sendemail had a problem.  Check the file log at "$SCRIPTS"/sendmail_log"
+		echo "Sendemail had a problem.  Check the file log at "$SCRIPT_DIR"/sendmail_log"
 		cat /tmp/sendemail_error.txt
 	else
 		echo "Email Sent"
@@ -2525,8 +2591,8 @@ if [[ $Debug_Steps == "true" ]]; then echo "config_backup"; fi
 		fi
 	fi
 	}
+	
 ########## DUMP PARTITION DATA ##########
-
 dump_drive_partition () {
 if [[ $Debug_Steps == "true" ]]; then echo "dump_drive_partition"; fi
 	if [[ "$drive" != "cd0" ]]; then
@@ -3042,7 +3108,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "zpool_report"; fi
 		if [ "$readErrors" != "0" ]; then readErrorsColor="$warnColor"; logfile_warning=$logfile_warning"$(echo "Pool: $pool - Scrub Read Errors<br>")"; else readErrorsColor="$bgColor"; fi
 		if [ "$writeErrors" != "0" ]; then writeErrorsColor="$warnColor"; logfile_warning=$logfile_warning"$(echo "Pool: $pool - Scrub Write Errors<br>")"; else writeErrorsColor="$bgColor"; fi
 		if [ "$cksumErrors" != "0" ]; then cksumErrorsColor="$warnColor"; logfile_warning=$logfile_warning"$(echo "Pool: $pool - Scrub Cksum Errors<br>")"; else cksumErrorsColor="$bgColor"; fi
-		if [ "$used" -ge "$PoolUsedWarn" ]; then usedColor="$warnColor"; logfile_warning=$logfile_warning"$(echo "Pool: $pool - ZFS Used<br>")"; else usedColor="$bgColor"; fi
+		if [ "$used" -ge "$PoolUsedWarn" ]; then usedColor="$warnColor"; logfile_warning=$logfile_warning"$(echo "Pool: $pool - ZFS Used Space<br>")"; else usedColor="$bgColor"; fi
 		if [ "$scrubRepBytes" != "$Non_Exist_Value" ] && [ "$scrubRepBytes" != "0" ] && ! [ "$(echo "$scrubRepBytesfull" | grep "Resilvered")" ]; then scrubRepBytesColor="$warnColor"; logfile_warning=$logfile_warning"$(echo "Pool: $pool - Scrub Rep Bytes<br>")"; else scrubRepBytesColor="$bgColor"; fi
 		if [ "$scrubErrors" != "$Non_Exist_Value" ] && [ "$scrubErrors" != "0" ]; then scrubErrorsColor="$warnColor"; logfile_critical=$logfile_critical"$(echo "Pool: $pool - Scrub Errors<br>")"; else scrubErrorsColor="$bgColor"; fi
 		if [ "$(echo "$scrubAge" | awk '{print int($1)}')" -ge "$ScrubAgeWarn" ]; then scrubAgeColor="$warnColor"; logfile_warning=$logfile_warning"$(echo "Pool: $pool - Scrub Age<br>")"; else scrubAgeColor="$bgColor"; fi
@@ -3083,27 +3149,29 @@ smartdata5=""
 				zpool_list=$(zpool status -v "$pool")
 				for longgptid in $drives_in_gptid; do
 					drive_name=$(glabel status | tail -n +2 | grep "$longgptid" | awk '{print $3}' | cut -d '/' -f2 | cut -d 'p' -f1)
-					if [[ $Partition_Check == "true" ]]; then
-						sgdisk -v /dev/${drive_name}
-						partition_results=$?
-						echo "partition_results="$partition_results" Drive="$drive_name
-						if [[ $partition_results == 0 ]]; then
-							echo "sgdisk: Normal program execution for drive ${drive_name}"
-						elif [[ $partition_results == 2 ]]; then
-							logfile_warning=$logfile_warning"$(echo "sgdisk: ($drive_name) - ERROR: 2 - An error occurred while reading the partition table.<br>")"
-						elif [[ $partition_results == 3 ]]; then
-							logfile_warning=$logfile_warning"$(echo "sgdisk: ($drive_name) - ERROR: 3 - Non-GPT disk detected and no -g option, but operation requires a write action.<br>")"
-						elif [[ $partition_results == 4 ]]; then
-							logfile_warning=$logfile_warning"$(echo "sgdisk: ($drive_name) - ERROR: 4 - An error prevented saving changes.<br>")"
-						elif [[ $partition_results == 5 ]]; then
-							logfile_warning=$logfile_warning"$(echo "sgdisk: ($drive_name) - ERROR: 5 - An error occurred while reading standard input.<br>")"
-						elif [[ $partition_results == 8 ]]; then
-							logfile_warning=$logfile_warning"$(echo "sgdisk: ($drive_name) - ERROR: 8 - Disk replication operation (-R) failed.<br>")"
-						else
-							logfile_warning=$logfile_warning"$(echo "sgdisk: ($drive_name) - ARG! - My bananas are not ripe.  Yes, something went wrong, but what.<br>")"
-							echo "sgdisk: ARG! - My bananas are not ripe."
-						fi
-					fi > /dev/null 2<&1	# We want to not echo this to the email/screen
+
+# REMOVED PARTITION SECTION FOR CORE ONLY
+#					if [[ $Partition_Check == "true" ]]; then
+#						sgdisk -v /dev/${drive_name}
+#						partition_results=$?
+#						echo "partition_results="$partition_results" Drive="$drive_name
+#						if [[ $partition_results == 0 ]]; then
+#							echo "sgdisk: Normal program execution for drive ${drive_name}"
+#						elif [[ $partition_results == 2 ]]; then
+#							logfile_warning=$logfile_warning"$(echo "sgdisk: ($drive_name) - ERROR: 2 - An error occurred while reading the partition table.<br>")"
+#						elif [[ $partition_results == 3 ]]; then
+#							logfile_warning=$logfile_warning"$(echo "sgdisk: ($drive_name) - ERROR: 3 - Non-GPT disk detected and no -g option, but operation requires a write action.<br>")"
+#						elif [[ $partition_results == 4 ]]; then
+#							logfile_warning=$logfile_warning"$(echo "sgdisk: ($drive_name) - ERROR: 4 - An error prevented saving changes.<br>")"
+#						elif [[ $partition_results == 5 ]]; then
+#							logfile_warning=$logfile_warning"$(echo "sgdisk: ($drive_name) - ERROR: 5 - An error occurred while reading standard input.<br>")"
+#						elif [[ $partition_results == 8 ]]; then
+#							logfile_warning=$logfile_warning"$(echo "sgdisk: ($drive_name) - ERROR: 8 - Disk replication operation (-R) failed.<br>")"
+#						else
+#							logfile_warning=$logfile_warning"$(echo "sgdisk: ($drive_name) - ARG! - My bananas are not ripe.  Yes, something went wrong, but what.<br>")"
+#							echo "sgdisk: ARG! - My bananas are not ripe."
+#						fi
+#					fi > /dev/null 2<&1	# We want to not echo this to the email/screen
 					if [[ "$drive_name" == *"nvd"* ]]; then	drive_name="nvme"$(echo ${drive_name} | cut -d'd' -f2); fi
 					get_tdr
 					get_tdw
@@ -3476,6 +3544,7 @@ tdwbytes=$zpool_TD
 # Examine the $Ignore_Drives_List variable and remove any matches from the $drive variable.
 
 process_ignore_drives () {
+#if [[ $Debug_Steps == "true" ]]; then echo "process_ignore_drives"; fi
 # This causes the script to fail and introduce a fake drive, why?  if [[ $Debug_Steps == "true" ]]; then echo "process_ignore_drives"; fi
 	targument="$(smartctl -i /dev/"${drive}" | grep "Serial Number:" | awk '{print $3}')";
 	s="0"
@@ -4372,9 +4441,6 @@ ID241=""
 					lastTestStatusPass="false"
 				fi
 				
-				
-				
-				
 # Get Last Self Test Hours
 				lastTestHours="$(nvme self-test-log --output-format=json /dev/${drive} | grep -m 1 "Power on hours" | cut -d ':' -f2 | cut -d ',' -f1)"
 			fi > /dev/null 2<&1
@@ -4470,6 +4536,10 @@ ID241=""
 
 	if [[ "$(echo "$smartdata5" | grep "NVM")" ]]; then
 		Custom_Drives_ListDrive="NVM"
+	fi
+
+	if [[ $DriveSCAMCheck == "true" ]]; then
+		check_farm_data
 	fi
 
 	if [[ $Develop == "true" ]]; then
@@ -4581,12 +4651,12 @@ if [[ "$reAlloc" != "" ]] && [[ "$reAlloc" != "0" ]]; then convert_to_decimal $r
 	fi
 	# Grab partition data too
 
-	if [[ $Partition_Backup == "true" ]] && [[ $1 != "NVM" ]]; then
-		if ! [[ "$(find /usr/ -name "sgdisk")" ]]; then
-			echo "sgdisk not found" >> "$logfile_caution"
-		else		
+	if [[ $Partition_Backup == "true" ]] && [[ $1 != "NVM" ]] && [[ $softver == "Linux" ]]; then    # SCALE ONLY
+#		if ! [[ "$(find /usr/ -name "sgdisk")" ]]; then
+#			echo "sgdisk not found" >> "$logfile_caution"
+#		else		
 		sgdisk -b="/tmp/${tempfilepath}_${drive}_${serial}.partition" /dev/${drive} > /dev/null 2<&1
-		fi
+#		fi
 	fi
 
 	get_json_data		# Save data for -dump routine
@@ -4862,9 +4932,9 @@ if [[ "$Monitor" == "true" ]]; then return; fi
 		if [[ "$1" == "NVM" ]] && [[ "$NVM_Device_ID" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">/dev/%s</td>\n" "$deviceStatusColor" "$drive"; fi
 
 # SERIAL NUMBER - CHART
-		if [[ "$1" == "HDD" ]] && [[ "$HDD_Serial_Number" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$bgColor" "$serial"; fi
-		if [[ "$1" == "SSD" ]] && [[ "$SSD_Serial_Number" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$bgColor" "$serial"; fi
-		if [[ "$1" == "NVM" ]] && [[ "$NVM_Serial_Number" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$bgColor" "$serial"; fi
+		if [[ "$1" == "HDD" ]] && [[ "$HDD_Serial_Number" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$serialColor" "$serial"; fi
+		if [[ "$1" == "SSD" ]] && [[ "$SSD_Serial_Number" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$serialColor" "$serial"; fi
+		if [[ "$1" == "NVM" ]] && [[ "$NVM_Serial_Number" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$serialColor" "$serial"; fi
 
 # MODEL NUMBER - CHART
 		if [[ "$1" == "HDD" ]] && [[ "$HDD_Model_Number" == "true" ]]; then printf "<td style=\"text-align:center; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$modelnumber"; fi
@@ -4915,7 +4985,7 @@ if [[ "$Monitor" == "true" ]]; then return; fi
 		if [[ "$1" == "NVM" ]] && [[ "$NVM_Power_Level" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$bgColor" "$nvm_power_level"; fi
 
 # POWER ON HOURS - CHART
-if [[ "$onTimeColor" == "$yellowColor" ]]; then onTime=$onTime" from Last Test Hours"; fi
+		if [[ "$onTimeColor" == "$yellowColor" ]]; then onTime=$onTime" from Last Test Hours"; fi
 		if [[ "$1" == "HDD" ]] && [[ "$HDD_Power_On_Hours" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$onTimeColor" "$onTime"; fi
 		if [[ "$1" == "SSD" ]] && [[ "$SSD_Power_On_Hours" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$onTimeColor" "$onTime"; fi
 		if [[ "$1" == "NVM" ]] && [[ "$NVM_Power_On_Hours" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse; font-family:courier;\">%s</td>\n" "$onTimeColor" "$onTime"; fi
@@ -5074,7 +5144,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "detailed_report"; fi
 
 
 		if [[ "$dump_all" == "3" ]] || [[ "$dump_all" == "4" ]]; then
-			echo "<b><span style='color:darkred;'>YOU have requested '-dump email' and thus an email was sent to Joe Schmuck for analysis.<br>He will try to contact you on the sending email address.  If this is an invalid<br>email address then please send a followup email to joeschmuck2023@hotmail.com<br>Your personal information will not be shared.</span></b><br>" >> "$logfile"
+			echo "<b><span style='color:darkred;'>YOU have requested -dump $1 and thus an email was sent to Joe Schmuck for analysis.<br>He will try to contact you on the sending email address.  If this is an invalid<br>email address then please send a followup email to joeschmuck2023@hotmail.com<br>Your personal information will not be shared.</span></b><br>" >> "$logfile"
 		fi
 
 
@@ -5131,15 +5201,20 @@ if [[ $Debug_Steps == "true" ]]; then echo "detailed_report"; fi
 				rm /tmp/smartdrive_selftest_text.txt				# Let's clean it up.
 			else
 				if [[ $No_External_File == "true" ]]; then
-					echo "   The external file was not present.<br>" >> "$logfile"
+					echo "   The external file was not present." >> "$logfile"
 				else
-					echo "   No '/tmp/smartdrive_selftest_text.txt' data file<br>" >> "$logfile"
+					echo "   No '/tmp/smartdrive_selftest_text.txt' data file" >> "$logfile"
 				fi
 			fi
 		else
-			echo "<b>4) S.M.A.R.T Testing External File - (Disabled)</b><br>" >> "$logfile"
+			echo "<b>4) S.M.A.R.T Testing External File - (Disabled)</b>" >> "$logfile"
 		fi
-
+		
+		if [[ $DriveSCAMCheck == "true" ]]; then
+			echo "<b>5) Seagate Drive SCAM Check - (Enabled)</b><br>" >> "$logfile"
+		else
+			echo "<b>5) Seagate Drive SCAM Check - (Disabled)</b><br>" >> "$logfile"
+		fi
 	fi
 	### Lets write out the error messages if there are any, Critical first followed by Warning
 
@@ -5148,6 +5223,13 @@ if [[ $Debug_Steps == "true" ]]; then echo "detailed_report"; fi
 	if [[ $AlertOnCriticalError == "true" ]] && [[ $Monitor == "true" ]]; then
 
 		if [[ $logfile_critical != "" ]]; then
+			Monitor_Send_Email="true"
+		fi
+	fi
+	
+	if [[ $AlertOnWarningError == "true" ]] && [[ $Monitor == "true" ]]; then
+
+		if [[ $logfile_warning != "" ]]; then
 			Monitor_Send_Email="true"
 		fi
 	fi
@@ -6152,6 +6234,7 @@ read_csv $Total_Data_Written_Month
 		logfile_warranty=$logfile_warranty"Drive "$drivesn2" Warranty Expired on "$drivedt2"<br>"
 	fi
 
+
 	### SMART STATUS
 	if [[ $smartStatus == "" || $smartStatus == "PASSED" || $smartStatus == "OK" ]]; then smartStatusColor=$okColor; else smartStatusColor=$critColor; fi
 	if [[ $smartStatus == "" || $smartStatus == "PASSED" || $smartStatus == "OK" ]]; then a=1; else logfile_critical=$logfile_critical"$(printf "Drive "$device " - Check Smart Status<br>")"; fi
@@ -6404,8 +6487,16 @@ read_csv $Total_Data_Written_Month
 	########## WRITE STATISTICAL DATA ##########
 	# Save Statistical Data before we make any changes to it.
 
-	if [[ $SDF_DataRecordEnable == "true" && $writing_data != "1" ]]; then
-		writing_data=1
+	# This value is not used in the script anymore.
+#	if [[ $SDF_DataRecordEnable == "true" && $writing_data != "1" ]]; then
+#		writing_data=1
+#	fi
+
+	if [[ $add_new_drive == "true" ]]; then
+		if [[ $add_new_drive_factor == "zero" ]]; then	# THIS WILL START THE 30 DAY AVERAGE WITH A VALUE OF '1' VICE THE ACTUAL CURRENT VALUE WHEN A NEW DRIVE IS INTRODUCED INTO THE SYSTEM.
+			tdw_log=1
+			tdr_log=1
+		fi
 	fi
 
 	tempdrive=$drive
@@ -6413,7 +6504,9 @@ read_csv $Total_Data_Written_Month
 	if [[ $testfilepath != "" ]]; then drive="TEST"; fi
 	if [[ $SDF_DataRecordEnable == "true" ]] && [[ $Write_Statistics == "true" ]]; then printf $datestamp","$timestamp","$drive","$detail_level","$serial","$smartStatus","$temp","$onHours","$wearLevel","$startStop","$loadCycle","$spinRetry","$reAlloc","$reAllocEvent","$pending","$offlineUnc","$crcErrors","$seekErrorHealth","$multiZone","$rawReadErrorRate","$Helium","$tdw_log","$tdr_log"\n" >> "$statistical_data_file";fi
 	drive="$tempdrive"
-
+	if [[ $add_new_drive == "true" ]]; then
+		add_new_drive="false"
+	fi
 	### Routine to zero out the UDMA CRC Error Count and Highlights it Yellow.
 
 	s="0"
@@ -6503,9 +6596,25 @@ if [[ $NVMelastTestHoursFake == "true" ]]; then testAge=$Non_Exist_Value; fi
 	if [[ $DeviceRedFlag == "true" ]]; then if [[ $deviceStatusColor != $critColor ]]; then if [[ $deviceStatusColor != $warnColor ]]; then deviceStatusColor=$temp_maxColor; fi; fi; fi
 	if [[ $DeviceRedFlag == "true" ]]; then if [[ $deviceStatusColor != $critColor ]]; then if [[ $deviceStatusColor != $warnColor ]]; then deviceStatusColor=$tempColor; fi; fi; fi
 	if [[ $smartStatusColor != $okColor ]]; then if [[ $DeviceRedFlag == "true" ]]; then if [[ $deviceStatusColor != $critColor ]]; then if [[ $deviceStatusColor != $warnColor ]]; then deviceStatusColor=$smartStatusColor; fi; fi; fi; fi
+		
+	if [[ $onTimeColor != $okColor ]]; then if [[ $DeviceRedFlag == "true" ]]; then if [[ $deviceStatusColor != $critColor ]]; then if [[ $deviceStatusColor != $warnColor ]]; then deviceStatusColor=$onTimeColor; fi; fi; fi; fi
+	
+	if [[ $serialColor != $okColor ]]; then if [[ $DeviceRedFlag == "true" ]]; then if [[ $deviceStatusColor != $critColor ]]; then if [[ $deviceStatusColor != $warnColor ]]; then deviceStatusColor=$serialColor; fi; fi; fi; fi
 
 	if [[ $DeviceRedFlag == "true" ]]; then if [[ $deviceStatusColor != $critColor ]]; then if [[ $deviceStatusColor != $warnColor ]]; then deviceStatusColor=$mediaErrorsColor; fi; fi; fi
 	if [[ $DeviceRedFlag == "true" ]]; then if [[ $deviceStatusColor != $critColor ]]; then if [[ $deviceStatusColor != $warnColor ]]; then deviceStatusColor=$smrColor; fi; fi; fi
+
+## SIMPLIFIED ABOVE SECTION, BUT WHAT THE HELL DOES IT REALLY DO?
+#if [[ $DeviceRedFlag == "true" ]]; then
+#	if [[ $deviceStatusColor != $critColor ]]; then
+#		if [[ $deviceStatusColor != $warnColor ]]; then
+#			deviceStatusColor=$HeliumColor
+#			deviceStatusColor=$reAllocColor
+#			...
+#		fi
+#	fi
+#fi
+
 
 	# SCT Error Recovery Control Report
 	scterc="$(smartctl -l scterc /dev/"$drive" | tail -3 | head -2)"
@@ -6606,6 +6715,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_config_file"; fi
 		echo "### You must use the '-m' switch"
 		echo 'AlertEmail="'$AlertEmail'"		# Alert email address used with the '-m' switch.'
 		echo 'AlertOnWarningTemp="'$AlertOnWarningTemp'"			# Send alert on Warning Temp. Default  ="true"'
+		echo 'AlertOnWarningError="'$AlertOnWarningError'"			# Send alert on Warning Error. Default = "true"'
 		echo 'AlertOnCriticalError="'$AlertOnCriticalError'"			# Send alert on Critical Error. Default = "true"'
 		echo " "
 		echo "###### EMAIL ON ALARM ONLY"
@@ -6630,11 +6740,9 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_config_file"; fi
 		echo 'SMR_New_Drive_Det_Count='$SMR_New_Drive_Det_Count'	# The SMR script will check the statistical_data_file for how many times the drive serial number has been listed.  Default = 14'
 		echo '				# - If it is less than or equal to this value, then run the SMR script.  0=Disable (Run SMR Check every time).'
 		echo " "
-		echo '### PARTITION CHECK AND BACKUP'
-		echo 'Partition_Check="'$Partition_Check'"		# Run sgdisk on each drive. Default = "false", this will install gdisk/sgdisk on TrueNAS CORE if not present.'
-		echo '				#  -- It is "false" because you should choose to control what is installed or not.'
+		echo '### PARTITION CHECK AND BACKUP - SCALE ONLY'
+		echo 'Partition_Check="'$Partition_Check'"		# Run sgdisk on each drive. Default = "false".'
 		echo 'Partition_Backup="'$Partition_Backup'"		# Set to "true" to save each partition table with the TrueNAS configuration backup.'
-		echo '				# NOTE: You need sgdisk installed, run the Partition Check once to install on CORE.'
 		echo " "
 		echo "###### Spencer Integration"
 		echo "### Warning Levels are: None, Warning, Critical -- This only affects the Email Subject Line, if any errors are present, an attachment will occur."
@@ -6707,6 +6815,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_config_file"; fi
 		echo " "
 		echo "###### General Settings"
 		echo "### Output Formats"
+		echo 'DriveSCAMCheck="'$DriveSCAMCheck'"			# When "true" will check all drives with F.A.R.M. data with S.M.A.R.T. data.  Default="true"'
 		echo 'PowerTimeFormat="'$PowerTimeFormat'"		# Format for power-on hours string, valid options are "ymdh", "ymd", "ym", "y", or "h" (year month day hour).'
 		echo 'TempDisplay="'$TempDisplay'"		# The format you desire the temperature to be displayed in. Common formats are: "*C", "^C", or "^c". Choose your own.'
 		echo 'Non_Exist_Value="'$Non_Exist_Value'"		# How do you desire non-existent data to be displayed.  The Default is "---", popular options are "N/A" or " ".'
@@ -7033,6 +7142,10 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_config_file"; fi
 		echo " "
 		echo "###### HDD/SSD/NVMe SMART Testing"
 		echo 'Test_ONLY_NVMe_Drives="'$Test_ONLY_NVMe_Drives'"				# This option when set to "true" will only test NVMe drives, HDD/SSD will not be tested. Default = "false"'
+		echo 'SCRUB_Minutes_Remaining='$SCRUB_Minutes_Remaining'                   # This option when set between 1 and 9999 (in minutes) will not run a SMART LONG test if a SCRUB has longer than xx minutes'
+        echo "                                            #  remaining, and a SMART SHORT test will be run instead to provide minimal impact to the SCRUB operation."
+        echo "                                            #  A value of 0 (zero) will disable all SMART test(s) during a SCRUB operation.  Default=0 (Disabled)."
+		echo "                                            #  NOTE: Any RESILVER operation automatically cancels SMART testing to put priority on rebuilding the pool."
 		echo " "
 		echo "### SHORT SETTINGS"
 		echo "Short_Test_Mode=$Short_Test_Mode                           # 1 = Use Short_Drives_to_Test_Per_Day value, 2 = All Drives Tested (Ignores other options), 3 = No Drives Tested."
@@ -7145,7 +7258,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file"; fi
 #					echo "   O) (Not operational) SCSI Drive Settings (Obtain true Power On Hours)"
 #					echo "   R) Run HDD/SDD Short & Long SMART Tests from Multi-Report Script"
 					echo "   S) Custom Drive Configuration"
-					echo "   T) SMR Drive Options and GPT Partition Checking/Backup"
+					echo "   T) SMR Drive Options and GPT Partition (SCALE ONLY) Checking/Backup"
 					echo "   U) Update Script - Automatic or Manual Internet (Github) Updates"
 					echo "   W) Write Configuration File (Save your changes)"
 					echo "   X) Exit - Will not automatically save changes"
@@ -7170,7 +7283,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file"; fi
 							echo "   C) Media Alarm Settings (Sectors and CRC Type Alarms)"
 							echo "   D) Activate Input/Output Settings (Enable SSD/NVMe/Non-SMART)" 
 							echo "   E) Ignore Alarms (Ignore CRC/MultiZone/Seek Type Errors/Email on Alert Only)"
-							echo "   F) Monitor Email Settings"
+							echo "   F) Monitor Email Settings (Warning/Critical/Drive High Temp)"
 							echo "   X) Exit - Return to previous menu"
 							echo " "
 							echo -n "   Make your selection: "
@@ -7482,6 +7595,14 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file"; fi
 								F)	clear
 									echo "Monitor Email Settings"
 									echo " "
+									echo "These settings when used with the '-m' switch will send emails during Warning,"
+									echo "Caution, and High Temp Drive temperatures.  To effectivly use this feature"
+									echo "you need to run the script often for drive temp monitoring to be effective, suggest"
+									echo "once every 10 to 15 minutes."
+									echo " "
+									echo "When used just for Warnings and Cautions, an email will only be generated if an alarm"
+									echo "condition exists, otherwise no email is sent."
+									echo " "
 									echo "AlertOnWarningTemp ("$AlertOnWarningTemp") "
 									echo 'Set to "true" will send Temperature Warnings to the Monitor Email address'
 									echo 'when using the "-m" switch.'
@@ -7491,6 +7612,16 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file"; fi
 										if [[ $Keyboard_yn == "t" ]]; then AlertOnWarningTemp="true"; else AlertOnWarningTemp="false"; fi
 									fi
 									echo "Set Value: ("$AlertOnWarningTemp")"
+									echo " "
+									echo "AlertOnWarningError ("$AlertOnWarningError") "
+									echo 'Set to "true" will send Warning Alarms to the Monitor Email address'
+									echo 'when using the "-m" switch.'
+									echo -n "('t' = true, 'f' = false) "
+									read -s -n 1 Keyboard_yn
+									if [[ ! $Keyboard_yn == "" ]]; then
+										if [[ $Keyboard_yn == "t" ]]; then AlertOnWarningError="true"; else AlertOnWarningError="false"; fi
+									fi
+									echo "Set Value: ("$AlertOnWarninglError")"
 									echo " "
 									echo "AlertOnCriticalError ("$AlertOnCriticalError") "
 									echo 'Set to "true" will send Critical Alarms to the Monitor Email address'
@@ -7502,6 +7633,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file"; fi
 									fi
 									echo "Set Value: ("$AlertOnCriticalError")"
 									echo " "
+									sleep 3
 								;;
 
 								X)
@@ -8147,6 +8279,25 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file"; fi
 						G)
 							clear
 							echo "Output Formats"
+							echo " "
+							echo "Seagate Drive SCAM Check"
+							echo "This will check any drive (Seagate or otherwise) for F.A.R.M. data and if"
+							echo "it exists, it will compare the drive Serial Number and Power On Time to the"
+							echo "S.M.A.R.T. data.  If either do not match, the drive is flagged."
+							echo " "
+							echo -n "The current status is: "
+							if [[ $DriveSCAMCheck == "true" ]]; then temp_keyboard="Enabled"; else temp_keyboard="Disabled"; fi
+							echo $temp_keyboard
+							echo " "
+							echo "Do you want this featured Enabled or Disabled?"
+							echo -n "Enter 'E' or 'D', or press any other key for No Change "
+							read -s -n 1 Keyboard_yn
+							if [[ $Keyboard_yn == "e" || $Keyboard_yn == "E" ]]; then DriveSCAMCheck="true"; fi
+							if [[ $Keyboard_yn == "d" || $Keyboard_yn == "D" ]]; then DriveSCAMCheck="false"; fi
+							echo " "
+							echo " "
+							echo "(true=Enabled, false=Disabled)"
+							echo Set Value: $DriveSCAMCheck
 							echo " "
 							echo "Power On Hours Time Format ("$PowerTimeFormat") "
 							echo -n "valid options are "ymdh", "ymd", "ym", "y", or "h" (year month day hour): "
@@ -9404,8 +9555,8 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file"; fi
 								echo " "
 								echo " "
 								echo "Do you want to download the SMR Script if it does not exist?"
-								echo "This will ONLY grab a copy of smr-check.sh from Github if it does not"
-								echo "exist on this system."
+								echo "This will ONLY grab a copy of smr-check.sh from Joe's Github"
+								echo "Repository if it does not exist on this system."
 								echo "Current: "$SMR_Update
 								echo " "
 								echo "Enter 't', 'f', or Enter/Return to retain the current value."
@@ -9478,52 +9629,59 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file"; fi
 							echo "Set Value: "$SMR_New_Drive_Det_Count
 							sleep 3
 							echo " "
-							clear							
-							echo "GPT PARTITION CHECKING"
-							echo " "
-							echo " "
-							echo "If enabled this will check all partitions to ensure there are no"
-							echo "catastrophic errors.  If you suspect GPT Partition issues, you would"
-							echo "be smart to make sure all is good, do not depend on this script alone."
-							echo " "
-							echo "Do you want to Enable GPT Partition Checking?"
-							echo "Current: "$Partition_Check
-							echo " "
-							echo "(true=yes, false=no)"
-							echo " "
-							echo "Enter 't', 'f', or Enter/Return to retain the current value."
-							read -s -n 1 Keyboard_yn
-							if [[ $Keyboard_yn == "t" || $Keyboard_yn == "f" ]]; then
-								if [[ $Keyboard_yn == "t" ]]; then
-									Partition_Check="true"
-								else
-									Partition_Check="false"
+							if [[ $softver == "Linux" ]]; then
+								clear							
+								echo "GPT PARTITION CHECKING - SCALE ONLY"
+								echo " "
+								echo " "
+								echo "If enabled this will check all partitions to ensure there are no"
+								echo "catastrophic errors.  If you suspect GPT Partition issues, you would"
+								echo "be smart to make sure all is good, do not depend on this script alone."
+								echo " "
+								echo "Do you want to Enable GPT Partition Checking?"
+								echo "Current: "$Partition_Check
+								echo " "
+								echo "(true=yes, false=no)"
+								echo " "
+								echo "Enter 't', 'f', or Enter/Return to retain the current value."
+								read -s -n 1 Keyboard_yn
+								if [[ $Keyboard_yn == "t" || $Keyboard_yn == "f" ]]; then
+									if [[ $Keyboard_yn == "t" ]]; then
+										Partition_Check="true"
+									else
+										Partition_Check="false"
+									fi
 								fi
-							fi
-							echo "Set Value: "$Partition_Check
-							sleep 2
-							clear
-							echo "GPT PARTITION BACKUP"
-							echo " "
-							echo " "
-							echo "If enabled (true) then a backup of each partition table (HDD/SSD) will"
-							echo "be created and added as a file attachment that will be issued when the"
-							echo "TrueNAS Config file is attached (Monday is the default)"
-							echo " "
-							echo "Current: "$Partition_Backup
-							echo " "
-							echo "(true=yes/enable, false=no/disable)"
-							echo " "
-							echo "Enter 't', 'f', or Enter/Return to retain the current value."
-							read -s -n 1 Keyboard_yn
-							if [[ $Keyboard_yn == "t" || $Keyboard_yn == "f" ]]; then
-								if [[ $Keyboard_yn == "t" ]]; then
-									Partition_Backup="true"
-								else
-									Partition_Backup="false"
+								echo "Set Value: "$Partition_Check
+								sleep 2
+								clear
+								echo "GPT PARTITION BACKUP"
+								echo " "
+								echo " "
+								echo "If enabled (true) then a backup of each partition table (HDD/SSD) will"
+								echo "be created and added as a file attachment that will be issued when the"
+								echo "TrueNAS Config file is attached (Monday is the default)"
+								echo " "
+								echo "Current: "$Partition_Backup
+								echo " "
+								echo "(true=yes/enable, false=no/disable)"
+								echo " "
+								echo "Enter 't', 'f', or Enter/Return to retain the current value."
+								read -s -n 1 Keyboard_yn
+								if [[ $Keyboard_yn == "t" || $Keyboard_yn == "f" ]]; then
+									if [[ $Keyboard_yn == "t" ]]; then
+										Partition_Backup="true"
+									else
+										Partition_Backup="false"
+									fi
 								fi
+								echo "Set Value: "$Partition_Backup
+							else
+								echo "TrueNAS CORE Detected - Partition Check/Backup disabled."
+								echo "Read the User Guide for more information."
+								Partition_Check="false"
+								Partition_Backup="false"
 							fi
-							echo "Set Value: "$Partition_Backup
 							echo " "
 							echo " "
 							echo "Make sure you write your changes."
@@ -9703,6 +9861,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file"; fi
 					echo "   A)utomatic Update"
 					echo "   E)nable Drive Self-test Script"
 					echo "   N)vme Only or All Drives Testing"
+					echo "   O) SCRUB time remaining to allow SMART Tests"
 					echo "   W)rite to configuration file  (NOTE: Any changes will be lost if you do not write the file NOW)"
 					echo "   X) Exit"
 					echo " "
@@ -9729,7 +9888,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file"; fi
 									echo "The current setting is: Test ALL Drives"
 								fi
 								echo " "
-								echo -n "Press 'A' for All Drives, 'N' for NVMe Only, Enter to reamin unchanged."
+								echo -n "Press 'A' for All Drives, 'N' for NVMe Only, Enter to remain unchanged."
 								read -s -n 1 Keyboard
 								echo " "
 								if [[ $Keyboard == "n" ]] || [[ $Keyboard == "N" ]]; then Test_ONLY_NVMe_Drives="true"; echo "New value: NVMe ONLY"; fi
@@ -9985,7 +10144,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file"; fi
 							echo -n "Press Any Key to Continue"
 							read -s -n 1 Keyboard_var3
 							;;
-
+							
 							X)
 							clear
 							echo "Returning to the previous menu..."
@@ -10366,6 +10525,37 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file"; fi
 						read -s -n 1 Keyboard_var3										
 						;;
 						
+						O)
+						clear
+						clear
+						echo "            SCRUB time to allow SMART Tests"
+						echo " "
+						echo "By default if a SCRUB is in progress, no SMART tests will be run."
+						echo " "
+						echo "You can change this behaviour to the following:"
+						echo "  a. You can Disable all SMART Testing during a SCRUB  (Value=0)"
+						echo "  b. You can Enable Short SMART Testing during a SCRUB (Value=10080 is 1 week)"
+						echo "  c. You can Enable Short SMART Testing only if xx minutes or less remain"
+						echo "     for the SCRUB to complete. (Value= 1 to xxxx)"
+						echo " "
+						echo "  NOTE: You cannot run a SMART LONG test during a SCRUB.  This is to enable"
+						echo "        the SCRUB to complete in a timely manner."
+						echo " "
+						echo "Current Value: "$SCRUB_Minutes_Remaining
+						echo " "
+						echo "Enter a new value or press Enter to use the current value..."
+						read Keyboard_var3
+						echo " "
+						if [[ $Keyboard_var3 != "" ]]; then
+							SCRUB_Minutes_Remaining=$Keyboard_var3
+						fi
+						echo " "
+						echo "New Value: "$SCRUB_Minutes_Remaining
+						echo " "
+						echo -n "Press Any Key to Continue"
+						read -s -n 1 Keyboard_var3						
+						;;
+						
 						W)
 						echo " "
 						echo "Writing Configuration File"
@@ -10722,7 +10912,8 @@ if [[ $Debug_Steps == "true" ]]; then echo "display_help"; fi
 	echo " "
 	echo "      -m [-s]       Monitor Drive Temperature Alarms. This will generate"
 	echo '                    an email to "AlertEmail" that contains a'
-	echo "                    notification when a drive reaches the Warning Temp Limit."
+	echo "                    notification when a drive reaches the Warning Temp Limit,"
+	echo "                    Warning Message, or Critical Message."
 	echo "                    Great for Smartphone Text Messages. By default it will not"
 	echo '                    write to the Statistical Data File, appending "-s"'
 	echo "                    will update the statistics as well."
@@ -10960,8 +11151,8 @@ if [[ $Debug_Steps == "true" ]]; then echo "display_help_commands"; fi
 	echo "      -s [-m]       Record drive statistics only, do not generate a"
 	echo '                    corresponding email, unless used with "-m".'
 	echo " "
-	echo "      -m [-s]       Monitor Drive Temperature Alarms, generate special email"
-	echo "                    notification when a drive reaches the Warning Temp Limit."
+	echo "      -m [-s]       Monitor Drive Temperature Alarms, Warning and Critical Errors"
+	echo "                    and ONLY generate an email when a an issue exists."
 	echo " "
 	echo "      -cleanup      Cleanup any left over Multi-Report files then may have been"
 	echo "                    abandoned due to script error.  A reboot will do the same thing."
@@ -11022,7 +11213,9 @@ echo " "
 echo $programver
 echo " "
 smartdata=""  # Don't think we need this here.
-
+if [[ $Debug_Steps == "true" ]]; then
+	echo "Debug_Steps Turned On"
+fi
 # Verify all the required_commands are available.
 # If not, generate a message.
 if [[ $softver != "Linux" ]]; then
@@ -11107,10 +11300,7 @@ auxillary_commands=( # Auxillary Commands - Just the basic commands I expect any
 awk
 )
 
-optional_commands=( # Optional Commands CORE
-gdisk
-sgdisk
-)
+
 
 #if ! test -e mr_sendemail.py; then
 # We need to generate the Python Script
@@ -11206,7 +11396,7 @@ if [[ "$1" == "-dump" || "$3" == "-dump" ]]; then
 		if [[ "$2" == "emailextra"  || "$2" == "emailall" ]]; then
 			dump_all="4"
 		else
-			dump_all="3"
+			dump_all="4"  # Use to be "3" but just doing away with limited data now.  Let's change to -dump, -dump all, -dump email.
 		fi
 		echo " "
 		echo "Processing..."
@@ -11308,16 +11498,17 @@ fi
 
 load_config
 
-if [[ $Partition_Check == "true" ]] || [[ $Partition_Backup == "true" ]]; then
-	# Test if the Optional commands are usable
-	for command in "${optional_commands[@]}"; do
-		if ! type "${command}" &> /dev/null; then
-			echo "'${command}' - Optional Command - file is missing. No Partition Data will be available." >&2
-			Partition_Backup="false"
-			Partition_Check="false"
-		fi
-	done
-fi
+# NO NEED IF SCALE ONLY
+#if [[ $Partition_Check == "true" ]] || [[ $Partition_Backup == "true" ]]; then
+#	# Test if the Optional commands are usable
+#	for command in "${optional_commands[@]}"; do
+#		if ! type "${command}" &> /dev/null; then
+#			echo "'${command}' - Optional Command - file is missing. No Partition Data will be available." >&2
+#			Partition_Backup="false"
+#			Partition_Check="false"
+#		fi
+#	done
+#fi
 
 if [[ "$1" == "-disable_smr" ]]; then
 	echo "Disabling SMR Checking.  Use '-check_smr' for a onetime check."
@@ -11371,9 +11562,9 @@ fi
 		)
 	fi
 
-if [[ $Partition_Check == "true" ]] || [[ $Partition_Backup == "true" ]]; then	# Check to see if the files needed are there.
-	check_gdisk
-fi
+#if [[ $Partition_Check == "true" ]] || [[ $Partition_Backup == "true" ]]; then	# Check to see if the files needed are there.
+#	check_gdisk
+#fi
 
 # 1 = -dump : Normal Dump, No TrueNAS configuration and Statistical Data File.
 # 2 = -dump all : Attach Almost Everything. (Includes TrueNAS Config File, Statistics, and MR Config)
@@ -11483,9 +11674,7 @@ if [[ "$3" == "-config" ]] && [[ "$1" == "-t" ]]; then
 	generate_config_file
 	exit 0
 fi
-if [[ $Debug_Steps == "true" ]]; then
-	echo "Debug_Steps Turned On"
-fi
+
 # Do not collect real drive data if we are using test data.
 if [[ "$testfilepath" == "" ]]; then
 	get_smartHDD_listings
