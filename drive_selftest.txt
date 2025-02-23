@@ -361,10 +361,10 @@ check_scrub () {
     # Check if a SCRUB or RESILVER is in progress and if if so, how much time remains.
     # If greater than $SCRUB_Minutes_Remaining then we will not run a SMART Long test, we substitute it with a Short test.
 
-    SCRUB_In_Progress="false"
-    for i in {0..1000}; do            # ARE WE REALLY GOING TO SEE 1000 POOLS, well just in case?  THIS IS NOT THE ID NUMBER
+#    SCRUB_In_Progress="false"
+    for i in {0..100}; do            # ARE WE REALLY GOING TO SEE 100 POOLS, well just in case?  THIS IS NOT THE ID NUMBER
         Function_Pool_Name=$(midclt call pool.query | jq -r '.['$i'].name')
-        Function=$(midclt call pool.query | jq -r '.['$i'].scan.function')
+        Function_temp=$(midclt call pool.query | jq -r '.['$i'].scan.function')
         Function_Time_Left=$(midclt call pool.query | jq -r '.['$i'].scan.total_secs_left')
 ###
 ### cat pool_query_degraded.txt | jq -r '.[0].topology.data.[].children.[].status' GETS A LIST OF DRIVE ONLINE STATUS
@@ -372,10 +372,15 @@ check_scrub () {
 ### cat pool_query_degraded.txt | jq -r '.[0].topology.data.[].children.[].serial' GETS A LIST OF SERIAL NUMBERS FOR UNAVAILABLE DRIVES
 ### cat pool_query_degraded.txt | jq -r '.[0].topology.data.[].children.[].unavail_disk.serial'  GETS ALL SERIAL NUMBERS UNAVAILABLE (OFFLINE?)
 ### 
-
+if [[ $Function_temp == "null" ]]; then
+	break
+else
+	Function=$Function_temp
+fi
         if [[ $Function == "RESILVER" ]]; then SCRUB_Minutes_Remaining=0; SCRUB_In_Progress="true"; fi
         if [[ $Function == "SCRUB" ]] || [[ $Function == "RESILVER" ]]; then
             if [[ $Function_Time_Left != "null" ]]; then         # We should have a number, lets convert it to hours.
+				SCRUB_In_Progress="true"
                 Function_Time_Left_Min=$((Function_Time_Left / 60))    # Seconds to Minutes
                 Function_Time_Left_Hour=$((Function_Time_Left_Min * 10 ))   # *10 due to rounding the hours
                 Function_Time_Left_Whole0=$((Function_Time_Left_Hour / 60))
@@ -383,7 +388,7 @@ check_scrub () {
                 Function_Time_Left_Fraction=$((Function_Time_Left_Whole0 - $((Function_Time_Left_Whole1 * 10 ))))
 				if [[ $SCRUB_Minutes_Remaining -gt 0 ]]; then
                     if [[ $Function_Time_Left_Min -gt $SCRUB_Minutes_Remaining ]]; then        # SCRUB Too Long
-                        SCRUB_In_Progress="true"
+ #                      SCRUB_In_Progress="true"
                         echo "  Pool: "$Function_Pool_Name | tee -a /tmp/drive_test_temp.txt
                         if [[ $Function_Time_Left_Min -gt 59 ]]; then    # JUST TO FORMAT TIME CORRECTLY
                             # OVER 1 HOUR
@@ -1818,6 +1823,7 @@ shopt -u nocasematch
 
 (( Drive_List_Length -- ))            # Adjust for offset
 get_API_Drives                        # Grab all the drive data at one single time
+SCRUB_In_Progress="false"
 check_scrub                           # Is a SCRUB going on?  This function will set the test mode to "0" if no tests are to be run.
 
 if [[ $Long_Test_Mode -ne 0 ]]; then
@@ -1880,7 +1886,7 @@ if [[ $Long_Drives_Testing == "" ]]; then Long_Drives_Testing="none"; fi
  echo "      ("$Short_Drives_Testing")"
  echo "<b>   b) Long Test Authorized Test Days (</b>"$Long_DOW_days"<b>) (</b>~$Drives_to_Test_Per_Day Drive(s) per day<b>)</b>"
  echo "      ("$Long_Drives_Testing")"
- if [[ SCRUB_In_Progress == "true" ]]; then
+ if [[ $SCRUB_In_Progress == "true" ]]; then
 	echo "<b>   c) A "$Function" is in progress with "$Function_Time_Left_Whole1"."$Function_Time_Left_Fraction" Hours remaining.</b>"
  else
  	echo "<b>   c) A SCRUB or RESILVER is NOT in progress.</b>"
