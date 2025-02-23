@@ -1200,11 +1200,11 @@ if [[ $Debug_Steps == "true" ]]; then echo "check_7zip"; fi
 
 update_smr () {
 if [[ $Debug_Steps == "true" ]]; then echo "update_smr"; fi
-	echo "Downloading SMR-CHECK Script for GitHub"
-	echo "Removing Old Script if it exists"
+#	echo "Downloading SMR-CHECK Script for GitHub"
+#	echo "Removing Old Script if it exists"
 	if test -e "/tmp/truenas-smr-check"; then rm -R "/tmp/truenas-smr-check"; echo "Directory Removed";fi  # Failed, possible loop
 	if test -e "smr-check.sh"; then rm "smr-check.sh"; echo "File Removed"; fi
-	echo "Downloading new script files"
+#	echo "Downloading new script files"
 	if [[ "$(curl -is https://github.com | head -n 1)" ]]; then
 		# Go git the file
 		
@@ -1212,9 +1212,9 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_smr"; fi
 			cd /tmp
 			curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/smr-check.sh
 		)
-		cp /tmp/truenas-smr-check/smr-check.sh $SCRIPT_DIR"/."
+		cp /tmp/smr-check.sh $SCRIPT_DIR"/."
 	fi
-	echo "File downloaded...  Continuing with Multi-Report script..."
+#	echo "File downloaded...  Continuing with Multi-Report script..."
 
 	}
 
