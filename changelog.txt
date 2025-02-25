@@ -1,4 +1,13 @@
 # CHANGE LOG FOR MULTI-REPORT
+
+# V3.16 (25 February 2025)
+#
+#  - Change for the FARM check to allow a reasonable difference in Power On Hours, using an exact match can be unreasonable.
+#    ---- Using an exact power on hours match apparently may not be true for every valid drive, example: refurbished.
+#  - Moved the Seagate FARM Check configuration (-config) settings into the SMR/GPT section.
+#  - Updated writing config file for a new statistical data file variable related to Seagate FARM check.
+#
+
 # V3.15 (22 February 2025)
 #
 #  -- Added Seagate Drive SCAM check.
