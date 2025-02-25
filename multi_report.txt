@@ -6,7 +6,7 @@ TrueNASConfigEmailEncryption=""	 # Set this to "" for no encryption, MUST REMAIN
 # NOTE: Some email providers will not send some encrypted file types, such as GMAIL, but .zip files are okay.
 # NOTE: 7zip is used for the compression/encryption and will not be installed unless encryption is enabled.
 
-##### Version 3.15
+##### Version 3.16
 
 ###### Get Config File Name and Location
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
@@ -84,15 +84,24 @@ fi
 # Version
 ### Changelog:
 
+# V3.16 (25 February 2025)
+#
+#  - Change for the FARM check to allow a reasonable difference in Power On Hours, using an exact match can be unreasonable.
+#    ---- Using an exact power on hours match apparently may not be true for every valid drive, example: refurbished.
+#  - Moved the Seagate FARM Check configuration (-config) settings into the SMR/GPT section.
+#  - Updated writing config file for a new statistical data file variable related to Seagate FARM check.
+#
+
+
 # V3.15 (22 February 2025)
 #
-#  -- Added Seagate Drive SCAM check.
-#  -- Updated SMR function to utilize Joe Schmuck hosted SMR script, due to security concerns.
-#  -- Removed Parition Check and Backup from CORE due to script security concerns.
-#  -- Modified the Alert Email option '-m' to include Warning messages to go along with Critical and Drive High Temp.
-#  -- Fixed to allow the -update_all switch to selectivly update each of the three scripts (Multi-Report, Drive_Selftest, or Sendemail.py).
-#  -- When adding an unknown drive, added parameter to use 'actual' or 'zero' the drive total read/write throughput, default="actual".
-#  -- Updated Variables and Config File to line up with Drive_Selftest Version 1.04.
+#  - Added Seagate Drive SCAM check.
+#  - Updated SMR function to utilize Joe Schmuck hosted SMR script, due to security concerns.
+#  - Removed Parition Check and Backup from CORE due to script security concerns.
+#  - Modified the Alert Email option '-m' to include Warning messages to go along with Critical and Drive High Temp.
+#  - Fixed to allow the -update_all switch to selectivly update each of the three scripts (Multi-Report, Drive_Selftest, or Sendemail.py).
+#  - When adding an unknown drive, added parameter to use 'actual' or 'zero' the drive total read/write throughput, default="actual".
+#  - Updated Variables and Config File to line up with Drive_Selftest Version 1.04.
 #
 
 # V3.14 (28 January 2025)
@@ -385,6 +394,7 @@ Run_SMART_No_power_on_time="false"	# Some SCSI drives do not report power_on_tim
 ###### General Settings ######
 ### Output Formats
 DriveSCAMCheck="true"			# When "true" will check all drives with F.A.R.M. data with S.M.A.R.T. data.  Default="true"
+DriveSCAMCheckHours=6			# This value is the maximum number of days off that FAR can be greater than SMART Power On Hours. Default=6
 PowerTimeFormat="h"				# Format for power-on hours string, valid options are "ymdh", "ymd", "ym", "y", or "h" (year month day hour).
 TempDisplay="*C"				# The format you desire the temperature to be displayed. Common formats are: "*C", "^C", or "^c". Choose your own.
 Non_Exist_Value="---"			# How do you desire non-existent data to be displayed.  The Default is "---", popular options are "N/A" or " ".
@@ -766,8 +776,8 @@ logfile_header="/tmp/${tempfilepath}smart_report_header.tmp"
 logfile_temp="/tmp/${tempfilepath}smart_report_temp.tmp"
 boundary="gc0p4Jq0M2Yt08jU534c0p"
 
-CurrentFilename="multi_report_v3.15_2025_02_22.txt"
-valid_config_version_date="2025-02-22"	# Configuration file valid date
+CurrentFilename="multi_report_v3.16_2025_02_25.txt"
+valid_config_version_date="2025-02-25"	# Configuration file valid date
 progverdate="$(echo $CurrentFilename | cut -d '_' -f4,5,6 | cut -d '.' -f1 | sed -r 's/[_]+/-/g')"
 progname="Multi-Report "$(echo $CurrentFilename | cut -d '_' -f3)" dtd:"
 
@@ -953,11 +963,25 @@ if [[ $Debug_Steps == "true" ]]; then echo "check_farm_data"; fi
 
 # Check if FARM data is available.
 	farm_data=$(smartctl -l farm /dev/$drive)
+
+#if [[ 1 -eq 1 ]]; then		# Temp for testing
 	if $farm_data | grep -i "serial"; then
 		# Collect FARM Data
 		farm_serial=$(smartctl -l farm /dev/$drive | grep -i "serial")
-		farm_power_on_hours=$(smartctl -l farm /dev/$drive | grep -i "power on hours" | grep -vi "spindle")
+		farm_power_on_hours=$(smartctl -l farm /dev/$drive | grep -i "power on hours" | grep -vi "spindle" | cut -d ':' -f2 | tr -d ' ')
 #		farm_spindle_power_on_hours=$(smartctl -l farm /dev/$drive | grep -i "power on hours" | grep -i "spindle")  # Not Using This Yet
+
+#onHours=16383
+#farm_power_on_hours="16383"
+#convert_to_decimal $farm_power_on_hours
+#farm_power_on_hours=$Return_Value
+temp_POH=$(( $onHours + $DriveSCAMCheckHours ))
+#convert_to_decimal $temp_POH
+#temp_POH=$Return_Value
+#temp_POH=4378
+#temp_FARM_POH=$(( $farm_power_on_hours + $DriveSCAMCheckHours ))
+#serial="yrhdg565"
+#farm_serial=$serial
 		
 		if [[ "$farm_serial" == *"$serial"* ]]; then
 			:
@@ -965,7 +989,8 @@ if [[ $Debug_Steps == "true" ]]; then echo "check_farm_data"; fi
 			logfile_warning=$logfile_warning"$(printf "Drive: ${drive} Serial Number Does Not Match ... ### S.M.A.R.T.: ${serial} ### ... ### F.A.R.M.:${farm_serial} ###<br>")"
 			serialColor=$warnColor
 		fi
-		if [[ "$farm_power_on_hours" == *"$onHours"* ]]; then
+
+		if [[ farm_power_on_hours -le temp_POH ]]; then
 			:
 		else
 			logfile_warning=$logfile_warning"$(printf "Drive: ${drive} Power On Hours Does NOT Match ... ### S.M.A.R.T.: ${onHours} ### ... ### F.A.R.M.:${farm_power_on_hours} ###<br>")"
@@ -6816,6 +6841,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_config_file"; fi
 		echo "###### General Settings"
 		echo "### Output Formats"
 		echo 'DriveSCAMCheck="'$DriveSCAMCheck'"			# When "true" will check all drives with F.A.R.M. data with S.M.A.R.T. data.  Default="true"'
+		echo "DriveSCAMCheckHours=$DriveSCAMCheckHours		# This value is the maximum number of days off that FAR can be greater than SMART Power On Hours. Default=6 hours."
 		echo 'PowerTimeFormat="'$PowerTimeFormat'"		# Format for power-on hours string, valid options are "ymdh", "ymd", "ym", "y", or "h" (year month day hour).'
 		echo 'TempDisplay="'$TempDisplay'"		# The format you desire the temperature to be displayed in. Common formats are: "*C", "^C", or "^c". Choose your own.'
 		echo 'Non_Exist_Value="'$Non_Exist_Value'"		# How do you desire non-existent data to be displayed.  The Default is "---", popular options are "N/A" or " ".'
@@ -6852,6 +6878,8 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_config_file"; fi
 		echo "SDF_DataPurgeDays="$SDF_DataPurgeDays"		# Set to the number of day you wish to keep in the data.  Older data will be purged. Default is 730 days (2 years). 0=Disable."
 		echo 'SDF_DataEmail="'$SDF_DataEmail'"		# Set to "true" to have an attachment of the file emailed to you. Default is true.'
 		echo 'SDF_DataEmailDay="'$SDF_DataEmailDay'"		# Set to the day of the week the statistical report is emailed.  (All, Mon, Tue, Wed, Thu, Fri, Sat, Sun, Month)'
+		echo 'add_new_drive_factor="'$add_new_drive_factor'"   # This setting will add a new drive to the statistical data file using either "zero" (0) or "actual" drive read/write throughput.'
+		echo '						# This will impact only the 30 Day or Month Average, until 30 days have passed.  Default="actual"'
 		echo " "
 		echo "###### TrueNAS config backup settings"
 		echo 'TrueNASConfigEmailEnable="'$TrueNASConfigEmailEnable'"		# Set to "true" to save config backup (which renders next two options operational); "false" to keep disable config backups.'
@@ -7258,7 +7286,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file"; fi
 #					echo "   O) (Not operational) SCSI Drive Settings (Obtain true Power On Hours)"
 #					echo "   R) Run HDD/SDD Short & Long SMART Tests from Multi-Report Script"
 					echo "   S) Custom Drive Configuration"
-					echo "   T) SMR Drive Options and GPT Partition (SCALE ONLY) Checking/Backup"
+					echo "   T) SMR Drive, GPT Partition (SCALE ONLY), and Seagate SCAM Check"
 					echo "   U) Update Script - Automatic or Manual Internet (Github) Updates"
 					echo "   W) Write Configuration File (Save your changes)"
 					echo "   X) Exit - Will not automatically save changes"
@@ -8280,25 +8308,6 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file"; fi
 							clear
 							echo "Output Formats"
 							echo " "
-							echo "Seagate Drive SCAM Check"
-							echo "This will check any drive (Seagate or otherwise) for F.A.R.M. data and if"
-							echo "it exists, it will compare the drive Serial Number and Power On Time to the"
-							echo "S.M.A.R.T. data.  If either do not match, the drive is flagged."
-							echo " "
-							echo -n "The current status is: "
-							if [[ $DriveSCAMCheck == "true" ]]; then temp_keyboard="Enabled"; else temp_keyboard="Disabled"; fi
-							echo $temp_keyboard
-							echo " "
-							echo "Do you want this featured Enabled or Disabled?"
-							echo -n "Enter 'E' or 'D', or press any other key for No Change "
-							read -s -n 1 Keyboard_yn
-							if [[ $Keyboard_yn == "e" || $Keyboard_yn == "E" ]]; then DriveSCAMCheck="true"; fi
-							if [[ $Keyboard_yn == "d" || $Keyboard_yn == "D" ]]; then DriveSCAMCheck="false"; fi
-							echo " "
-							echo " "
-							echo "(true=Enabled, false=Disabled)"
-							echo Set Value: $DriveSCAMCheck
-							echo " "
 							echo "Power On Hours Time Format ("$PowerTimeFormat") "
 							echo -n "valid options are "ymdh", "ymd", "ym", "y", or "h" (year month day hour): "
 							read Keyboard_yn
@@ -8432,6 +8441,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file"; fi
 								fi
 							fi
 							echo " "
+							echo " "
 							echo "Statistical Data Recording Enabled ("$SDF_DataRecordEnable") "
 							echo -n "('t' - true, 'f' = false) "
 							read -s -n 1 Keyboard_yn
@@ -8441,6 +8451,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file"; fi
 							echo "Set Value: ("$SDF_DataRecordEnable")"
 							if [[ $SDF_DataRecordEnable == "true" ]]; then
 								echo " "
+								echo " "
 								echo "Statistical Data Email Enabled ("$SDF_DataEmail") "
 								echo -n "('t' - true, 'f' = false) "
 								read -s -n 1 Keyboard_yn
@@ -8449,6 +8460,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file"; fi
 								fi
 								echo "Set Value: ("$SDF_DataEmail")"
 								echo " "
+								echo " "
 								echo "Statistical file : ("$statistical_data_file")"
 								echo "Enter new location and file name or press Enter/Return"
 								echo -n "to accept current value: "
@@ -8456,11 +8468,13 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file"; fi
 								if [[ ! $Keyboard_yn == "" ]]; then statistical_data_file=$Keyboard_yn; fi
 								echo "Set Value: ("$statistical_data_file")"
 								echo " "
+								echo " "
 								echo "Statistical Data Purge Days ("$SDF_DataPurgeDays") "
 								echo -n "(1-10000) "
 								read Keyboard_HDD
 								if [[ ! $Keyboard_HDD == "" ]]; then SDF_DataPurgeDays=$Keyboard_HDD; fi
 								echo "Set Value: ("$SDF_DataPurgeDays")"
+								echo " "
 								echo " "
 								echo "What day of the week would you like the file attached?"
 								echo "Current Value: "$SDF_DataEmailDay
@@ -8468,7 +8482,24 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file"; fi
 								read Keyboard_SDF_DataEmailDay
 								if [[ ! $Keyboard_SDF_DataEmailDay == "" ]]; then SDF_DataEmailDay=$Keyboard_SDF_DataEmailDay; fi
 								echo "Set Value: ("$SDF_DataEmailDay")"
+								echo " "
+								echo " "
+								echo "When a new drive is introduced into the system, or more accurately is first recorded in the"
+								echo "statistical data file, it needs a value to start the 30 day averaging.  You can use the"
+								echo "'actual' or use 'zero' values for the first 30 days.  After 30 days the script will use"
+								echo "the actual data in the statistical data file.  The default is: 'actual'"
+								echo " "
+								echo "Current value:"$add_new_drive_factor
+								echo " "
+								echo "Do you want to use 'actual' (A) or 'zero' (Z), or press Enter/Return for no change."
+								echo " "
+								read -s -n 1 Keyboard_yn
+								if [[ ! $Keyboard_yn == "" ]]; then
+									if [[ $Keyboard_yn == "a" ]]; then add_new_drive_factor="actual"; else add_new_drive_factor="zero"; fi
+								fi
+								echo "Set Value: ("$add_new_drive_factor")"							
 							fi
+							echo " "
 							echo " "
 							echo "returning..."
 							sleep 2
@@ -9531,7 +9562,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file"; fi
 
 						T)
 							clear
-							echo "SMR DRIVE OPTIONS AND GPT PARTITION CHECKING/BACKUP"
+							echo "SMR DRIVE, GPT PARTITION CHECKING/BACKUP, AND SEAGATE SCAM CHECK"
 							echo " "
 							echo "Do you want to Enable SMR Drive Operations?"
 							echo "Current: "$SMR_Enable
@@ -9682,6 +9713,59 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file"; fi
 								Partition_Check="false"
 								Partition_Backup="false"
 							fi
+							sleep 2
+							echo " "
+							echo " "
+							echo "SEAGATE DRIVE SCAM CHECK"
+							echo " "
+							echo " "
+							echo "This will check any drive (Seagate or otherwise) for F.A.R.M. data and if"
+							echo "it exists, it will compare the drive Serial Number and Power On Time to the"
+							echo "S.M.A.R.T. data.  If either do not match, the drive is flagged."
+							echo " "
+							echo -n "The current status is: "
+							if [[ $DriveSCAMCheck == "true" ]]; then temp_keyboard="Enabled"; else temp_keyboard="Disabled"; fi
+							echo $temp_keyboard
+							echo " "
+							echo "Do you want this featured Enabled or Disabled?"
+							echo -n "Enter 'E' or 'D', or press any other key for No Change "
+							read -s -n 1 Keyboard_yn
+							if [[ $Keyboard_yn == "e" || $Keyboard_yn == "E" ]]; then DriveSCAMCheck="true"; fi
+							if [[ $Keyboard_yn == "d" || $Keyboard_yn == "D" ]]; then DriveSCAMCheck="false"; fi
+							echo " "
+							echo " "
+							echo "(true=Enabled, false=Disabled)"
+							echo Set Value: $DriveSCAMCheck
+							echo " "
+							sleep 2
+							echo " "
+							echo "Seagate Drive SCAM Check Allowed Difference Hours"
+							echo " "
+							echo "As I understand it, valid drives could have a substantial difference between"
+							echo "the SMART Power On Hours and the FARM Power On Hours.  I didn't want to make"
+							echo "an unchangable value incase this is true.  A refurbished drive may have a"
+							echo "significant descrepancy."
+							echo " "
+							echo "With all that said, and with some help, the default value is 6 hours."
+							echo 'Rationale: The SMART and FARM Power On Hours "should" be identical in a perfect world.'
+							echo "I understand that FARM data remains with the drive from cradle to grave, or in other"
+							echo "words, it does not get reset if it is a refursished drive like SMART does.  This certainly will"
+							echo "cause an issue.  Here you can change the default value to compensate for refurbished drives, however"
+							echo "erroring on the side of caution, the default being 6 hours will warn you if you had a used drive,"
+							echo "well that is the objective.  Set the value to whatever pleases you."
+							echo " "
+							echo " "
+							echo "Current Value: "$DriveSCAMCheckHours
+							echo " "
+							echo "Enter a new value or Enter/Return to retain the current value."
+								read Keyboard_yn
+								if [[ $Keyboard_yn == "" ]]; then
+									:
+								else
+									DriveSCAMCheckHours=$Keyboard_yn
+								fi
+							echo " "
+							echo "Set Value: "$DriveSCAMCheckHours
 							echo " "
 							echo " "
 							echo "Make sure you write your changes."
