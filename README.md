@@ -24,7 +24,7 @@ A User Guide exists (needs a bit of updating).
 
 # Drive Self-test for TrueNAS
 
-Drive Self-test is a new script specifically to perform the SAMRT testing.
+Drive Self-test is a new script specifically to perform the SMART testing.
 The SMART testing was removed from Multi-Report placed in this script.
 This script has many benefits being a seperate script:
 1) Easier to maintain.
