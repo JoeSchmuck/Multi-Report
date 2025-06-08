@@ -4,14 +4,14 @@ LANG="en_US.UTF-8"
 if [[ $TERM == "dumb" ]]; then          # Set a terminal as the script may generate an error message if using 'dumb'.
     export TERM=unknown
 fi
-##### Version 1.04
+##### Version 1.05
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
 ### FILE NAME SHOULD BE 'drive_selftest.sh' TO INTEGRATE WITH MULTI-REPORT
 ###
 ### MULTIPLE DRIVE SMART SELF-TEST SCRIPT (TO EASE YOUR CONFIGURATION NEEDS)
-###
+###    
 ### WHAT DOES THIS SCRIPT DO?
 ###
 ### THIS SCRIPT WAS ORIGINALLY DESIGNED FOR PEOPLE WHO HAVE A LOT OF DRIVES AND
@@ -54,9 +54,25 @@ SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
 # Change Log
 #
+# Version 1.05 (07 June 2025)
+#
+# - Updated the smartctl interface connection to roll through several more variations if the default fails to work.
+#   ---- This did impact a few people but it has been fixed now. This also "should" open up options for USB connected devices.
+# - Added '--scan' output to a file for data collection.
+# - Updated Debugging Data for Troubleshooting and analysis.
+# - Updated '-help' information.
+# - Fixed potential drive not being Long tested if it had a similar name to a Short test drive (da1 and da11 was the noted problem).
+# - Updated Debug to be enabled during a Multi-report -dump switch.
+# - Added RESILVER/SCRUB Override for SMART Long tests (by request).
+# - Converted options from 'true/false' to 'enable/disable' to make more sense.
+# - Fixed reading the multi_report_config.txt file earlier in the script execution.
+#
+#  Thanks go out to @SD for helping with the script.  It is good to have a different set of eyes looking at things.
+#
+
 # Version 1.04 (22 February 2025)
 #
-# - Added checking for SCRUB and RESILVER and run SMART LONG/SHORT tests appropriately. Default = No SMART Testing during SCRUB/RESILVER operations.
+# - Added checking for SCRUB and RESILVER and run SMART LONG/SHORT tests appropriately. Default = No SMART Long Testing during SCRUB/RESILVER operations.
 # - Updated the 'Silent' function to ONLY display really important information only, such as a failure or an update is available.
 # - Improved the Update/Automatic Update feature.
 # - Removed erroneous 'Month' messages
@@ -91,22 +107,29 @@ SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
 ### EXTERNAL CONFIGURATION FILE
 Config_File_Name=$SCRIPT_DIR"/multi_report_config.txt"
-Use_multi_report_config_values="true"       # A "true" value here will use the $Config_File_Name file values to override the values defined below, if it exists.
-                                            #  This allows the values to be retained between versions.  A "false" will not allow the external config file to be
-											#  used regardless of any other settings and therefore would utilize the values below. Default="true"
+Use_multi_report_config_values="enable"       # A "enable" value here will use the $Config_File_Name file values to override the values defined below, if it exists.
+                                            #  This allows the values to be retained between versions.  A "disable" will not allow the external config file to be
+                                            #  used regardless of any other settings and therefore would utilize the values below. Default="true"
 
 ###### SCRIPT UPDATES
-Check_For_Updates="true"                    # This will check to see if an update is available. Default="true"
-Automatic_Selftest_Update="false"           # WARNING !!!  This option will automatically update the Drive_Selftest script if a newer version exists on GitHub
-                                            #  with no user interaction. Default = "false"
+Check_For_Updates="enable"                  # This will check to see if an update is available. Default="enable"
+Automatic_Selftest_Update="disable"         # WARNING !!!  This option will automatically update the Drive_Selftest script if a newer version exists on GitHub
+                                            #  with no user interaction. Default = "disable"
+											
+##### SMARTCTL_Interface_Options			# This variable is used to attempt to account for drives not easily accessable.
+SMARTCTL_Interface_Options="auto,sat,atacam,scsi,nvme"
 
 ###### HDD/SSD/NVMe SMART Testing
-Test_ONLY_NVMe_Drives="false"               # This option when set to "true" will only test NVMe drives, HDD/SSD will not be tested. Default = "false"
+Test_ONLY_NVMe_Drives="disable"             # This option when set to "enable" will only test NVMe drives, HDD/SSD will not be tested. Default = "disable"
 SCRUB_Minutes_Remaining=0                   # This option when set between 1 and 9999 (in minutes) will not run a SMART LONG test if a SCRUB has longer than xx minutes
                                             #  remaining, and a SMART SHORT test will be run instead to provide minimal impact to the SCRUB operation.
                                             #  A value of 0 (zero) will disable all SMART test(s) during a SCRUB operation.  Default=0 (Disabled).
-											#  NOTE: Any RESILVER operation automatically cancels SMART testing to put priority on rebuilding the pool.
+                                            #  NOTE: Any RESILVER operation automatically cancels SMART testing to put priority on rebuilding the pool.
 
+SCRUB_RESILVER_OVERRIDE="disable"			# This option will allow all SCRUB actions to occur regardless of the SCRUB_Minutes_Remaining variable
+# NEED TO MAKE WORK!!!!						# meaning that if a SCRUB or a RESILVER is in progress, any given SMART testing will be performed.
+											# I personally do not advise enabling this option but someone asked for it, here it is.
+											
 ### SHORT SETTINGS
 Short_Test_Mode=2                           # 1 = Use Short_Drives_to_Test_Per_Day value, 2 = All Drives Tested (Ignores other options), 3 = No Drives Tested.
 Short_Time_Delay_Between_Drives=1           # Tests will have a XX second delay between the drives starting testing. If drives are always spinning, this can be "0".
@@ -114,7 +137,7 @@ Short_SMART_Testing_Order="DriveID"         # Test order is for Test Mode 1 ONLY
 Short_Drives_to_Test_Per_Day=1              # For Test_Mode 1) How many drives to run each day minimum?
 Short_Drives_Test_Period="Week"             # "Week" (7 days) or "Month" (28 days)
 Short_Drives_Tested_Days_of_the_Week="1,2,3,4,5,6,7"    # Days of the week to run, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat, 7=Sun.  # This takes over for number of days variable.
-Short_Drives_Test_Delay=130                   # How long to delay when running Short tests, before exiting to controlling procedure.  Default is 130 second should allow.
+Short_Drives_Test_Delay=30                  # How long to delay when running Short tests, before exiting to controlling procedure.  Default is 130 second should allow.
                                             # Short tests to complete before continuing.  If using without Multi-Report, set this value to 1.
 
 ### LONG SETTINGS
@@ -122,7 +145,7 @@ Long_Test_Mode=1                            # 1 = Use Long_Drives_to_Test_Per_Da
 Long_Time_Delay_Between_Drives=1            # Tests will have a XX second delay between the drives starting the next test.
 Long_SMART_Testing_Order="Serial"           # Test order is either "Serial" or "DriveID".  Default = 'Serial'
 Long_Drives_to_Test_Per_Day=1               # For Test_Mode 1) How many drives to run each day minimum?
-Long_Drives_Test_Period="Month"             # "Week" (7 days) or "Month" (28 days)
+Long_Drives_Test_Period="Week"             # "Week" (7 days) or "Month" (28 days)
 Long_Drives_Tested_Days_of_the_Week="1,2,3,4,5,6,7"     # Days of the week to run, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat, 7=Sun. # This takes over for number of days variable.
 
 
@@ -134,9 +157,9 @@ Ignore_Drives_List=""
 
 ### REPORT
 Drive_List_Length=10                        # This is how many drive IDs to list per line.  Default is 10.
-Enable_Logging="true"                       # This will create a text file named "drive_test_xx.txt". Run -clearlog
+Enable_Logging="enable"                       # This will create a text file named "drive_test_xx.txt". Run -clearlog
 LOG_DIR=$SCRIPT_DIR"/DS_Logs"               # The default log directory is the script directory.
-Silent="false"                              # When "true" only error messages will be output to the stdout.
+Silent="disable"                               # When "enable" only error messages will be output to the stdout.
 
 #######################################
 #######################################
@@ -153,7 +176,8 @@ Silent="false"                              # When "true" only error messages wi
 # I do not recommend people play with anything here.
 
 Debug="false"            # Default = "false"
-simulated_drives=0       # Set to '0' to use actual drives, or to any number to use simulated drives (the Serial option will not work)
+Debug_Steps="false"		# Default = "false"
+simulated_drives=0      # Set to '0' to use actual drives, or to any number to use simulated drives (the Serial option will not work)
 
 ###### Auto-generated Parameters
 softver=$(uname -s)
@@ -176,8 +200,8 @@ fi
 programver3=$(( programver3 + 0 ))        # Make Base 10
 programver4=$(( programver4 + 0 ))
 Program_Name="drive_selftest.sh"
-Version="1.04"                            # Current version of the script
-Version_Date="(22 February 2025)"
+Version="1.05"                            # Current version of the script
+Version_Date="(07 June 2025)"
 
 # GLOBAL VARIABLES - MUST BE DEFINED EARLY BEFORE FUNCTION TO BE GLOBAL
 Drive_Disk_Query=""
@@ -189,7 +213,6 @@ drives_subsystem=""
 driveConnectionType="auto"
 Demo="false"
 IFS_RESTORE=$IFS
-#CRAP="DRATS"
 selftest_drives_short=""
 selftest_drives_long=""
 Ready_to_Test="false"
@@ -228,6 +251,7 @@ smartctlscan=$(smartctl --scan-open)
 ##########################
 
 checkforupdate () {
+if [[ $Debug_Steps == "true" ]]; then echo "checkforupdate" | tee -a /tmp/drive_selftest/drive_test_temp.txt; fi
     echo " "
     echo "Checking for Updates"
     if test -e "/tmp/Multi-Report"; then rm -R "/tmp/Multi-Report"; fi
@@ -273,7 +297,7 @@ checkforupdate () {
             else
                 echo " - No Update"
             fi        
-            if [[ $Automatic_Selftest_Update == "true" ]] && [[ $UpdateDriveAvailable == "true" ]]; then
+            if [[ $Automatic_Selftest_Update == "enable" ]] && [[ $UpdateDriveAvailable == "true" ]]; then
                 echo "     Automatic Update Enabled"
                 update_Drive_script
             fi                    
@@ -293,6 +317,7 @@ checkforupdate () {
     }
 
     update_Drive_script () {
+	if [[ $Debug_Steps == "true" ]]; then echo "update_Drive_script" | tee -a /tmp/drive_selftest/drive_test_temp.txt; fi
     echo "Update Script Routine"
     echo "Removing Old Local Script if it exists"
     if test -e "/tmp/Multi-Report"; then rm -R "/tmp/Multi-Report"; fi
@@ -301,7 +326,6 @@ checkforupdate () {
         # Go git the file
         ( mkdir /tmp/Multi-Report
         cd /tmp/Multi-Report
- 
         curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/drive_selftest.txt
         curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/Drive_Selftest_User_Guide.pdf
         )
@@ -312,7 +336,7 @@ checkforupdate () {
         echo "      - The Github version is: "$GitDriveVersion
         echo " "
 
-        if [[ $Automatic_Selftest_Update != "true" ]]; then
+        if [[ $Automatic_Selftest_Update != "enable" ]]; then
             echo "Enter 'y' to commit or any other key to abort."
             read Keyboard_yn
         else
@@ -340,7 +364,7 @@ checkforupdate () {
     else
         echo "GitHub is Not Available"
     fi
-    if [[ $Automatic_Selftest_Update != "true" ]]; then 
+    if [[ $Automatic_Selftest_Update != "enable" ]]; then 
         echo "Exiting..."
         exit 0
     fi
@@ -348,7 +372,7 @@ checkforupdate () {
     }
 
 convert_to_decimal () {
-if [[ $Debug_Steps == "true" ]]; then echo "convert_to_decimal"; fi
+	if [[ $Debug_Steps == "true" ]]; then echo "convert_to_decimal: $1" | tee -a /tmp/drive_selftest/drive_test_temp.txt; fi
     if [[ "$1" == "" ]]; then return; fi
     Converting_Value=${1#0}
     Converting_Value="${Converting_Value//,}"
@@ -358,60 +382,55 @@ if [[ $Debug_Steps == "true" ]]; then echo "convert_to_decimal"; fi
     }
 
 check_scrub () {
+	if [[ $Debug_Steps == "true" ]]; then echo "check_scrub" | tee -a /tmp/drive_selftest/drive_test_temp.txt; fi
     # Check if a SCRUB or RESILVER is in progress and if if so, how much time remains.
     # If greater than $SCRUB_Minutes_Remaining then we will not run a SMART Long test, we substitute it with a Short test.
 
-#    SCRUB_In_Progress="false"
     for i in {0..100}; do            # ARE WE REALLY GOING TO SEE 100 POOLS, well just in case?  THIS IS NOT THE ID NUMBER
         Function_Pool_Name=$(midclt call pool.query | jq -r '.['$i'].name')
         Function_temp=$(midclt call pool.query | jq -r '.['$i'].scan.function')
         Function_Time_Left=$(midclt call pool.query | jq -r '.['$i'].scan.total_secs_left')
-###
-### cat pool_query_degraded.txt | jq -r '.[0].topology.data.[].children.[].status' GETS A LIST OF DRIVE ONLINE STATUS
-### cat pool_query_degraded.txt | jq -r '.[0].topology.data.[].children.[].disk' GETS A LIST OF DRIVE NAMES
-### cat pool_query_degraded.txt | jq -r '.[0].topology.data.[].children.[].serial' GETS A LIST OF SERIAL NUMBERS FOR UNAVAILABLE DRIVES
-### cat pool_query_degraded.txt | jq -r '.[0].topology.data.[].children.[].unavail_disk.serial'  GETS ALL SERIAL NUMBERS UNAVAILABLE (OFFLINE?)
-### 
-if [[ $Function_temp == "null" ]]; then
-	break
-else
-	Function=$Function_temp
-fi
+
+        if [[ $Function_temp == "null" ]]; then
+            break
+        else
+            Function=$Function_temp
+        fi
+		
         if [[ $Function == "RESILVER" ]]; then SCRUB_Minutes_Remaining=0; SCRUB_In_Progress="true"; fi
         if [[ $Function == "SCRUB" ]] || [[ $Function == "RESILVER" ]]; then
             if [[ $Function_Time_Left != "null" ]]; then         # We should have a number, lets convert it to hours.
-				SCRUB_In_Progress="true"
+                SCRUB_In_Progress="true"
                 Function_Time_Left_Min=$((Function_Time_Left / 60))    # Seconds to Minutes
                 Function_Time_Left_Hour=$((Function_Time_Left_Min * 10 ))   # *10 due to rounding the hours
                 Function_Time_Left_Whole0=$((Function_Time_Left_Hour / 60))
                 Function_Time_Left_Whole1=$((Function_Time_Left_Whole0 / 10))
                 Function_Time_Left_Fraction=$((Function_Time_Left_Whole0 - $((Function_Time_Left_Whole1 * 10 ))))
-				if [[ $SCRUB_Minutes_Remaining -gt 0 ]]; then
+                if [[ $SCRUB_Minutes_Remaining -gt 0 ]]; then
                     if [[ $Function_Time_Left_Min -gt $SCRUB_Minutes_Remaining ]]; then        # SCRUB Too Long
- #                      SCRUB_In_Progress="true"
-                        echo "  Pool: "$Function_Pool_Name | tee -a /tmp/drive_test_temp.txt
+                        echo "  Pool: "$Function_Pool_Name | tee -a /tmp/drive_selftest/drive_test_temp.txt
                         if [[ $Function_Time_Left_Min -gt 59 ]]; then    # JUST TO FORMAT TIME CORRECTLY
                             # OVER 1 HOUR
-                            echo "  "$Function" In Progress: ~"$Function_Time_Left_Whole1"."$Function_Time_Left_Fraction" Hours remain. " | tee -a /tmp/drive_test_temp.txt
-                            echo "  The "$Function" remaining time exceeds "$SCRUB_Minutes_Remaining" minutes, running SMART SHORT tests vice any pending LONG tests." | tee -a /tmp/drive_test_temp.txt
+                            echo "  "$Function" In Progress: ~"$Function_Time_Left_Whole1"."$Function_Time_Left_Fraction" Hours remain. " | tee -a /tmp/drive_selftest/drive_test_temp.txt
+                            echo "  The "$Function" remaining time exceeds "$SCRUB_Minutes_Remaining" minutes, running SMART SHORT tests vice any pending LONG tests." | tee -a /tmp/drive_selftest/drive_test_temp.txt
                         else
                             # LESS THAN 1 HOUR
-                            echo $Function" In Progress: "$Function_Time_Left" minutes remain." | tee -a /tmp/drive_test_temp.txt
+                            echo $Function" In Progress: "$Function_Time_Left" minutes remain." | tee -a /tmp/drive_selftest/drive_test_temp.txt
                         fi
                     else
                         # LESS THAN MAX TIME - WE CAN RUN A LONG TEST
-                        echo "  Pool: "$Function_Pool_Name | tee -a /tmp/drive_test_temp.txt
-                        echo "  "$Function" In Progress: ~"$Function_Time_Left_Whole1"."$Function_Time_Left_Fraction" Hours remain. " | tee -a /tmp/drive_test_temp.txt
-                        echo "  The "$Function" remaining time is less than "$SCRUB_Minutes_Remaining" minutes, running all SMART tests as planned." | tee -a /tmp/drive_test_temp.txt
+                        echo "  Pool: "$Function_Pool_Name | tee -a /tmp/drive_selftest/drive_test_temp.txt
+                        echo "  "$Function" In Progress: ~"$Function_Time_Left_Whole1"."$Function_Time_Left_Fraction" Hours remain. " | tee -a /tmp/drive_selftest/drive_test_temp.txt
+                        echo "  The "$Function" remaining time is less than "$SCRUB_Minutes_Remaining" minutes, running all SMART tests as planned." | tee -a /tmp/drive_selftest/drive_test_temp.txt
                     fi
                 else
                     # SCRUB/RESILVER IN PROGRESS - NO SMART TESTING AT ALL
-                    echo "  Pool: "$Function_Pool_Name | tee -a /tmp/drive_test_temp.txt
-                    echo "  "$Function" In Progress: ~"$Function_Time_Left_Whole1"."$Function_Time_Left_Fraction" Hours remain. " | tee -a /tmp/drive_test_temp.txt
-                    echo "  SMART testing disabled during "$Function"." | tee -a /tmp/drive_test_temp.txt
-					# Lets cancel all testing.
-					Short_Test_Mode=0
-					Long_Test_Mode=0
+                    echo "  Pool: "$Function_Pool_Name | tee -a /tmp/drive_selftest/drive_test_temp.txt
+                    echo "  "$Function" In Progress: ~"$Function_Time_Left_Whole1"."$Function_Time_Left_Fraction" Hours remain. " | tee -a /tmp/drive_selftest/drive_test_temp.txt
+                    echo "  SMART testing disabled during "$Function"." | tee -a /tmp/drive_selftest/drive_test_temp.txt
+                    # Lets cancel all testing.
+                    Short_Test_Mode=0
+                    Long_Test_Mode=0
                 fi
             fi
         elif [[ $Function == "null" ]]; then    # We exit, no more pools in the list.
@@ -422,80 +441,87 @@ fi
     }
 
 remove_duplicate_tests () {
+	if [[ $Debug_Steps == "true" ]]; then echo "remove_duplicate_tests" | tee -a /tmp/drive_selftest/drive_test_temp.txt; fi
 # THIS WILL COMPARE BOTH SHORT AND LONG TESTS AND REMOVE DUPLICATE SHORT TESTS FROM THE TESTING LIST.
 # NEXT TIME LETS FIGURE OUT THE LONG TESTS FIRST, THEN FIGURE OUT THE SHORT TESTS AND IF ONE IS LISTED IN THE LONG TESTS LIST, REMOVE IT.
 
 # Global Variables: selftest_drives_short, selftest_drives_long
 
 # Local Variables: s_drives, short_modified_drives
+    (echo "            "$start_time_display":  START remove_duplicate_tests"; echo " ") >> /tmp/drive_selftest/drive_test_timer_temp.txt
 
-    (echo "            "$start_time_display":  START remove_duplicate_tests"; echo " ") >> /tmp/drive_test_timer_temp.txt
-
-	for s_drives in $selftest_drives_short ; do                     # Loop through all the Long drives to test
-		# Lets remove any matches to the short drive list.
-		if [[ $selftest_drives_long == *"$s_drives"* ]]; then        # If the Short drive is listed in the Long drives list, Do Not add to a new drive list
+    for s_drives in $selftest_drives_short ; do                     # Loop through all the Long drives to test
+		test=0
+        # Lets remove any matches to the short drive list.
+		for l_drives in $selftest_drives_long ; do
+			if [[ "$l_drives" == "$s_drives" ]]; then test=1; fi
+		done
+		if [[ $test == 1 ]]; then     # This drive should be removed from teh SHORT test list.
 			if [[ $reduced_drives_display == "" ]]; then            # We are creating a list of drives being removed for display only purposes.
 				reduced_drives_display=$s_drives                            # We are formatting the display to look nice in this IF statement.
 			else
 				reduced_drives_display=$reduced_drives_display" "$s_drives
 			fi
+
 		else                                                        # ELSE we create a new list of Short drives to test, if any.
 			if [[ $short_modified_drives == "" ]]; then short_modified_drives=$s_drives; else short_modified_drives=$short_modified_drives" "$s_drives; fi
 		fi
-	done
-	Moved_Long_Scrub=$selftest_drives_long
-	# Move from LONG to SHORT During a SCRUB
-	if [[ $SCRUB_In_Progress == "true" ]]; then
-		for l_drives in $selftest_drives_long ; do                     # Loop through all the Long drives to test
-			if [[ $SCRUB_Minutes_Remaining -gt 0 ]]; then
-				short_modified_drives=$short_modified_drives" "$l_drives
-			fi
-		done
-			selftest_drives_long=""
-	fi
+    done
+	
+    Moved_Long_Scrub=$selftest_drives_long
+    # Move from LONG to SHORT During a SCRUB
+    if [[ $SCRUB_In_Progress == "true" ]]; then
+        for l_drives in $selftest_drives_long ; do                     # Loop through all the Long drives to test
+            if [[ $SCRUB_Minutes_Remaining -gt 0 ]]; then
+                short_modified_drives=$short_modified_drives" "$l_drives
+            fi
+        done
+            selftest_drives_long=""
+    fi
 
-	if [[ $s_drives != "" ]] && [[ $SCRUB_In_Progress != "true" ]]; then
-		if [[ $(wc -c <<< "$reduced_drives_display" | xargs) -gt 2 ]]; then
-			if [[ $Silent != "true" ]]; then
-				(echo '    Drive(s): "'$reduced_drives_display'" were removed from the Short testing list'
-				echo '    It/They are already scheduled for the Long test, no need to duplicate efforts'
-				echo " " ) | tee -a /tmp/drive_test_temp.txt
-			fi
-		fi
-	fi
-	selftest_drives_short=$short_modified_drives
-	selftest_drives=$selftest_drives_short
+    if [[ $s_drives != "" ]] && [[ $SCRUB_In_Progress != "true" ]]; then
+        if [[ $(wc -c <<< "$reduced_drives_display" | xargs) -gt 2 ]]; then
+            if [[ $Silent != "enable" ]]; then
+                (echo '    Drive(s): "'$reduced_drives_display'" were removed from the Short testing schedule for today.'
+                echo '    The drive(s) are already scheduled today for the Long test.'
+                echo " " ) | tee -a /tmp/drive_selftest/drive_test_temp.txt
+            fi
+        fi
+    fi
+    selftest_drives_short=$short_modified_drives
+    selftest_drives=$selftest_drives_short
 
     if ! [[ $selftest_drives == "" ]]; then
-        if [[ $Silent != "true" ]]; then
+        if [[ $Silent != "enable" ]]; then
             if [[ $SCRUB_In_Progress == "true" ]]; then
-                echo "RUNNING SHORT TEST: "$selftest_drives", '"$Moved_Long_Scrub"' moved from LONG TEST due to SCRUB." | tee -a /tmp/drive_test_temp.txt
+                echo "RUNNING SHORT TEST: "$selftest_drives", '"$Moved_Long_Scrub"' moved from LONG TEST due to SCRUB." | tee -a /tmp/drive_selftest/drive_test_temp.txt
             else
-                echo "RUNNING SHORT TEST: "$selftest_drives | tee -a /tmp/drive_test_temp.txt
+                echo "RUNNING SHORT TEST: "$selftest_drives | tee -a /tmp/drive_selftest/drive_test_temp.txt
             fi
         fi
         run_smart_test Short
         Short_Drives_Testing=$selftest_drives
     else
-        if [[ $Silent != "true" ]]; then
+        if [[ $Silent != "enable" ]]; then
             (echo " "
-            echo "NO SHORT TESTS TO RUN"$selftest_drives ) | tee -a /tmp/drive_test_temp.txt
+            echo "NO SHORT TESTS TO RUN"$selftest_drives ) | tee -a /tmp/drive_selftest/drive_test_temp.txt
         fi
     fi
+	
     selftest_drives=$selftest_drives_long
     echo " "
     if [[ $(wc -c <<< "$selftest_drives" | xargs) -gt 2 ]]; then
-        if [[ $Silent != "true" ]]; then
-            echo "RUNNING LONG TEST:" | tee -a /tmp/drive_test_temp.txt
+        if [[ $Silent != "enable" ]]; then
+            echo "RUNNING LONG TEST: $selftest_drives" | tee -a /tmp/drive_selftest/drive_test_temp.txt
         fi
-        echo "            RUNNING LONG TEST:" >> /tmp/drive_test_timer_temp.txt
+        echo "            RUNNING LONG TEST: $selftest_drives" >> /tmp/drive_selftest/drive_test_timer_temp.txt
         run_smart_test Long
         Long_Drives_Testing=$selftest_drives
     else
-        if [[ $Silent != "true" ]]; then
-            echo "NO LONG TESTS TO RUN" | tee -a /tmp/drive_test_temp.txt
+        if [[ $Silent != "enable" ]]; then
+            echo "NO LONG TESTS TO RUN" | tee -a /tmp/drive_selftest/drive_test_temp.txt
         fi
-        (echo "            NO LONG TESTS TO RUN"; echo " ") >> /tmp/drive_test_timer_temp.txt
+        (echo "            NO LONG TESTS TO RUN"; echo " ") >> /tmp/drive_selftest/drive_test_timer_temp.txt
     fi
 
     if [[ $softver != "Linux" ]]; then
@@ -503,68 +529,125 @@ remove_duplicate_tests () {
     else
         elapsed_time $start_time_display
     fi
-	
+    
     (echo "            "$end_time_display":  EXIT remove_duplicate_tests"
-    echo -n "            Elapsed Time: Program $((SECONDS / 60)) minutes and $((SECONDS % 60))"
+    echo -n "            Elapsed Time: $((SECONDS / 60)) minutes and $((SECONDS % 60))"
     if [[ $end_tenths != "" ]]; then
         echo ".$end_tenths seconds elapsed."
     else
         echo " seconds elapsed."
     fi
-    echo " ") >> /tmp/drive_test_timer_temp.txt
+    echo " ") >> /tmp/drive_selftest/drive_test_timer_temp.txt
 
     }
 
-
 # CALLED FROM ONE LOCATION
 run_smart_test () {
-
+	if [[ $Debug_Steps == "true" ]]; then echo "run_smart_test" | tee -a /tmp/drive_selftest/drive_test_temp.txt; fi
 # This will check if a SMART test is currently running and if yes, display the progress.
-# If not SMART test is running then execute the test.
+# If no SMART test is running then attempt to execute the test.
 #
 # Required variables: $1=Test Type (Short/Long)
-# Global Variables: Drive_Disk_Query, smart_ver, selftest_drives, Demo, Time_Delay_Between_Drives, Debug, drive, 
+# Global Variables: Drive_Disk_Query, smart_ver, selftest_drives, Demo, Time_Delay_Between_Drives, Debug, drive, smartctlscan
 #
-# Local Variables: drive, API_BUS, smart_test_ok, test_it, driveConnectionType, api_s
+# Local Variables: drive, API_BUS, smart_test_ok, test_it, driveConnectionType, drive_connection_types, api_s
 #
 # Calls nvm_selftest
 
-    (echo "                "$start_time_display":  START run_smart_test"; echo " ") >> /tmp/drive_test_timer_temp.txt
+    (echo "                "$start_time_display":  START run_smart_test"; echo " ") >> /tmp/drive_selftest/drive_test_timer_temp.txt
     test_running=0
+    if ! test -e "/tmp/drive_selftest/smartctl_scan_results.txt"; then
+        smartctl --scan > /tmp/drive_selftest/smartctl_scan_results.txt
+    fi
     for drive in $selftest_drives; do
         api_s=0
+		in_test=0
         until [[ "$(echo $Drive_Disk_Query | jq -r '.['$api_s'].name')" == "null" ]] || [[ "$(echo $Drive_Disk_Query | jq -r '.['$api_s'].name')" == *"$drive"* ]]; do (( api_s ++)); done
         API_BUS=$(echo $Drive_Disk_Query | jq -r '.['$api_s'].subsystem')
-        driveConnectionType=$(echo "$smartctlscan" | grep -i "$drive" | awk '{printf $3}')
-        if [[ $Debug == "true" ]]; then echo " "; fi
-        if [[ $Debug == "true" ]]; then echo "    Debug - Drive ID=$drive, Interface Type=$driveConnectionType, API BUS="$API_BUS; fi
+		API_SERIAL=$(echo $Drive_Disk_Query | jq -r '.['$api_s'].serial')
+        drive_connection_types="none$(echo "$smartctlscan" | grep -i "$drive" | awk '{printf ","; printf $3}'),$SMARTCTL_Interface_Options"
+		driveConnectionType=$(echo "$smartctlscan" | grep -i "$drive" | awk '{printf $3}')
+        if [[ $Debug == "true" ]]; then echo " " | tee -a /tmp/drive_selftest/drive_test_temp.txt; fi
+        if [[ $Debug == "true" ]]; then echo "    Debug - 'Drive ID=$drive', 'Drive S/N=${API_SERIAL}', 'SMARTCTL Interface Type=$driveConnectionType', 'API BUS=$API_BUS'" | tee -a /tmp/drive_selftest/drive_test_temp.txt; fi
 
-        if [[ $programver3 -lt 24 ]] && [[ $drive == *"nvm"* ]] && [[ $programver4 -lt 3 ]]; then     # If less than (24 or 13.3) and nvme drive.
+        if [[ $programver3 -lt 24 ]] && [[ $programver4 -lt 3 ]] && [[ $drive == *"nvm"* ]]; then     # If less than TrueNAS 24 and nvme drive, use low level nvme commands.
             nvm_selftest $1 $drive
             No_Tests="false"
         else                                        # If smartmontool is 7.4 or greater, Time to try and run a SMART test using smartmontools for nvme.
-            if [[ $1 == "Short" ]]; then
-                smart_test_ok="$(smartctl -d "${driveConnectionType}" -t short /dev/$drive)" > /dev/null 2<&1
-            else
-                smart_test_ok="$(smartctl -d "${driveConnectionType}" -t long /dev/$drive)" > /dev/null 2<&1
-            fi
-            smartresult=$?
-            if echo $smart_test_ok | grep -i "has begun" > /dev/null 2<&1; then
-                if [[ $Silent != "true" ]]; then
-                    echo "    Drive: $drive in $1 Test" | tee -a /tmp/drive_test_temp.txt
+            IFS_RESTORE=$IFS
+            IFS=","
+            for dr in $drive_connection_types; do
+                if [[ $dr == "none" ]]; then
+                    driveConnectionType=$dr
+                    # No interface parameter passed
+                    if [[ $1 == "Short" ]]; then
+                        smart_test_ok="$(smartctl -t short /dev/$drive)"
+                    else
+                        smart_test_ok="$(smartctl -t long /dev/$drive)"
+                    fi
+                    smartresult=$?
+                    if [[ $smartresult -eq 0 ]]; then   # Exit code of 0 is good, command accepted.
+                        if [[ $Silent != "enable" ]]; then
+                            echo "SMART command for drive:"$drive" was received okay, return exit code:"$smartresult | tee -a /tmp/drive_selftest/drive_test_temp.txt
+                        fi
+						in_test=1
+                        break 1   # Return to the FOR loop
+					elif [[ $smartresult -eq 4 ]]; then		# Exit code of 4 could mean the command was accepted but the drive was busy or the command was not accepted.
+						# Check to see if test is running before assuming exit code 4 is a bust.
+						if echo $smart_test_ok | grep -i -e "remaining" -e "completed" > /dev/null 2<&1; then
+							in_test=1
+							break 1		# Jump out of the FOR loop
+						fi
+                    else
+                        echo "SMART command for drive:"$drive" was not good, returned exit code:"$smartresult | tee -a /tmp/drive_selftest/drive_test_temp.txt
+                        echo "Lets try a different interface type..." | tee -a /tmp/drive_selftest/drive_test_temp.txt
+                    fi
+                else		# It looks like we need an interface modifier
+                    driveConnectionType=$dr
+                    if [[ $1 == "Short" ]]; then
+                        smart_test_ok="$(smartctl -d "${driveConnectionType}" -t short /dev/$drive)"
+                    else
+                        smart_test_ok="$(smartctl -d "${driveConnectionType}" -t long /dev/$drive)"
+                    fi
+                    smartresult=$?
+						
+                    if [[ $smartresult -eq 0 ]]; then   # Exit code of 0 is good, command accepted.
+                        if [[ $Silent != "enable" ]]; then
+                            echo "SMART command -d "$driveConnectionType" for drive:"$drive" was received okay, return exit code:"$smartresult | tee -a /tmp/drive_selftest/drive_test_temp.txt
+                        fi
+						in_test=1
+                        break 1   # Return to the FOR loop
+					elif [[ $smartresult -eq 4 ]]; then		# Exit code of 4 could mean the command was accepted but the drive was busy or the command was not accepted.
+						# If the drive is in-test, consider the command received. 
+						# Check to see if test is running before assuming exit code 4 is a bust.
+						if echo $smart_test_ok | grep -i -e "remaining" -e "completed" > /dev/null 2<&1; then
+							in_test=1
+							break 1		# Jump out of the FOR loop
+						fi						
+                    else
+                        if [[ $Silent != "enable" ]]; then
+                            echo "SMART command -d "$driveConnectionType" for drive:"$drive" was not good, returned exit code:"$smartresult | tee -a /tmp/drive_selftest/drive_test_temp.txt
+                            echo "Lets try a different interface type..." | tee -a /tmp/drive_selftest/drive_test_temp.txt
+                        fi
+                    fi
                 fi
-                if [[ $timer_flag -eq 1 ]]; then echo "                    Drive: $drive in $1 Test"; fi >> /tmp/drive_test_timer_temp.txt
+            done
+			
+            if [[ $in_test == 0 ]]; then echo "SMART commands exhausted for drive:"$drive", returned exit code:"$smartresult | tee -a /tmp/drive_selftest/drive_test_temp.txt; fi
+            IFS=$IFS_RESTORE
+ 
+            if echo $smart_test_ok | grep -i "has begun" > /dev/null 2<&1; then
+                if [[ $Silent != "enable" ]]; then
+                    echo "    Drive: $drive in $1 Test" | tee -a /tmp/drive_selftest/drive_test_temp.txt
+                fi
+                if [[ $timer_flag -eq 1 ]]; then echo "                    Drive: $drive in $1 Test"; fi >> /tmp/drive_selftest/drive_test_timer_temp.txt
                 test_running=1    # Looks like the testing is in progress.
                 No_Tests="false"
             else
-                if [[ $timer_flag -eq 1 ]]; then echo "                    An error occurred for Drive: $drive in $1 Test."; fi >> /tmp/drive_test_timer_temp.txt
-    #                if [[ $CRAP == "DRATS" ]]; then CRAP="DARN"; else CRAP="DRATS"; fi
-                    echo -n "    Drive: $drive failed to start $1 Test" | tee -a /tmp/drive_test_temp.txt
-    #                echo -n ' - "'$drive'"' | tee -a /tmp/drive_test_temp.txt
+                if [[ $timer_flag -eq 1 ]]; then echo "                    An error occurred for Drive: $drive in $1 Test."; fi >> /tmp/drive_selftest/drive_test_timer_temp.txt
                 if echo $smart_test_ok | grep -i -e "remaining" -e "completed" > /dev/null 2<&1; then
-                (   echo -n " - Drive is still running a test: "
-                    echo $smart_test_ok | grep -o -e '(..% remaining)' -e '(..% completed)') | tee -a /tmp/drive_test_temp.txt
-    #                echo '    Skipping drive "'$drive'"') | tee -a /tmp/drive_test_temp.txt
+                (   echo -n "    Drive $drive is still running a test: "
+                    echo $smart_test_ok | grep -o -e '(..% remaining)' -e '(..% completed)') | tee -a /tmp/drive_selftest/drive_test_temp.txt
                 else
                 (   echo " - Drive did not accept the smartctl command."
                     echo " "
@@ -572,7 +655,7 @@ run_smart_test () {
                     echo " "
                     echo "    Here is the return message:"
                     echo $smart_test_ok
-                    echo " ") | tee -a /tmp/drive_test_temp.txt
+                    echo " ") | tee -a /tmp/drive_selftest/drive_test_temp.txt
                 fi
             fi
             test_it=1
@@ -585,11 +668,11 @@ run_smart_test () {
 
     if [[ $test_it -eq 1 ]]; then
         if [[ $1 == "Long" ]]; then
-            sleep 1   # Wait 1 second before executing any Long tests.
+   #         sleep 1   # Wait 1 second before executing any Long tests.
             if [[ $selftest_drives != "" ]]; then
-                if [[ $Silent != "true" ]]; then
+                if [[ $Silent != "enable" ]]; then
                     (echo " "
-                    echo "ALL TESTS COMPLETED OR RUNNING IN BACKGROUND") | tee -a /tmp/drive_test_temp.txt
+                    echo "ALL TESTS COMPLETED OR RUNNING IN BACKGROUND") | tee -a /tmp/drive_selftest/drive_test_temp.txt
                 fi
             fi
         fi
@@ -602,19 +685,20 @@ run_smart_test () {
     fi
     
     (echo "                "$end_time_display":  EXIT run_smart_test"
-    echo -n "                Elapsed Time: Program $((SECONDS / 60)) minutes and $((SECONDS % 60))"
+    echo -n "                Elapsed Time: $((SECONDS / 60)) minutes and $((SECONDS % 60))"
         if [[ $end_tenths != "" ]]; then
             echo ".$end_tenths seconds elapsed."
         else
             echo " seconds elapsed."
         fi
-        echo " ") >> /tmp/drive_test_timer_temp.txt
+        echo " ") >> /tmp/drive_selftest/drive_test_timer_temp.txt
 
     }
 
 
 # CALLED FROM TWO LOCATIONS
 smartctl_selftest () {
+	if [[ $Debug_Steps == "true" ]]; then echo "smartctl_selftest" | tee -a /tmp/drive_selftest/drive_test_temp.txt; fi
     # THIS WILL DIRECT COLLECTING THE DRIVE DATA BASED ON $1 (Short|Long) value.  And it will determine the drives to test each day.
 
     # Uses smartmontools to run the tests.
@@ -625,7 +709,7 @@ smartctl_selftest () {
 
     # Local Variables: counter_simulated_drives, day_of_week, DOW_days, drives_to_test
 
-    (echo "        "$start_time_display":  START smartctl_selftest '$1'"; echo " ") >> /tmp/drive_test_timer_temp.txt
+    (echo "        "$start_time_display":  START smartctl_selftest '$1'"; echo " ") >> /tmp/drive_selftest/drive_test_timer_temp.txt
 
     api_drive_serial_number=""
     if [[ $Demo == "true" ]]; then
@@ -693,23 +777,23 @@ smartctl_selftest () {
     esac
 
     IFS=$IFS_RESTORE
-    if [[ $Silent != "true" ]]; then
-        echo " " | tee -a /tmp/drive_test_temp.txt
+    if [[ $Silent != "enable" ]]; then
+        echo " " | tee -a /tmp/drive_selftest/drive_test_temp.txt
     fi
     if [[ $Demo == "true" ]] && [[ $1 == "Short" ]]; then
-        echo "SHORT TEST SIMULATION" | tee -a /tmp/drive_test_temp.txt
+        echo "SHORT TEST SIMULATION" | tee -a /tmp/drive_selftest/drive_test_temp.txt
     elif [[ $Demo == "true" ]] && [[ $1 == "Long" ]]; then
-        echo "LONG TEST SIMULATION" | tee -a /tmp/drive_test_temp.txt
+        echo "LONG TEST SIMULATION" | tee -a /tmp/drive_selftest/drive_test_temp.txt
     fi
-    if [[ $Silent != "true" ]]; then
-        echo -n '  '$1' Test Mode:('$Test_Mode') "'$Test_Mode_Title'"' | tee -a /tmp/drive_test_temp.txt
+    if [[ $Silent != "enable" ]]; then
+        echo -n '  '$1' Test Mode:('$Test_Mode') "'$Test_Mode_Title'"' | tee -a /tmp/drive_selftest/drive_test_temp.txt
     
         if [[ $Test_Mode -eq 1 ]]; then
-            echo ', Running '$Drives_Test_Period' Option, Sorting by: '$SMART_Testing_Order | tee -a /tmp/drive_test_temp.txt
+            echo ', Running '$Drives_Test_Period' Option, Sorting by: '$SMART_Testing_Order | tee -a /tmp/drive_selftest/drive_test_temp.txt
         elif [[ $Test_Mode -eq 2 ]]; then
-            echo ', Running '$Drives_Test_Period' Option, No Sorting' | tee -a /tmp/drive_test_temp.txt
+            echo ', Running '$Drives_Test_Period' Option, No Sorting' | tee -a /tmp/drive_selftest/drive_test_temp.txt
         else    
-            echo ", $1 Testing will not be executed." | tee -a /tmp/drive_test_temp.txt
+            echo ", $1 Testing will not be executed." | tee -a /tmp/drive_selftest/drive_test_temp.txt
         fi
     fi
     sort_list=$smartdrives                                      # Lets sort the drive IDs.
@@ -725,25 +809,20 @@ smartctl_selftest () {
                 api_drive_serial_number=$sort_list              # The Serial/DriveID are now sorted.
                 sort_serial_number                              # Input - api_drive_serial_number, Output - smartdrives_sorted
             fi
-			echo " "
-			Drive_Count=$(wc -w <<< "$smartdrives_sorted" | xargs)  # Total number of drives.
-			if [[ $Silent != "true" ]]; then
-				(echo "    Authorized Test Days: "$DOW_days
-				echo "    Total Drives Recognized: "$Drive_Count) | tee -a /tmp/drive_test_temp.txt
-			fi
-		#else
-		#   if [[ $Silent != "true" ]]; then
-		#		(echo " "
-		#       echo "NO $1 DRIVES TO TEST THIS PERIOD"
-		#		echo " ") | tee -a /tmp/drive_test_temp.txt
-		fi		
+            echo " "
+            Drive_Count=$(wc -w <<< "$smartdrives_sorted" | xargs)  # Total number of drives.
+            if [[ $Silent != "enable" ]]; then
+                (echo "    Authorized Test Days: "$DOW_days
+                echo "    Total Drives Recognized: "$Drive_Count) | tee -a /tmp/drive_selftest/drive_test_temp.txt
+            fi
+        fi        
     fi
-	if [[ $Drives_Tested_Days_of_the_Week == *"$DOW"* ]] || [[ $Demo == "true" ]]; then
-		drives_to_test=$smartdrives_sorted
-	else
-		drives_to_test=""
-	fi
-	
+    if [[ $Drives_Tested_Days_of_the_Week == *"$DOW"* ]] || [[ $Demo == "true" ]]; then
+        drives_to_test=$smartdrives_sorted
+    else
+        drives_to_test=""
+    fi
+    
     if [[ $Test_Mode -eq 2 ]]; then        # All Testing
         Demo_loop=0
         loop_counter=0
@@ -768,10 +847,10 @@ smartctl_selftest () {
             (( Demo_loop ++ ))
         done
         if [[ $Drives_Tested_Days_of_the_Week == *"$DOW"* ]] || [[ $Demo == "true" ]]; then
-			drives_to_test=$smartdrives_sorted
-		else
-			drives_to_test=""
-		fi
+            drives_to_test=$smartdrives_sorted
+        else
+            drives_to_test=""
+        fi
     fi    
    
     if [[ $Test_Mode -eq 3 ]]; then        # No Testing
@@ -786,13 +865,16 @@ smartctl_selftest () {
             Days_Authorized_in_Week=$(echo "$Drives_Tested_Days_of_the_Week" | tr ',' ' ' | wc -w | xargs )     # This holds numbers of the days 1,2,3...
             Days_Authorized_in_Month=$(( 4 * Days_Authorized_in_Week ))  #  4 weeks * 2 days a week = 8 days to test.
  
+            # shellcheck disable=SC1073
+            # shellcheck disable=SC1072
+            # shellcheck disable=SC1009
             if [[ $(( Drives_to_Test_Per_Day * 10 )) -lt $((( Drive_Count * 10 ) / Days_Authorized_in_${Drives_Test_Period} )) ]]; then
-                    if [[ $Silent != "true" ]]; then
+                    if [[ $Silent != "enable" ]]; then
                     (   echo " "
                         echo "      DANGER Will Robinson, you have $Drive_Count drives and "$(( Days_Authorized_in_${Drives_Test_Period} ))" authorized days to test."
                         echo "      ROBOT will make adjustments, please wait.... Geez that was fast!"
                         echo "      Maybe you need more drives, Waka Waka! ROBOT made a funny."
-                    ) | tee -a /tmp/drive_test_temp.txt
+                    ) | tee -a /tmp/drive_selftest/drive_test_temp.txt
                     fi
 
                 Drives_to_Test_Per_Day=$((( Drive_Count * 10 ) / Days_Authorized_in_${Drives_Test_Period} ))   #  28/6 = 5.xxx = 6
@@ -801,11 +883,11 @@ smartctl_selftest () {
                 else
                     Drives_to_Test_Per_Day=$((Drive_Count / Days_Authorized_in_${Drives_Test_Period}))
                 fi
-                    if [[ $Silent != "true" ]]; then
+                    if [[ $Silent != "enable" ]]; then
                     (   echo "      Recalculation Complete, the new value is $Drives_to_Test_Per_Day drive(s) spread across"
-						echo "      the "$(( Days_Authorized_in_${Drives_Test_Period} ))" authorized day(s)."
+                        echo "      the "$(( Days_Authorized_in_${Drives_Test_Period} ))" authorized day(s)."
                         echo " "
-                    ) | tee -a /tmp/drive_test_temp.txt
+                    ) | tee -a /tmp/drive_selftest/drive_test_temp.txt
                     fi
             fi
 
@@ -830,24 +912,24 @@ smartctl_selftest () {
     if [[ $1 == "Short" ]]; then selftest_drives_short=$drives_to_test; fi
     if [[ $selftest_drives_short == "all" ]]; then
         selftest_drives_short=$smartdrives
-        if [[ $Silent != "true" ]]; then
-            echo "ALL DRIVES - SHORT" | tee -a /tmp/drive_test_temp.txt
+        if [[ $Silent != "enable" ]]; then
+            echo "ALL DRIVES - SHORT" | tee -a /tmp/drive_selftest/drive_test_temp.txt
         fi
     fi
     if [[ $1 == "Long" ]]; then selftest_drives_long=$drives_to_test; fi
     if [[ $selftest_drives_long == "all" ]]; then
         selftest_drives_long=$smartdrives
-        if [[ $Silent != "true" ]]; then
-            echo "ALL DRIVES - LONG" | tee -a /tmp/drive_test_temp.txt
+        if [[ $Silent != "enable" ]]; then
+            echo "ALL DRIVES - LONG" | tee -a /tmp/drive_selftest/drive_test_temp.txt
         fi
     fi
     # Call SMART Test routine.  Pass $1=Short/Long
     if [[ $Demo != "true" ]] && [[ $Ready_to_Test == "true" ]]; then    # Ready_to_Test means the Short and Long drive schedules are complete and actual testing may start.
 
 # We need to not start the smart testing until after we process both Short and Long drive lists to test.
-		if [[ $Short_Drives_Tested_Days_of_the_Week == *"$DOW"*	]] || [[ $Long_Drives_Tested_Days_of_the_Week == *"$DOW"*	]]; then		# If Long tests are not authorized for this day, do not run remove_duplicate_tests.
-			remove_duplicate_tests
-		fi
+        if [[ $Short_Drives_Tested_Days_of_the_Week == *"$DOW"*    ]] || [[ $Long_Drives_Tested_Days_of_the_Week == *"$DOW"*    ]]; then        # If Long tests are not authorized for this day, do not run remove_duplicate_tests.
+            remove_duplicate_tests
+        fi
     else
         # We have not processed the Long tests yet.
         Ready_to_Test="true"        # This is good for the second pass now.
@@ -860,18 +942,19 @@ smartctl_selftest () {
     fi
     
     (echo "        "$end_time_display":  EXIT smartctl_selftest"
-    echo -n "        Elapsed Time: Program $((SECONDS / 60)) minutes and $((SECONDS % 60))"
+    echo -n "        Elapsed Time: $((SECONDS / 60)) minutes and $((SECONDS % 60))"
         if [[ $end_tenths != "" ]]; then
             echo ".$end_tenths seconds elapsed."
         else
             echo " seconds elapsed."
         fi
-        echo " ") >> /tmp/drive_test_timer_temp.txt
+        echo " ") >> /tmp/drive_selftest/drive_test_timer_temp.txt
     
     }
 
 # CALLED FROM ONE LOCATION
 list_monthly_output () {
+	if [[ $Debug_Steps == "true" ]]; then echo "list_monthly_output" | tee -a /tmp/drive_selftest/drive_test_temp.txt; fi
 
 # This will generate the MONTHLY screen output for the drives tested.
 #
@@ -880,7 +963,7 @@ list_monthly_output () {
 # Local Variables: today_weekday, debian_day_of_month, pretext, gap_characters, pretext_length, drive_list_length_counter, drives_to_list_x, drives_already_tested
 #
 
-    (echo "            "$start_time_display":  START list_monthly_output") >> /tmp/drive_test_timer_temp.txt
+    (echo "            "$start_time_display":  START list_monthly_output") >> /tmp/drive_selftest/drive_test_timer_temp.txt
 
     DOW_temp=$DOW                                    # Use a temporary variable to add/subtract with.
     drives_to_list=""                                # Listing a grouping of drive ids.
@@ -936,7 +1019,7 @@ list_monthly_output () {
             done
             if [[ $Demo == "true" ]]; then        # WHY IS THIS ONLY FOR DEMO? IT WILL LIST ALL THE DAYS OF THE DRIVES IF DISABLED.  LEAVE IN PLACE !
                 if [[ $drives_to_list == "" ]]; then drives_to_list=" Nothing To Test This Day"; fi
-                echo -e $pretext$drives_to_list | tee -a /tmp/drive_test_temp.txt
+                echo -e $pretext$drives_to_list | tee -a /tmp/drive_selftest/drive_test_temp.txt
             fi
 
             if [[ $(( 10#$day_of_month )) -lt $(( 10#$today_day )) ]]; then
@@ -951,14 +1034,14 @@ list_monthly_output () {
     if [[ $Demo == "true" ]]; then return; fi
     if [[ ! $drives_already_tested -ge $Drive_Count ]]; then                                      # We match and have to test
         test_it=1
-        if [[ $Silent != "true" ]]; then
-            echo "    Drive(s) previously scheduled to be tested: "$drives_tested_demo | tee -a /tmp/drive_test_temp.txt
-            echo -e "    "$(wc -w <<< "$drives_to_list" | xargs)" Drive(s) testing today: "$drives_to_list | tee -a /tmp/drive_test_temp.txt
+        if [[ $Silent != "enable" ]]; then
+            echo "    Drive(s) previously scheduled to be tested: "$drives_tested_demo | tee -a /tmp/drive_selftest/drive_test_temp.txt
+            echo -e "    "$(wc -w <<< "$drives_to_list" | xargs)" Drive(s) testing today: "$drives_to_list | tee -a /tmp/drive_selftest/drive_test_temp.txt
         fi
         drives_to_test=$drives_to_list
     else
-        if [[ $Silent != "true" ]]; then
-            if [[ $valid_today -eq 1 ]]; then echo "    All Scheduled Drives Complete" | tee -a /tmp/drive_test_temp.txt; fi
+        if [[ $Silent != "enable" ]]; then
+            if [[ $valid_today -eq 1 ]]; then echo "    All Scheduled Drives Complete" | tee -a /tmp/drive_selftest/drive_test_temp.txt; fi
         fi
     fi
     echo " "
@@ -970,26 +1053,26 @@ list_monthly_output () {
     fi
     
     (echo "            "$end_time_display":  EXIT list_monthly_output"
-    echo -n "            Elapsed Time: Program $((SECONDS / 60)) minutes and $((SECONDS % 60))"
+    echo -n "            Elapsed Time: $((SECONDS / 60)) minutes and $((SECONDS % 60))"
         if [[ $end_tenths != "" ]]; then
             echo ".$end_tenths seconds elapsed."
         else
             echo " seconds elapsed."
         fi
-        echo " ") >> /tmp/drive_test_timer_temp.txt
+        echo " ") >> /tmp/drive_selftest/drive_test_timer_temp.txt
 
     }
 
 # CALLED FROM ONE LOCATION
 list_weekly_output () {
-
+	if [[ $Debug_Steps == "true" ]]; then echo "list_weekly_output" | tee -a /tmp/drive_selftest/drive_test_temp.txt; fi
 # This will generate the WEEKLY screen output for the drives tested.
 #
 # Global Variables: Demo, Drive_Count, Drives_Tested_Days_of_the_Week, smartdrives_sorted, 
 # Local Variables: First_DOM, drives_already_tested, valid_today, drives_already_tested, test_it, drives, DOW_temp, drives_to_test, drives_tested_demo?
 #
 
-    (echo "            "$start_time_display":  START list_weekly_output") >> /tmp/drive_test_timer_temp.txt
+    (echo "            "$start_time_display":  START list_weekly_output") >> /tmp/drive_selftest/drive_test_timer_temp.txt
 
     ### Setup variables:
     First_DOM=1        # Set First_DOM to the first day of the month.
@@ -999,10 +1082,10 @@ list_weekly_output () {
     test_it=0                # If set to other than 0, testing is needed.
     drives_already_tested=0            # Total number of drives previously scheduled tested.  The next number is the drive to be tested if test_it != 0.
     if [[ $Debug == "true" ]]; then
-        echo "Debug - Drive Names="$Drives_name
-        echo "Debug - Drive Count="$Drive_Count
-        echo "Debug - Drives Already Tested="$drives_already_tested
-        echo "Debug - Drives To Test="$drives_to_test
+        echo "Debug - Drive Names="$Drives_name | tee -a /tmp/drive_selftest/drive_test_temp.txt
+        echo "Debug - Drive Count="$Drive_Count | tee -a /tmp/drive_selftest/drive_test_temp.txt
+        echo "Debug - Drives Already Tested="$drives_already_tested | tee -a /tmp/drive_selftest/drive_test_temp.txt
+        echo "Debug - Drives To Test="$drives_to_test | tee -a /tmp/drive_selftest/drive_test_temp.txt
     fi
 
     while [ $First_DOM -le 7 ]; do
@@ -1024,8 +1107,8 @@ list_weekly_output () {
     if [[ ! $drives_already_tested -ge $Drive_Count ]]; then                        # We match and have to test
         test_it=1
     else
-        if [[ $Silent != "true" ]]; then
-            if [[ $valid_today -eq 1 ]]; then echo "All Scheduled Drives Complete" | tee -a /tmp/drive_test_temp.txt; fi
+        if [[ $Silent != "enable" ]]; then
+            if [[ $valid_today -eq 1 ]]; then echo "All Scheduled Drives Complete" | tee -a /tmp/drive_selftest/drive_test_temp.txt; fi
         fi
     fi 
     Temp_drives_tested=$drives_already_tested
@@ -1058,9 +1141,9 @@ list_weekly_output () {
     fi
 
     if [[ $Test_Mode -eq 2 ]]; then
-        if [[ $Silent != "true" ]]; then
+        if [[ $Silent != "enable" ]]; then
             (echo "All $(wc -w <<< "$smartdrives" | xargs) drives will be tested each time the script it run."
-            echo " ") | tee -a /tmp/drive_test_temp.txt
+            echo " ") | tee -a /tmp/drive_selftest/drive_test_temp.txt
         fi
         return
     fi
@@ -1081,11 +1164,9 @@ list_weekly_output () {
             7)    day_of_week="Sunday"    ;;
         esac
         IFS=$IFS_RESTORE
-
-
         if [[ $Demo == "true" ]]; then
             (echo " "; echo $day_of_week":"
-            ) | tee -a /tmp/drive_test_temp.txt
+            ) | tee -a /tmp/drive_selftest/drive_test_temp.txt
         fi
 
         # FOR WEEKLY RESULTS
@@ -1111,32 +1192,32 @@ list_weekly_output () {
         done
         if [[ $Demo == "true" ]]; then
             if [[ $Drive_List == "" ]]; then Drive_List="No Remaining Drives"; fi
-            echo -e " "$Drive_List | tee -a /tmp/drive_test_temp.txt
+            echo -e " "$Drive_List | tee -a /tmp/drive_selftest/drive_test_temp.txt
         fi
         Drive_List=""
     done
-    echo " " | tee -a /tmp/drive_test_temp.txt
+    echo " " | tee -a /tmp/drive_selftest/drive_test_temp.txt
     IFS=$IFS_RESTORE
     if [[ $Demo != "true" ]]; then
     (    if [[ $drives_tested_demo == "" ]]; then
-            if [[ $Silent != "true" ]]; then
+            if [[ $Silent != "enable" ]]; then
                 echo "    Drive(s) previously scheduled to be tested: None"
             fi
         else
-            if [[ $Silent != "true" ]]; then
+            if [[ $Silent != "enable" ]]; then
                 echo "    Drive(s) previously scheduled to be tested: "$drives_tested_demo
             fi
         fi
         if [[ $drives_to_test == "" ]]; then
-            if [[ $Silent != "true" ]]; then
+            if [[ $Silent != "enable" ]]; then
                 echo "    Drives scheduled for testing today: None"
             fi
         else
-            if [[ $Silent != "true" ]]; then
+            if [[ $Silent != "enable" ]]; then
                 echo "    Drive(s) scheduled for testing today: "$drives_to_test
             fi
         fi
-        echo " ") | tee -a /tmp/drive_test_temp.txt
+        echo " ") | tee -a /tmp/drive_selftest/drive_test_temp.txt
     fi
         
     if [[ $softver != "Linux" ]]; then
@@ -1146,13 +1227,13 @@ list_weekly_output () {
     fi
     
     (echo "            "$end_time_display":  EXIT list_weekly_output"
-    echo -n "            Elapsed Time: Program $((SECONDS / 60)) minutes and $((SECONDS % 60))"
+    echo -n "            Elapsed Time: $((SECONDS / 60)) minutes and $((SECONDS % 60))"
         if [[ $end_tenths != "" ]]; then
             echo ".$end_tenths seconds elapsed."
         else
             echo " seconds elapsed."
         fi
-        echo " ") >> /tmp/drive_test_timer_temp.txt
+        echo " ") >> /tmp/drive_selftest/drive_test_timer_temp.txt
 
     }
 
@@ -1162,6 +1243,7 @@ list_weekly_output () {
 
 # CALLED FROM ONE LOCATION
 sort_serial_number () {
+	if [[ $Debug_Steps == "true" ]]; then echo "sort_serial_number" | tee -a /tmp/drive_selftest/drive_test_temp.txt; fi
 # This routine performs three things:
 #  1. Sorts the drive serial numbers.
 #  2. Places the drive ids ($smartdrives_sorted) in the same order as the sorted serial numbers.
@@ -1172,20 +1254,20 @@ sort_serial_number () {
 #
 # Input - api_drive_serial_number, Output - smartdrives_sorted
 
-    (echo "            "$start_time_display":  START sort_serial_number") >> /tmp/drive_test_timer_temp.txt
+    (echo "            "$start_time_display":  START sort_serial_number") >> /tmp/drive_selftest/drive_test_timer_temp.txt
     
     api_x=0
     api_y=0
     api_drive_name=""
-    if [[ $Silent != "true" ]]; then
+    if [[ $Silent != "enable" ]]; then
         (echo " "
-        echo -n "    Sorting Drive Test Order ") | tee -a /tmp/drive_test_temp.txt
+        echo -n "    Sorting Drive Test Order ") | tee -a /tmp/drive_selftest/drive_test_temp.txt
     fi
     for api_drive_serial_order in $api_drive_serial_number; do
         while [[ "$(echo $Drive_Disk_Query  | jq -r '.['$api_y'].name')" != "null" ]]; do    # Loop through all of the drives comparing S/N Order to drive
             api_drive_serial_test=$(echo $Drive_Disk_Query  | jq -r '.['$api_y'].serial')
-            if [[ $Silent != "true" ]]; then
-                echo -n "." | tee -a /tmp/drive_test_temp.txt
+            if [[ $Silent != "enable" ]]; then
+                echo -n "." | tee -a /tmp/drive_selftest/drive_test_temp.txt
             fi
             Serial_Length=$(wc -c <<< "$api_drive_serial_test")                              # Too short of a S/N (3 characters or less) = Not Valid Drive
             if [[ $Serial_Length -gt 3 ]]; then
@@ -1208,8 +1290,8 @@ sort_serial_number () {
         api_y=0
         ((api_x ++))
     done
-    if [[ $Silent != "true" ]]; then
-        echo " " | tee -a /tmp/drive_test_temp.txt
+    if [[ $Silent != "enable" ]]; then
+        echo " " | tee -a /tmp/drive_selftest/drive_test_temp.txt
     fi
     smartdrives_sorted=$(echo "$api_drive_name" | xargs |  sed 's/nvd/nvme/g' )
 
@@ -1220,13 +1302,13 @@ sort_serial_number () {
     fi
     
     (echo "            "$end_time_display":  EXIT sort_serial_number"
-    echo -n "            Elapsed Time: Program $((SECONDS / 60)) minutes and $((SECONDS % 60))"
+    echo -n "            Elapsed Time: $((SECONDS / 60)) minutes and $((SECONDS % 60))"
         if [[ $end_tenths != "" ]]; then
             echo ".$end_tenths seconds elapsed."
         else
             echo " seconds elapsed."
         fi
-        echo " ") >> /tmp/drive_test_timer_temp.txt
+        echo " ") >> /tmp/drive_selftest/drive_test_timer_temp.txt
     
     }
 
@@ -1234,14 +1316,14 @@ sort_serial_number () {
 ########## RUN NVMe SELFTEST ##########
 # CALLED FROM ONE LOCATION
 nvm_selftest () {
-
+	if [[ $Debug_Steps == "true" ]]; then echo "nvm_selftest" | tee -a /tmp/drive_selftest/drive_test_temp.txt; fi
 # $1 is Long or Short
 #
 # Global Variables: $1, softver, Wait_For_SMART_Short_Test, Wait_For_SMART_Long_Test, drive
 # Local Variables: check_nvme_selftest, smart_selftest
 #
 
-    (echo "                    "$start_time_display":  START nvm_selftest") >> /tmp/drive_test_timer_temp.txt
+    (echo "                    "$start_time_display":  START nvm_selftest") >> /tmp/drive_selftest/drive_test_timer_temp.txt
     # This check should not be required as this function is only called if nvme commands are required.
     # I may need to change this to only check smartmontools if it is version 7.4, regardless of if it is not completely compatible until version 7.5.
     if ! [[ $programver3 -lt 24 ]] || [[ $programver3 -eq 13 && $programver4 -eq 3 ]]; then            # Check if we are using TrueNAS which supports nvme testing, after version 24.04 ?
@@ -1254,18 +1336,18 @@ nvm_selftest () {
         fi
     else
         NVMe_Override_Enabled="true"
-        echo "Using direct nvme commands to test nvme drives." | tee -a /tmp/drive_test_temp.txt
+        echo "Using direct nvme commands to test nvme drives." | tee -a /tmp/drive_selftest/drive_test_temp.txt
         # FIRST KICK OFF EACH TEST
         if [ $softver != "Linux" ]; then
             # FreeBSD Commands
             check_nvme_selftest=$(nvmecontrol identify "$drive" | grep -i "self-test")
             shopt -s nocasematch  # Make test not case sensitive
             if [[ $check_nvme_selftest != *"Not"* ]]; then
-                if [[ $Silent != "true" ]]; then
+                if [[ $Silent != "enable" ]]; then
                     if [[ $1 == "Long" ]]; then
-                        echo "Running $1 Self-test for $drive" | tee -a /tmp/drive_test_temp.txt
+                        echo "Running $1 Self-test for $drive" | tee -a /tmp/drive_selftest/drive_test_temp.txt
                     else
-                        echo "Running $1 Self-test for $drive" | tee -a /tmp/drive_test_temp.txt
+                        echo "Running $1 Self-test for $drive" | tee -a /tmp/drive_selftest/drive_test_temp.txt
                     fi
                 fi
                 if [[ "$1" != "Long" ]]; then    #Default run Short self-test.
@@ -1275,18 +1357,18 @@ nvm_selftest () {
                 fi
                 nvmecontrol selftest -c $smart_selftest "$drive"
             else
-                echo "$drive does not support Self-test" | tee -a /tmp/drive_test_temp.txt
+                echo "$drive does not support Self-test" | tee -a /tmp/drive_selftest/drive_test_temp.txt
             fi
             shopt -u nocasematch
         else
             # Debian Commands
             check_nvme_selftest=$(nvme id-ctrl /dev/"$drive" -H | grep -i "self-test")
             if [[ $check_nvme_selftest != *"Not"* ]]; then
-                if [[ $Silent != "true" ]]; then
+                if [[ $Silent != "enable" ]]; then
                     if [[ $1 == "Long" ]]; then
-                        echo "Running $1 Self-test for $drive in background " | tee -a /tmp/drive_test_temp.txt
+                        echo "Running $1 Self-test for $drive in background " | tee -a /tmp/drive_selftest/drive_test_temp.txt
                     else
-                        echo "Running $1 Self-test for $drive" | tee -a /tmp/drive_test_temp.txt
+                        echo "Running $1 Self-test for $drive" | tee -a /tmp/drive_selftest/drive_test_temp.txt
                     fi
                 fi
                 if [[ "$1" != "Long" ]]; then
@@ -1296,7 +1378,7 @@ nvm_selftest () {
                 fi
                 nvme device-self-test /dev/"$drive" -s $smart_selftest
             else
-                echo "$drive does not support Self-test" | tee -a /tmp/drive_test_temp.txt
+                echo "$drive does not support Self-test" | tee -a /tmp/drive_selftest/drive_test_temp.txt
             fi
         fi
     fi
@@ -1308,13 +1390,13 @@ nvm_selftest () {
     fi
     
     (echo "                    "$end_time_display":  EXIT nvm_selftest"
-    echo -n "                    Elapsed Time: Program $((SECONDS / 60)) minutes and $((SECONDS % 60))"
+    echo -n "                    Elapsed Time: $((SECONDS / 60)) minutes and $((SECONDS % 60))"
         if [[ $end_tenths != "" ]]; then
             echo ".$end_tenths seconds elapsed."
         else
             echo " seconds elapsed."
         fi
-        echo " ") >> /tmp/drive_test_timer_temp.txt    
+        echo " ") >> /tmp/drive_selftest/drive_test_timer_temp.txt    
 
     }
 
@@ -1322,6 +1404,7 @@ nvm_selftest () {
 ########## GET DRIVE LISTINGS
 # CALLED FROM ONE LOCATION
 get_API_Drives () {
+	if [[ $Debug_Steps == "true" ]]; then echo "get_API_Drives" | tee -a /tmp/drive_selftest/drive_test_temp.txt; fi
 # Replaces all the drive listing procedures.
 # Input = Nothing
 # Output = List of each drive TrueNAS recognizes along with (within an array; Drive Name, Model, Serial Number, Interface Type) and the full Drive Query output.
@@ -1330,16 +1413,16 @@ get_API_Drives () {
 # Local Variables: index, increment
 #
 
-    (echo "    "$start_time_display":  START get_API_Drives") >> /tmp/drive_test_timer_temp.txt
+    (echo "    "$start_time_display":  START get_API_Drives") >> /tmp/drive_selftest/drive_test_timer_temp.txt
 
-	# Setup local variables
+    # Setup local variables
     index=0            # INDEX IS THE REPORTED BACK DRIVES
     increment=0        # INCREMENT IS THE ACCESS TO THE FULL ARRAY, INCLUDING VIRTUAL AND CD DRIVES
     skip_drives_count=0
 
-    if [[ $Debug == "true" ]]; then    echo "Debug - Function 'get_API_Drives'"; echo " "; fi
-        if [[ $Test_ONLY_NVMe_Drives == "true" ]]; then
-            echo "Testing ONLY NVMe Drives" | tee -a /tmp/drive_test_temp.txt
+    if [[ $Debug == "true" ]]; then    echo "Debug - Function 'get_API_Drives'" | tee -a /tmp/drive_selftest/drive_test_temp.txt; echo " " | tee -a /tmp/drive_selftest/drive_test_temp.txt; fi
+        if [[ $Test_ONLY_NVMe_Drives == "enable" ]]; then
+            echo "Testing ONLY NVMe Drives" | tee -a /tmp/drive_selftest/drive_test_temp.txt
         fi
     Drive_Disk_Query=$(midclt call disk.query)
 
@@ -1355,15 +1438,15 @@ get_API_Drives () {
         drives_serial[index]=$(echo $Drive_Disk_Query | jq -Mre '.'[$increment]'.serial' | tr -d ' ')        # "td -d ' '" removes any white space from the serial number
 
     # WE NEED TO WEED OUT ALL BUT NVD/NVME DRIVES IF NVME TEST ONLY OPTION SET
-        if [[ $Test_ONLY_NVMe_Drives == "true" ]]; then
+        if [[ $Test_ONLY_NVMe_Drives == "enable" ]]; then
             # WE NEED TO LET PASS ONLY NVD/NVME HERE
             if [[ ${drives_name[$index]} == "nvme"* ]] || [[ ${drives_name[$index]} == "nvd"* ]]; then
                 if [[ $Debug == "true" ]]; then
-                    echo "continue "$i
+                    echo "continue "$i | tee -a /tmp/drive_selftest/drive_test_temp.txt
                 fi
             else
                 if [[ $Debug == "true" ]]; then
-                    echo "Virtual "$i
+                    echo "Virtual "$i | tee -a /tmp/drive_selftest/drive_test_temp.txt
                 fi
                 drives_model[$index]="Virtual"            # Change all non NVD/NVME drives to Virtual, Crappy Hack But it Works?
             fi
@@ -1374,13 +1457,13 @@ get_API_Drives () {
             (( skip_drives_count ++ ))
             if [[ $Debug == "true" ]] || [[ $Demo == "true" ]] || [[ $timer_flag -eq 1 ]] ; then
                 if [[ $Ignore_Drives_List =~ ${drives_serial[$index]} ]]; then
-                    if [[ $Silent != "true" ]]; then
-                        echo "Skip Ignored Drive(s): "${drives_name[$index]} | tee -a /tmp/drive_test_temp.txt
+                    if [[ $Silent != "enable" ]]; then
+                        echo "Skip Ignored Drive(s): "${drives_name[$index]} | tee -a /tmp/drive_selftest/drive_test_temp.txt
                     fi
                     skip_drives_ignore=$skip_drives_ignore", "${drives_name[$index]}"("${drives_serial[$index]}")"
                 else
-                    if [[ $Silent != "true" ]]; then
-                        echo "Skip Virtual Drive(s): "${drives_name[$index]} | tee -a /tmp/drive_test_temp.txt
+                    if [[ $Silent != "enable" ]]; then
+                        echo "Skip Virtual Drive(s): "${drives_name[$index]} | tee -a /tmp/drive_selftest/drive_test_temp.txt
                     fi
                     skip_drives_virtual=", "${drives_name[$index]}
                 fi
@@ -1409,18 +1492,18 @@ get_API_Drives () {
     if [[ $Debug == "true" ]]; then
         index=0
         for i in ${drives_name[@]}; do
-            echo -n "Debug - Drive ID="${drives_name[$index]}
-            echo -n ", Drive S/N="${drives_serial[$index]}
-            echo -n ", Drive Model="${drives_model[$index]}
-            echo ", Drive Subsystem="${drives_subsystem[$index]}
+            echo -n "Debug - Drive ID="${drives_name[$index]} | tee -a /tmp/drive_selftest/drive_test_temp.txt
+            echo -n ", Drive S/N="${drives_serial[$index]} | tee -a /tmp/drive_selftest/drive_test_temp.txt
+            echo -n ", Drive Model="${drives_model[$index]} | tee -a /tmp/drive_selftest/drive_test_temp.txt
+            echo ", Drive Subsystem="${drives_subsystem[$index]} | tee -a /tmp/drive_selftest/drive_test_temp.txt
             (( index ++ ))
         done
-        echo " "
-        echo "Debug - Total Drives="$drives_count
-        echo "Debug - Drive Names="${drives_name[@]}
-        echo "Debug - Drives Serial Numbers="${drives_serial[@]}
-        echo " "
-        echo "Debug - Leaving function 'get_API_Drives'"
+        echo " " | tee -a /tmp/drive_selftest/drive_test_temp.txt
+        echo "Debug - Total Drives="$drives_count | tee -a /tmp/drive_selftest/drive_test_temp.txt
+        echo "Debug - Drive Names="${drives_name[@]} | tee -a /tmp/drive_selftest/drive_test_temp.txt
+        echo "Debug - Drives Serial Numbers="${drives_serial[@]} | tee -a /tmp/drive_selftest/drive_test_temp.txt
+        echo " " | tee -a /tmp/drive_selftest/drive_test_temp.txt
+        echo "Debug - Leaving function 'get_API_Drives'" | tee -a /tmp/drive_selftest/drive_test_temp.txt
     fi
 
     skip_drives_ignore="Ignored: "${skip_drives_ignore:1}
@@ -1436,25 +1519,24 @@ get_API_Drives () {
     fi
     
     echo "    "$end_time_display":  EXIT get_API_Drives"
-    echo -n "    Elapsed Time: Program $((SECONDS / 60)) minutes and $((SECONDS % 60))"
+    echo -n "    Elapsed Time: $((SECONDS / 60)) minutes and $((SECONDS % 60))"
         if [[ $end_tenths != "" ]]; then
             echo ".$end_tenths seconds elapsed."
         else
             echo " seconds elapsed."
         fi
-        echo " ") >> /tmp/drive_test_timer_temp.txt
+        echo " ") >> /tmp/drive_selftest/drive_test_timer_temp.txt
         
-#echo 
-
     }
 
 ########## SORT ROUTINE ##########
 
 sort_data () {
+	if [[ $Debug_Steps == "true" ]]; then echo "sort_data" | tee -a /tmp/drive_selftest/drive_test_temp.txt; fi
 # Global Variables: sort_list
 # Local Variables: i
 
-    (echo "            "$start_time_display":  START sort_data '$1'") >> /tmp/drive_test_timer_temp.txt
+    (echo "            "$start_time_display":  START sort_data '$1'") >> /tmp/drive_selftest/drive_test_timer_temp.txt
 
     if [ $softver != "Linux" ]; then
     sort_list=$(for i in $sort_list; do
@@ -1478,18 +1560,19 @@ sort_data () {
     fi
     
     (echo "            "$end_time_display":  EXIT sort_data"
-    echo -n "            Elapsed Time: Program $((SECONDS / 60)) minutes and $((SECONDS % 60))"
+    echo -n "            Elapsed Time: $((SECONDS / 60)) minutes and $((SECONDS % 60))"
         if [[ $end_tenths != "" ]]; then
             echo ".$end_tenths seconds elapsed."
         else
             echo " seconds elapsed."
         fi
-        echo " ") >> /tmp/drive_test_timer_temp.txt
+        echo " ") >> /tmp/drive_selftest/drive_test_timer_temp.txt
 
     }
 
 
     delete_log_files () {
+		if [[ $Debug_Steps == "true" ]]; then echo "delete_log_files" | tee -a /tmp/drive_selftest/drive_test_temp.txt; fi
     # This function will detect and delete all the log file created by this script.
     
     if ls drive_selftest_demo_??.txt 1> /dev/null 2>&1; then echo "Removing Demo Log Files"; rm drive_selftest_demo_??.txt; else echo "No demo log files to remove."; fi
@@ -1511,9 +1594,10 @@ sort_data () {
 
 # CALLED FROM TWO LOCATIONS    
 help_text () {
+	if [[ $Debug_Steps == "true" ]]; then echo "help_text" | tee -a /tmp/drive_selftest/drive_test_temp.txt; fi
     clear
     echo "SMART Drive Self-test Script: "$Version" "$Version_Date
-	echo "Standalone or Companion to Multi-Report 3.1 and later."
+    echo "Standalone or Companion to Multi-Report 3.1 and later."
     echo " "
     echo "For Standalone Operation (not using multi_report_config.txt file),"
     echo "edit lines (around line 90) '######### USER SETTINGS #########' as desired."
@@ -1587,16 +1671,17 @@ help_text () {
     echo "This will provide a listing of how your drives would be tested for"
     echo "a short test in Test Mode 1, providing you the dates they would be tested."
     echo " "
-	echo "To read the Troubleshooting Help pages, Press 'Y'"
+    echo "To read the Troubleshooting Help pages, Press 'Y'"
     echo "Press any other key to exit"
     read -s -n 1 key_input
-	if [[ $key_input == "y" ]] || [[ $key_input == "Y" ]]; then troubleshooting_help; fi
-
+    if [[ $key_input == "y" ]] || [[ $key_input == "Y" ]]; then troubleshooting_help; fi
     exit 0
+	
     }
 
 # CALLED FROM ONE LOCATION    
 troubleshooting_help () {
+	if [[ $Debug_Steps == "true" ]]; then echo "troubleshooting_help" | tee -a /tmp/drive_selftest/drive_test_temp.txt; fi
     clear
     echo "TROUBLESHOOTING HELP                           Script Version: "$Version" "$Version_Date
     echo "You are running on "$programver
@@ -1605,7 +1690,7 @@ troubleshooting_help () {
     echo "in which you may encounter."
     echo " "
     echo "First: What is a problem message?"
-    echo " 1. Anything that has the words 'DRATS' or 'DARN' is a minor problem."
+    echo " 1. If you see an error message about exit code that is other than zero (0)."
     echo " 2. If you notice drives are being tested in an improper sequence."
     echo " 3. Any script failure messages."
     echo " "
@@ -1617,10 +1702,6 @@ troubleshooting_help () {
     echo " 3. Days being skipped in '-demo' mode.  First check your Authorized Days"
     echo "    to run the test, odds are you are missing the week days not included."
     echo " "
-    echo "For a 'DRATS' or 'DARN' message, this means that the drive is already in test,"
-    echo "and therefore was not expected to be in test.  Reasonable possibilities are:"
-    echo " 1. You are running the script while a SMART test is already in progress."
-    echo "Hum, can't be anything else, can it."
     echo " "
     echo "Press Any Key to Continue"
     read -s -n 1 key_input
@@ -1646,7 +1727,7 @@ troubleshooting_help () {
     echo " "
     echo "Five Waka Waka Jokes: https://www.youtube.com/watch?v=rDpUAqQPnzM"
     echo "If you are bored"
-	    
+        
     }
 
 
@@ -1655,53 +1736,64 @@ troubleshooting_help () {
 
 ### Use multi_report_config.txt or not?
 # If the file does not exist, script values will be used and no error message will be generated.
-# Either setting the Use_multi_report_config_values="true" (at top of script), or switch will use the Multi-Report file, if it exists.
+# Either setting the Use_multi_report_config_values="enable" (at top of script), or switch will use the Multi-Report file, if it exists.
 # First line finds out if this script was called by Multi-Report.
 
 ### DELETE ANY LEFTOVER TEMPORARY FILES IF THEY EXIST, THEY SHOULDN'T.
-if test -e "/tmp/drive_test_timer_temp.txt"; then rm "/tmp/drive_test_timer_temp.txt"; fi
-if test -e "/tmp/drive_test_temp.txt"; then rm "/tmp/drive_test_temp.txt"; fi
+if test -e "/tmp/drive_selftest"; then rm -R "/tmp/drive_selftest"; fi
+sleep .2
+mkdir "/tmp/drive_selftest"		# Create temporary directory for this iteration of the script.
 
-echo "Joe's SMART Drive Self-test Script - Run: "$today_day" "$Full_Month_Name" "$(date +%r) | tee /tmp/drive_test_temp.txt /tmp/drive_test_timer_temp.txt
-echo "Script Version: "$Version" "$Version_Date", "$programver | tee /tmp/drive_test_temp.txt /tmp/drive_test_timer_temp.txt
+#if test -e "/tmp/drive_selftest/drive_test_timer_temp.txt"; then rm "/tmp/drive_selftest/drive_test_timer_temp.txt"; fi
+#if test -e "/tmp/drive_selftest/drive_test_temp.txt"; then rm "/tmp/drive_selftest/drive_test_temp.txt"; fi
 
-if [[ $Enable_Logging == "true" ]]; then
+echo "Joe's SMART Drive Self-test Script - Run: "$today_day" "$Full_Month_Name" "$(date +%r) | tee -a /tmp/drive_selftest/drive_test_temp.txt /tmp/drive_selftest/drive_test_timer_temp.txt
+echo "Script Version: "$Version" "$Version_Date", "$programver | tee -a /tmp/drive_selftest/drive_test_temp.txt /tmp/drive_selftest/drive_test_timer_temp.txt
+
+if test -e "$Config_File_Name" || [[ $1 == "-use_external_file" ]]; then
+    if [[ $Use_multi_report_config_values == "enable" ]]; then
+        if test -e "$Config_File_Name"; then
+            . "$Config_File_Name"
+            echo 'Using "'$Config_File_Name'" values..."' | tee -a /tmp/drive_selftest/drive_test_temp.txt /tmp/drive_selftest/drive_test_timer_temp.txt
+        else
+            echo 'Using "script" values...' | tee -a /tmp/drive_selftest/drive_test_temp.txt /tmp/drive_selftest/drive_test_timer_temp.txt
+        fi
+    fi
+fi
+
+if [[ $1 == "-dump" ]] || [[ $2 == "-dump" ]] || [[ $1 == "-demo" ]]; then Silent="disable"; Debug="true"; fi    # This is duplicated before and after the config file is read to ensure we remain in "debug" mode.
+
+if [[ $Enable_Logging == "enable" ]]; then
     if ! test -e "$LOG_DIR"; then
-        echo "'"$LOG_DIR"' does not exist, attempting to create it..." | tee /tmp/drive_test_temp.txt /tmp/drive_test_timer_temp.txt
+        echo "'"$LOG_DIR"' does not exist, attempting to create it..." | tee -a /tmp/drive_selftest/drive_test_temp.txt /tmp/drive_selftest/drive_test_timer_temp.txt
         mkdir $LOG_DIR
         if test -e "$LOG_DIR"; then
-            echo "Success" | tee /tmp/drive_test_temp.txt /tmp/drive_test_timer_temp.txt
+            echo "Success" | tee -a /tmp/drive_selftest/drive_test_temp.txt /tmp/drive_selftest/drive_test_timer_temp.txt
         else
-            echo "Failed to create '"$LOG_DIR"', using script default directory of "$SCRIPT_DIR | tee /tmp/drive_test_temp.txt /tmp/drive_test_timer_temp.txt
+            echo "Failed to create '"$LOG_DIR"', using script default directory of "$SCRIPT_DIR | tee -a /tmp/drive_selftest/drive_test_temp.txt /tmp/drive_selftest/drive_test_timer_temp.txt
             LOG_DIR=$SCRIPT_DIR
         fi
     fi
-    if [[ $Silent != "true" ]]; then
+    if [[ $Silent != "enable" ]]; then
         echo " "
-        echo "Logging Enabled" | tee /tmp/drive_test_temp.txt /tmp/drive_test_timer_temp.txt
+        echo "Logging Enabled" | tee -a /tmp/drive_selftest/drive_test_temp.txt /tmp/drive_selftest/drive_test_timer_temp.txt
     fi
 fi
 
-if [[ $Silent == "true" ]]; then
-    echo "Silent Enabled - Only Errors Will Be Reported" | tee /tmp/drive_test_temp.txt /tmp/drive_test_timer_temp.txt
+if [[ $Silent == "enable" ]]; then
+    (echo " "
+    echo "----> Silent Enabled - Minimal Data Will Be Reported, Plus Any Error Messages <----"
+    echo "----> You may experience prolonged silence, be patient <----"
+    echo " ") | tee -a /tmp/drive_selftest/drive_test_temp.txt /tmp/drive_selftest/drive_test_timer_temp.txt
 fi
 
-if test -e "$Config_File_Name" || [[ $1 == "-use_external_file" ]]; then
-    if [[ $Use_multi_report_config_values == "true" ]]; then
-        if test -e "$Config_File_Name"; then
-            . "$Config_File_Name"
-			echo "Using "$Config_File_Name" values..." | tee /tmp/drive_test_temp.txt /tmp/drive_test_timer_temp.txt
-        else
-            echo "Using script values..." | tee /tmp/drive_test_temp.txt /tmp/drive_test_timer_temp.txt
-        fi
-    fi
-fi
+if [[ $2 == "debug" ]]; then Silent="disable"; Debug="true"; fi
 
-if [[ $Check_For_Updates == "true" ]]; then
+if [[ $Check_For_Updates == "enable" ]]; then
     checkforupdate
 fi
 
-if [[ $Automatic_Selftest_Update == "true" ]] && [[ $UpdateDriveAvailable == "true" ]]; then checkforupdate; fi
+if [[ $Automatic_Selftest_Update == "enable" ]] && [[ $UpdateDriveAvailable == "true" ]]; then checkforupdate; fi
 
 if [[ $1 == "-update" ]]; then
     update_Drive_script
@@ -1713,7 +1805,7 @@ SECONDS=0            # Lets start the timer
 if [[ $softver != "Linux" ]]; then start_time_display=$(date '+%H:%M:%S'); else start_time_display=$(date +"%H:%M:%S.%2N"); fi
 
 (echo "This log file is used to track the execution time for each routine and identify any location to optimize if possible."; echo " "
-echo $start_time_display":  Program Start"; echo " ") >> /tmp/drive_test_timer_temp.txt
+echo $start_time_display":  Program Start"; echo " ") >> /tmp/drive_selftest/drive_test_timer_temp.txt
 
 #### SETUP SCRIPT TO ACKNOWLEDGE ANY ORDER OF SWITCHES.
 
@@ -1810,7 +1902,7 @@ if [[ $1 == "-demo" ]]; then
     echo "Demo Mode: Below is the simulated testing schedule based on current settings."
     echo " "
     (echo "Demo Mode: Below is the simulated testing schedule based on current settings."
-    echo " ") >> /tmp/drive_test_temp.txt
+    echo " ") >> /tmp/drive_selftest/drive_test_temp.txt
 fi
 
 #if [[ $Demo == "true" ]] && [[ $short_cli -eq 1 ]]; then Long_Test_Mode=3; fi
@@ -1824,7 +1916,9 @@ shopt -u nocasematch
 (( Drive_List_Length -- ))            # Adjust for offset
 get_API_Drives                        # Grab all the drive data at one single time
 SCRUB_In_Progress="false"
-check_scrub                           # Is a SCRUB going on?  This function will set the test mode to "0" if no tests are to be run.
+if [[ $SCRUB_RESILVER_OVERRIDE != "enable" ]]; then  # Override scrub and resilver, allow SMART Long tests to run regardless.
+	check_scrub                           # Is a SCRUB going on?  This function will set the test mode to "0" if no tests are to be run.
+fi
 
 if [[ $Long_Test_Mode -ne 0 ]]; then
     smartctl_selftest Short           # Run Short HDD/SSD SMART Tests
@@ -1879,17 +1973,17 @@ if [[ $Long_DOW_days == "" ]]; then Long_DOW_days="None"; fi
     
 IFS=$IFS_RESTORE
 
-if [[ $Short_Drives_Testing == "" ]]; then Short_Drives_Testing="none"; fi
-if [[ $Long_Drives_Testing == "" ]]; then Long_Drives_Testing="none"; fi
+if [[ $Short_Drives_Testing == "" ]]; then Short_Drives_Testing="none today"; fi
+if [[ $Long_Drives_Testing == "" ]]; then Long_Drives_Testing="none today"; fi
 
 (echo "<b>   a) Short Test Authorized Test Days (</b>"$Short_DOW_days"<b>) (</b>~$Drives_to_Test_Per_Day Drive(s) per day<b>)</b>"
- echo "      ("$Short_Drives_Testing")"
+ echo "      Drives Testing: ("$Short_Drives_Testing") - Test Mode "$Short_Test_Mode
  echo "<b>   b) Long Test Authorized Test Days (</b>"$Long_DOW_days"<b>) (</b>~$Drives_to_Test_Per_Day Drive(s) per day<b>)</b>"
- echo "      ("$Long_Drives_Testing")"
+ echo "      Drives Testing: ("$Long_Drives_Testing") - Test Mode "$Long_Test_Mode
  if [[ $SCRUB_In_Progress == "true" ]]; then
-	echo "<b>   c) A "$Function" is in progress with "$Function_Time_Left_Whole1"."$Function_Time_Left_Fraction" Hours remaining.</b>"
+    echo "<b>   c) A "$Function" is in progress with "$Function_Time_Left_Whole1"."$Function_Time_Left_Fraction" Hours remaining.</b>"
  else
- 	echo "<b>   c) A SCRUB or RESILVER is NOT in progress.</b>"
+     echo "<b>   c) A SCRUB or RESILVER is NOT in progress.</b>"
  fi
 
 if [[ $NVMe_Override_Enabled == "true" ]]; then
@@ -1904,30 +1998,30 @@ else
 fi
 
 # PRINT THE SCRIPT DURATION
-if [[ $Silent != "true" ]]; then
+if [[ $Silent != "enable" ]]; then
     (echo " "
     echo $end_time_display":  Drive-Selftest Wrapping things up..."
-    echo -n "Elapsed Time: Program $((SECONDS / 60)) minutes and $((SECONDS % 60))"
+    echo -n "Elapsed Time: $((SECONDS / 60)) minutes and $((SECONDS % 60))"
     if [[ $end_tenths != "" ]]; then
         echo ".$end_tenths seconds elapsed."
     else
         echo " seconds elapsed."
     fi
-    echo " ") | tee -a /tmp/drive_test_temp.txt
+    echo " ") | tee -a /tmp/drive_selftest/drive_test_temp.txt
 else
     (echo " "
     echo $end_time_display":  Drive-Selftest Wrapping things up..."
-    echo -n "Elapsed Time: Program $((SECONDS / 60)) minutes and $((SECONDS % 60))"
+    echo -n "Elapsed Time: $((SECONDS / 60)) minutes and $((SECONDS % 60))"
     if [[ $end_tenths != "" ]]; then
         echo ".$end_tenths seconds elapsed."
     else
         echo " seconds elapsed."
     fi
-    echo " ") >> /tmp/drive_test_temp.txt
+    echo " ") >> /tmp/drive_selftest/drive_test_temp.txt
 fi
 
 # TIME TO TELL EVERYONE THE DURATION OF THE WAIT
-if [[ $Silent != "true" ]]; then
+if [[ $Silent != "enable" ]]; then
     (
     if [[ $No_Tests == "false" ]]; then
         if [[ $Short_Drives_Test_Delay -lt 6 ]]; then
@@ -1936,7 +2030,7 @@ if [[ $Silent != "true" ]]; then
             echo "Waiting $Short_Drives_Test_Delay Second Delay, Please Standby..."
         fi
     fi
-    ) | tee -a /tmp/drive_test_temp.txt
+    ) | tee -a /tmp/drive_selftest/drive_test_temp.txt
 else
     (
     if [[ $No_Tests == "false" ]]; then
@@ -1946,38 +2040,42 @@ else
             echo "Your $Short_Drives_Test_Delay Second Delay, Please Standby..."
         fi
     fi
-    ) >> /tmp/drive_test_temp.txt
+    ) >> /tmp/drive_selftest/drive_test_temp.txt
 fi
 
 # IF LOGGING ENABLED, WRITE THE THREE FILES
-if [[ $Enable_Logging == "true" ]]; then
+if [[ $Enable_Logging == "enable" ]]; then
     if [[ $Demo == "true" ]]; then
         echo " "
-        echo "Saving Log (file name: $LOG_DIR/drive_test_demo_${today_day#0}.txt)" | tee -a /tmp/drive_test_temp.txt
-        cat /tmp/drive_test_temp.txt > $LOG_DIR/drive_selftest_demo_${today_day#0}.txt
+        echo "Saving Log (file name: $LOG_DIR/drive_selftest_demo_${today_day#0}.txt)" | tee -a /tmp/drive_selftest/drive_test_temp.txt
+        cat /tmp/drive_selftest/drive_test_temp.txt > $LOG_DIR/drive_selftest_demo_${today_day#0}.txt
     else
-        if [[ $Silent != "true" ]]; then
-            echo "Saving Log (file name: $LOG_DIR/drive_test_${today_day}.txt)" | tee -a /tmp/drive_test_temp.txt
-            echo "Exiting Joe's SMART Drive Self-test Script" >> /tmp/drive_test_temp.txt
-            cat /tmp/drive_test_temp.txt > $LOG_DIR/drive_selftest_${today_day#0}.txt
+        if [[ $Silent != "enable" ]]; then
+            echo "Saving Log (file name: $LOG_DIR/drive_selftest_${today_day}.txt)" | tee -a /tmp/drive_selftest/drive_test_temp.txt
+            echo "Exiting Joe's SMART Drive Self-test Script" >> /tmp/drive_selftest/drive_test_temp.txt
+            cat /tmp/drive_selftest/drive_test_temp.txt > $LOG_DIR/drive_selftest_${today_day#0}.txt
         else
-            echo "Saving Log (file name: $LOG_DIR/drive_test_${today_day}.txt)" >> /tmp/drive_test_temp.txt
-            echo "Exiting Joe's SMART Drive Self-test Script" >> /tmp/drive_test_temp.txt
-            cat /tmp/drive_test_temp.txt > $LOG_DIR/drive_selftest_${today_day#0}.txt
+            echo "Saving Log (file name: $LOG_DIR/drive_test_${today_day}.txt)" >> /tmp/drive_selftest/drive_test_temp.txt
+            echo "Exiting Joe's SMART Drive Self-test Script" >> /tmp/drive_selftest/drive_test_temp.txt
+            cat /tmp/drive_selftest/drive_test_temp.txt > $LOG_DIR/drive_selftest_${today_day#0}.txt
         fi
     fi
     if [[ $timer_flag -eq 1 ]]; then
-        echo "Exiting Joe's SMART Drive Self-test Script" >> /tmp/drive_test_timer_temp.txt
-        cat /tmp/drive_test_timer_temp.txt > $LOG_DIR/drive_selftest_timer_${today_day#0}.txt
+        echo "Exiting Joe's SMART Drive Self-test Script" >> /tmp/drive_selftest/drive_test_timer_temp.txt
+        cat /tmp/drive_selftest/drive_test_timer_temp.txt > $LOG_DIR/drive_selftest_timer_${today_day#0}.txt
     fi
 
-    if [[ $drive_selftest_dump != "true" ]]; then        # Leave the files behind for Multi-Report to collect.
-        rm /tmp/drive_test_timer_temp.txt > /dev/null 2<&1
-        rm /tmp/drive_test_temp.txt > /dev/null 2<&1
-    fi
+#    if [[ $drive_selftest_dump != "true" ]]; then        # Leave the files behind for Multi-Report to collect.
+#        rm /tmp/drive_selftest/drive_test_timer_temp.txt > /dev/null 2<&1
+#        rm /tmp/drive_selftest/drive_test_temp.txt > /dev/null 2<&1
+#    fi
 fi
 
 # Leave "/tmp/smartdrive_selftest_text.txt" for Multi-Report
+
+# Delete everything else
+if test -e "/tmp/drive_selftest"; then rm -R "/tmp/drive_selftest"; fi
+if test -e "/tmp/Multi-Report/drive_selftest.txt"; then rm /tmp/Multi-Report/drive_selftest.txt; fi
 
 if [[ $No_Tests == "true" ]]; then
     if [[ $Demo == "true" ]]; then
