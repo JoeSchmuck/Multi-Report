@@ -5,6 +5,8 @@ LANG="en_US.UTF-8"
 
 ##### Version 3.18
 
+# THIS IS A PATCHED VERSION OF 3.18 UNTIL 3.19 CAN BE RELEASED.  FARM CHECK IS DISABLED AND CANNOT BE ENABLED, REGARDLESS OF THE SETTING.
+
 ###### Get Config File Name and Location
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 Config_File_Name="$SCRIPT_DIR/multi_report_config.txt"
@@ -80,6 +82,10 @@ fi
 
 # Version
 ### Changelog:
+
+# V3.18a
+#
+#  - Disabled FARM check.
 
 # V3.18 (09 June 2025)
 #
@@ -820,7 +826,7 @@ logfile_header="/tmp/${tempfilepath}smart_report_header.tmp"
 logfile_temp="/tmp/${tempfilepath}smart_report_temp.tmp"
 boundary="gc0p4Jq0M2Yt08jU534c0p"
 
-CurrentFilename="multi_report_v3.18_2025_06_09.txt"
+CurrentFilename="multi_report_v3.18_2025_06_17.txt"
 valid_config_version_date="2025-06-07"	# Configuration file valid date
 progverdate="$(echo $CurrentFilename | cut -d '_' -f4,5,6 | cut -d '.' -f1 | sed -r 's/[_]+/-/g')"
 progname="Multi-Report "$(echo $CurrentFilename | cut -d '_' -f3)" dtd:"
@@ -4738,7 +4744,7 @@ ID241=""
 		Custom_Drives_ListDrive="NVM"
 	fi
 
-	if [[ $DriveFARMCheck == "enable" ]]; then
+	if [[ $DriveFARMCheck == "3.18a_enable" ]]; then
 		check_farm_data
 	fi
 
@@ -5410,7 +5416,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "detailed_report" | tee -a /tmp/multi
 			echo "<b>4) S.M.A.R.T Testing External File - (Disabled)</b>" >> "$logfile"
 		fi
 		
-		if [[ $DriveFARMCheck == "enable" ]]; then
+		if [[ $DriveFARMCheck == "3.18a_enable" ]]; then
 			echo "<b>5) Seagate Drive FARM Check - (Enabled)</b><br>" >> "$logfile"
 		else
 			echo "<b>5) Seagate Drive FARM Check - (Disabled)</b><br>" >> "$logfile"
