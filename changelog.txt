@@ -1,5 +1,44 @@
 # CHANGE LOG FOR MULTI-REPORT
 
+# V3.19 (27 June 2025)
+#
+#  - Updated FARM check function to convert numerical strings in to numbers.  Limited checks to Serial Number and Power On Hours.
+#  - Updated built in simulator to process .farm files.
+#  - Updated -dump files to remove the begining numerical portion of the file name.
+#  - Added two new switches `-enable_farm` and `-disable_farm` to make the change easier that using the `-config` switch.
+#  - Added new switch `-tardrivedata` to capture all the JSON and FARM data, without actually running the entire script.
+#  - Fixed Drive_Selftest Minor Version Update Issue.
+#  - Fixed the Multi-Report User Guide and Quick Start Guide not being saved during an initial installation.
+#
+
+# V3.18 (09 June 2025)
+#
+#  - Fixed the Update script.  Accidentally broke it.
+
+# V3.17 (07 June 2025)
+#
+#  - Added F.A.R.M. data to -dump files.
+#  - Added F.A.R.M. Offset to the Custom Drive Configuration.  You may leave at default or ignore the drive.
+#  - Updated F.A.R.M. check to now include Reallocated Sectors, Head Flight Hours, Load Cycle Count, and Power Cycle Count, Write Power On Head 0 and Head 1, besides Power on Hours. 
+#  - Updated -dump switch to either `-dump` = Send all dump data to user, or `-dump email` which will send all dump data,
+#    ---- except the TrueNAS Config file to the user and Joe, and added more Debug data.
+#  - Fixed sending dump data SMART '-a' and '-x' data which was absent during data collection.
+#  - Added sending smartctl --scan data to dump file.
+#  - Changed Seagate "SCAM" to "FARM".
+#  - Made some clarifications in the wording of text.
+#  - Made adjustments yet again for iXsystems changing sending emails.
+#  - Fixed Zpool TDW/TDR values.  Apparently a previous change broke it.
+#  - Removed Un-needed TrueNAS Configuration file ZIP encryption.  The file is already encrypted.
+#  - Removed installing 7-Zip function.  Retained removal should someone need it still.
+#  - Now save Old_multi_report_config.txt in script directory during an upgrade.
+#  - Added --debug_enabled for writing the sendemail.py log file always.
+#  - Allow an Update is Available message when using '-m' switch.
+#  - Added TrueNAS Version Name to report.
+#  - Added Update Log file to change the email subject line to report an update is available.
+#  - Added Percentage Values for the 30-Day Read/Written Column.  Added Color - Must be manually changed in script variables.
+#  - Updated obtaining Power On Hours as some drives (very few) did not post using standardized value.  Hopefully this didn't break anything.
+#  - Updated statisticaldatafile to not record "<br>SMR" when an SMR drive is detected.  This did not cause a problem, it just annoyed me once it was discovered.
+
 # V3.16 (25 February 2025)
 #
 #  - Change for the FARM check to allow a reasonable difference in Power On Hours, using an exact match can be unreasonable.
