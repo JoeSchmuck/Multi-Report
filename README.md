@@ -1,6 +1,6 @@
 # Multi-Report for FreeNAS/TrueNAS Core & Scale
 
-New in Version 3.15
+New in Version 3.19
 
 This script will perform five main functions:
 1) Generate a report and send an email on your drive(s) status. 
@@ -30,6 +30,5 @@ This script has many benefits being a seperate script:
 1) Easier to maintain.
 2) Run standalone without Multi-Report.
 3) Schedules both Short and Long tests to be accomplished Daily, Weekly, and/or Monthly.
-4) Can schedule over 1000 drives to be tested.
-5) Can test ONLY Nvme while TrueNAS is not able to schedule NVMe SMART tests in the GUI.
-6) 
+4) Can schedule over 1000 drives to be tested (OMG!).
+5) Able to test ONLY Nvme while TrueNAS is not able to schedule NVMe SMART tests in the GUI.
