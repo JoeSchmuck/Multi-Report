@@ -12433,9 +12433,9 @@ fi
 
 ### Hack for Monitoring to provide an Alert message if there is a software update available.
 
-if [[ "$UpdateDriveAvailable" == "true" ]]; then
+if [[ "$UpdateAvailable" == "true" ]]; then
 	logfile_update=$logfile_update" Multi-Report Update Is Available. Use '-update' switch to update.<br>"
-elif [[ "$UpdateAvailable" == "true" ]]; then
+elif [[ "$UpdateDriveAvailable" == "true" ]]; then
 	logfile_update=$logfile_update" Drive_Selftest Update Is Available. Use '-update_selftest' switch to update.<br>"
 elif [[ "$UpdateSendemailAvailable" == "true" ]]; then
 	logfile_update=$logfile_update" SendEmail.py Update Is Available. Use '-update_sendemail' switch to update.<br>"
