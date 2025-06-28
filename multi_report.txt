@@ -3,7 +3,7 @@
 LANG="en_US.UTF-8"
 
 
-##### Version 3.19
+##### Version 3.18
 
 ###### Get Config File Name and Location
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
@@ -81,18 +81,6 @@ fi
 # Version
 ### Changelog:
 
-# V3.19 (27 June 2025)
-#
-#  - Updated FARM check function to convert numerical strings in to numbers.  Limited checks to Serial Number and Power On Hours.
-#  - Updated built in simulator to process .farm files.
-#  - Updated -dump files to remove the begining numerical portion of the file name.
-#  - Added two new switches `-enable_farm` and `-disable_farm` to make the change easier that using the `-config` switch.
-#  - Added new switch `-tardrivedata` to capture all the JSON and FARM data, without actually running the entire script.
-#  - Fixed Drive_Selftest Minor Version Update Issue.
-#  - Fixed the Multi-Report User Guide and Quick Start Guide not being saved during an initial installation.
-#
-
-
 # V3.18 (09 June 2025)
 #
 #  - Fixed the Update script.  Accidentally broke it.
@@ -121,6 +109,10 @@ fi
 #  - Added Percentage Values for the 30-Day Read/Written Column.  Added Color - Must be manually changed in script variables.
 #  - Updated obtaining Power On Hours as some drives (very few) did not post using standardized value.  Hopefully this didn't break anything.
 #  - Updated statisticaldatafile to not record "<br>SMR" when an SMR drive is detected.  This did not cause a problem, it just annoyed me once it was discovered.
+
+
+# Futue Plans: DO I NEED TO REDUCE RATE VALUES (ex Read Rate Errors)
+
 
 
 # V3.16 (25 February 2025)
@@ -828,8 +820,8 @@ logfile_header="/tmp/${tempfilepath}smart_report_header.tmp"
 logfile_temp="/tmp/${tempfilepath}smart_report_temp.tmp"
 boundary="gc0p4Jq0M2Yt08jU534c0p"
 
-CurrentFilename="multi_report_v3.19_2025_06_27.txt"
-valid_config_version_date="2025-06-24"	# Configuration file valid date
+CurrentFilename="multi_report_v3.18_2025_06_09.txt"
+valid_config_version_date="2025-06-07"	# Configuration file valid date
 progverdate="$(echo $CurrentFilename | cut -d '_' -f4,5,6 | cut -d '.' -f1 | sed -r 's/[_]+/-/g')"
 progname="Multi-Report "$(echo $CurrentFilename | cut -d '_' -f3)" dtd:"
 
@@ -1054,109 +1046,6 @@ run_smart_data_command () {
 
 
 	}
-	
-	
-########## GET DRIVE LISTINGS
-# CALLED FROM ONE LOCATION
-get_API_Drives_and_tar () {
-
-#
-#  This procedure will:
-#    1. Obtain all the Drive IDs using the TrueNAS API.
-#    2. Create .json files of each drive.
-#    3. Create .farm files of each drive.  Farm files may not contain any data, however it is the responce recieved from 'smartctl' so it is still required.
-#    4. TAR the files together maintaining seperate folders.
-#    5. Place the TAR file in the script running directory.
-#    6. Cleanup any leftover files.
-
-# Input = Nothing
-# Output = List of each drive TrueNAS recognizes along with (within an array; Drive Name, Model, Serial Number, Interface Type) and the full Drive Query output.
-#
-# Global Variables: Drive_Disk_Query, smartdrives, drives_name[@], drives_serial[@], drives_subsystem[@], drives_model[@], drives_type[@]
-# Local Variables: index, increment
-#
-
-    # Setup local variables
-    index=0            # INDEX IS THE REPORTED BACK DRIVES
-    increment=0        # INCREMENT IS THE ACCESS TO THE FULL ARRAY, INCLUDING VIRTUAL AND CD DRIVES
-    skip_drives_count=0
-
-    Drive_Disk_Query=$(midclt call disk.query)
-
-    # 1. Get all API data in a variable, one call. -- Can we find API that says SMART Self-test is supported or not?  May need to use smartctl for one thing.
-    #    `supports_smart:null`, maybe check if null and if so or `no`, use smartctl.
-    # 2. Get Drive data into an array
-
-    drives_name=$(echo $Drive_Disk_Query | jq '.[].name' | tr -d '"')            # get all the drive names
-	if test -e "/tmp/multi_report_drive_data"; then
-		echo "/tmp/multi_report_drive_data directory exists..."
-		echo "Deleting the '/tmp/multi_report_drive_data' directory..."
-		rm -R /tmp/multi_report_drive_data
-		sleep 1
-	fi
-	echo "Creating a new directory structure..."	
-	mkdir "/tmp/multi_report_drive_data"
-	mkdir "/tmp/multi_report_drive_data/JSON"
-	mkdir "/tmp/multi_report_drive_data/FARM"
-	mkdir "/tmp/multi_report_drive_data/SUBSYSTEM"
-	
-    for i in $drives_name; do
-        drives_model[index]=$(echo $Drive_Disk_Query | jq -Mre '.'[$increment]'.model')
-        drives_name[index]=$(echo $Drive_Disk_Query | jq -Mre '.'[$increment]'.name')
-        drives_serial[index]=$(echo $Drive_Disk_Query | jq -Mre '.'[$increment]'.serial' | tr -d ' ')        # "td -d ' '" removes any white space from the serial number
-		drives_type[index]=$(echo $Drive_Disk_Query | jq -Mre '.'[$increment]'.type')
-
-    # WE NEED TO WEED OUT VIRTUAL AND CD DRIVES
-        if [[ ${drives_model[$index]} == *"Virtual"* ]] || [[ ${drives_name[$index]} == "cd"* ]]; then
-            (( skip_drives_count ++ ))
-            (( increment ++ ))
-            continue
-        fi
-
-        if echo ${drives_name[$index]} | grep -q -i "nvd"; then
-            drives_name[index]="$(echo ${drives_name[index]} | sed 's/nvd/nvme/g')"
-        elif echo ${drives_name[$index]} | grep -q -i "nvme"; then
-            drives_name[index]="$(echo "nvme"$(echo ${drives_name[$index]} | sed -r 's#^nvme##' | cut -d 'n' -f 1))"
-        fi
-
-        drives_subsystem[index]=$(echo $Drive_Disk_Query | jq -Mre '.'[$increment]'.subsystem')
-		
-        (( index ++ ))
-        (( increment ++ ))
-    done
-
-    # If the last drive at the end is a virtual or cd drive, remove it.
-    if [[ ${drives_model[$index]} == *"Virtual"* ]] || [[ ${drives_name[$index]} == "cd"* ]]; then drives_name[index]=""; drives_serial[index]=""; fi
-
-    drives_count=$(echo ${drives_name[@]} | wc -w)
-
-    smartdrives=${drives_name[@]}
-    index=0
-    for i in ${drives_name[@]}; do
-		smartctl -x --json=u /dev/${drives_name[$index]} > /tmp/multi_report_drive_data/JSON/${drives_type[index]}_${drives_name[$index]}_${drives_serial[$index]}.json
-		smartctl -l farm /dev/${drives_name[$index]} > /tmp/multi_report_drive_data/FARM/${drives_type[index]}_${drives_name[$index]}_${drives_serial[$index]}.farm
-		echo "API SUBSYSTEM - "${drives_subsystem[$index]} > /tmp/multi_report_drive_data/SUBSYSTEM/${drives_type[index]}_${drives_name[$index]}_${drives_serial[$index]}.txt
-        (( index ++ ))
-    done
-	
-	tar czf /${SCRIPT_DIR}/tardrivedata.tgz -C /tmp multi_report_drive_data/
-
-	clear
-	echo "The file `tardrivedata.tgz` is located /${SCRIPT_DIR} and contains SMART JOSN and FARM data to aid in troubleshooting script issues."
-	echo " "
-	echo " "
-	echo "Cleaning up leftover files..."
-	if test -e "/tmp/multi_report_drive_data"; then rm -R /tmp/multi_report_drive_data; fi
-	echo " "
-	echo "COMPLETE"
-	echo " "
-    exit 0
-        
-    }	
-	
-	
-	
-	
 
 
 ########## CHECK SEAGATE FARM DATA ##########
@@ -1166,183 +1055,135 @@ get_API_Drives_and_tar () {
 # Set Warning Flag if drive appears to be false.
 # Have an Enable/Disable for this function as well.
 
-check_farm_data_original () {
-if [[ $Debug_Steps == "true" ]]; then echo "check_farm_data"; fi
+check_farm_data () {
+if [[ $Debug_Steps == "true" ]]; then echo "check_farm_data: $drive" | tee -a /tmp/multi_report_debug.txt; fi
 
-# Check if FARM data is available.
+# Check if FARM data is available.  If it is, a serial number will be available.
 	farm_data=$(smartctl -l farm /dev/$drive)
 
 	if $farm_data | grep -i "serial"; then
 		# Collect FARM Data
 		farm_serial=$(smartctl -l farm /dev/$drive | grep -i "serial")
 		farm_power_on_hours=$(smartctl -l farm /dev/$drive | grep -i "power on hours" | grep -vi "spindle" | cut -d ':' -f2 | tr -d ' ')
-
-		temp_POH=$(( $onHours + $DriveSCAMCheckHours ))
+		farm_head_load_events=$(smartctl -l farm /dev/$drive | grep -i "head load events" | grep -vi "spindle" | cut -d ':' -f2 | tr -d ' ')
+		farm_power_cycle_count=$(smartctl -l farm /dev/$drive | grep -i "power cycle count" | cut -d ':' -f2 | tr -d ' ')
+		farm_head_fly_hours=$(smartctl -l farm /dev/$drive | grep -i "flight" | cut -d ':' -f2 | tr -d ' ')
+		farm_reallocated_sectors=$(smartctl -l farm /dev/$drive | grep -i "reallocated sectors" | grep -vi "head" | cut -d ":" -f2 | tr -d ' ')
+		farm_head_write_hours_head_0=$(smartctl -l farm /dev/$drive | grep -i "write power on (hrs) by head 0" | cut -d ":" -f2 | tr -d ' ')
+		farm_head_write_hours_head_1=$(smartctl -l farm /dev/$drive | grep -i "write power on (hrs) by head 1" | cut -d ":" -f2 | tr -d ' ')
+		
+		if [[ $Custom_Drives_List != "" ]]; then		# Read if an offset is present, if yes, ensure it is correct.
+			IFS=',' read -ra ADDR <<< "$Custom_Drives_List"
+			for i in "${ADDR[@]}"; do
+				cdrivesn1="$(echo $i | cut -d':' -f 1)"
+				if [[ $cdrivesn1 == $serial ]]; then
+					farmoffset="$(echo $i | cut -d':' -f 17)"			# farmoffset = 'd' or 'i'
+					if [[ $farmoffset == "" ]]; then farmoffset="d"; fi
+				fi
+			done
+		fi
+	
+		# Use the Custom Drive Data to offset any previous FARM POH values.
+		temp_POH=$(( $onHours + $DriveFARMCheckHours ))
 		
 		if [[ "$farm_serial" == *"$serial"* ]]; then
-			:
+			smartctl -l farm /dev/${drive} > /tmp/${drive}_${serial}.farm
 		else
-			logfile_warning=$logfile_warning"$(printf "Drive: ${drive} Serial Number Does Not Match ... ### S.M.A.R.T.: ${serial} ### ... ### F.A.R.M.:${farm_serial} ###<br>")"
-			serialColor=$warnColor
-		fi
-
-		if [[ farm_power_on_hours -le temp_POH ]]; then
-			:
-		else
-			logfile_warning=$logfile_warning"$(printf "Drive: ${drive} Power On Hours Does NOT Match ... ### S.M.A.R.T.: ${onHours} ### ... ### F.A.R.M.:${farm_power_on_hours} ###<br>")"
-			onTimeColor=$warnColor
-		fi
-	fi > /dev/null 2<&1
-
-	}
-
-
-check_farm_data () {
-if [[ $Debug_Steps == "true" ]]; then echo "check_farm_data: $drive" | tee -a /tmp/multi_report_debug.txt; fi
-#echo "Start of FARM routine"
-#return
-# Check if FARM data is available.  If it is, a serial number will be available.
-		
-	if [[ $testfilepath == "" ]]; then
-		# The real drive data
-		farm_data=$(smartctl -l farm /dev/$drive)
-	else
-		# The simulation drive data
-		echo "Simulated Drive ID="$drive
-		echo "Serial==="$serial
-		farm_data_file_name=$(ls $testfilepath"/" | grep "$serial" | grep ".farm")
-		echo "farm_data_file_name="$farm_data_file_name
-		farm_data=$(cat "$testfilepath/$farm_data_file_name")
-	fi	
-#echo "Collected FARM DATA"
-#
-#	THIS MAY BE READY TO GO, AFTER TESTING REST OF THE SCRIPT, THEN WE CAN TRY TO IGNORE A DRIVE.
-#
-#		if [[ $Custom_Drives_List != "" ]]; then		# Read if an offset is present, if yes, ensure it is correct.
-#			IFS=',' read -ra ADDR <<< "$Custom_Drives_List"
-#			for i in "${ADDR[@]}"; do
-#				cdrivesn1="$(echo $i | cut -d':' -f 1)"
-#				if [[ $cdrivesn1 == $serial ]]; then
-#					farmoffset="$(echo $i | cut -d':' -f 17)"			# farmoffset = 'd'=default or 'i'=Ignore
-#					if [[ $farmoffset == "" ]]; then farmoffset="d"; fi
-#				fi
-#			done
-#		fi
-
-	if ! echo "$farm_data" | grep -qi "Farm Log Page"; then
-		return		# If no FARM data, no need to compare.
-	fi
-
-	# Collect values we may use to validate the SMART data against the FARM data.
-	farm_serial=$(echo "$farm_data" | grep -i "serial")
-	farm_power_on_hours=$(echo "$farm_data" | grep -i "power on hours" | grep -vi "spindle" | cut -d ':' -f2 | tr -d ' ')		
-
-	# Collect other values we may use later.
-#	farm_head_load_events=$(echo "$farm_data" | grep -i "head load events" | grep -vi "spindle" | cut -d ':' -f2 | tr -d ' ')
-#	farm_power_cycle_count=$(echo "$farm_data" | grep -i "power cycle count" | cut -d ':' -f2 | tr -d ' ')
-#	farm_head_fly_hours=$(echo "$farm_data" | grep -i "flight" | cut -d ':' -f2 | tr -d ' ')
-#	farm_reallocated_sectors=$(echo "$farm_data" | grep -i "reallocated sectors" | grep -vi "head" | cut -d ":" -f2 | tr -d ' ')
-#	farm_head_write_hours_head_0=$(echo "$farm_data" | grep -i "write power on (hrs) by head 0" | cut -d ":" -f2 | tr -d ' ')
-#	farm_head_write_hours_head_1=$(echo "$farm_data" | grep -i "write power on (hrs) by head 1" | cut -d ":" -f2 | tr -d ' ')
-		
-	convert_to_decimal $onHours; onHours=$Return_Value		# Need this here as conversion happens after FARM checks, so any numbers need to be converted here as well.
-
-		if [[ "$farm_serial" != *"$serial"* ]]; then
 			logfile_warning=$logfile_warning"$(printf "Drive: S.M.A.R.T. ${serial} S/N mismatch to F.A.R.M. S/N ${farm_serial}<br>")"
 			serialColor=$warnColor
 		fi
 
 # Check POH
-
-		# Use the $DriveFARMCheckHours to offset any previous FARM POH values.  Default = 6 hours.
-		temp_POH=$(( $onHours + $DriveFARMCheckHours ))
-		
 		if [[ farm_power_on_hours -gt temp_POH ]]; then
-			logfile_warning=$logfile_warning"$(printf "Drive: ${serial} S.M.A.R.T. Hours (${onHours}) mismatch to F.A.R.M. Hours (${farm_power_on_hours})<br>")"
-			onTimeColor=$warnColor
+			if [[ $farmoffset == "i" ]]; then
+				onTimeColor=$ovrdColor	# Set the warning light on time only for ignore.
+				logfile_messages=$logfile_messages"$(printf "Drive: ${serial} S.M.A.R.T. Hours (${onHours}) mismatch to F.A.R.M. Hours (${farm_power_on_hours}) - Ignored<br>")"
+			else
+				logfile_warning=$logfile_warning"$(printf "Drive: ${serial} S.M.A.R.T. Hours (${onHours}) mismatch to F.A.R.M. Hours (${farm_power_on_hours})<br>")"
+				onTimeColor=$warnColor
+			fi
 		fi
 
-
 # Check Power Cycle Events
-#		DPCC=$(echo "$smartdata5" | grep -i "power_cycle_count" | cut -d '-' -f2 | tr -d ' ')
-#		DPCC1=$(( $DPCC + 5 ))  # Establish an allowable offset
-#echo "DPCC="$DPCC
-
-#		if [[ $farm_power_cycle_count -gt $DPCC1 ]]; then
-#			if [[ $farmoffset == "i" ]]; then
-#				onTimeColor=$ovrdColor	# Set the warning light on time only for ignore.
-#				logfile_messages=$logfile_messages"$(printf "Drive: ${serial} S.M.A.R.T. Power Cycle Count (${DPCC}) mismatch to F.A.R.M. Power Cycle Count (${farm_power_cycle_count}) - Ignored<br>")"
-#			else
-#				logfile_warning=$logfile_warning"$(printf "Drive: ${serial} S.M.A.R.T. Power Cycle Count (${DPCC}) mismatch to F.A.R.M. Power Cycle Count (${farm_power_cycle_count})<br>")"
-#				onTimeColor=$warnColor
-#			fi	
-#		fi
-		
+		DPCC=$(smartctl -a /dev/${drive} | grep -i "power_cycle" | cut -d '-' -f2 | tr -d ' ')
+		DPCC1=$(( $DPCC + 5 ))  # Establish an allowable offset
+		if [[ $farm_power_cycle_count -gt $DPCC1 ]]; then
+			if [[ $farmoffset == "i" ]]; then
+				onTimeColor=$ovrdColor	# Set the warning light on time only for ignore.
+				logfile_messages=$logfile_messages"$(printf "Drive: ${serial} S.M.A.R.T. Power Cycle Count (${DPCC}) mismatch to F.A.R.M. Power Cycle Count (${farm_power_cycle_count}) - Ignored<br>")"
+			else
+				logfile_warning=$logfile_warning"$(printf "Drive: ${serial} S.M.A.R.T. Power Cycle Count (${DPCC}) mismatch to F.A.R.M. Power Cycle Count (${farm_power_cycle_count})<br>")"
+				onTimeColor=$warnColor
+			fi	
+		fi
+			
 # Check Head Load Events
-#		DHLE=$(echo "$smartdata5" | grep -i "load_cycle" | cut -d '-' -f2 | tr -d ' ')
-#		DHLE1=$(( $DHLE + 5 ))	# Establish an allowable offset
-#		if [[ $farm_head_load_events -gt $DHLE1 ]]; then
-#			if [[ $farmoffset == "i" ]]; then
-#				onTimeColor=$ovrdColor	# Set the warning light on time only for ignore.
-#				logfile_messages=$logfile_messages"$(printf "Drive: ${serial} S.M.A.R.T. Load Cycle Count (${DHLE}) mismatch to F.A.R.M. Head Load Events (${farm_head_load_events}) - Ignored<br>")"
-#			else
-#				logfile_warning=$logfile_warning"$(printf "Drive: ${serial} S.M.A.R.T. Load Cycle Count (${DHLE}) mismatch to F.A.R.M. Head Load Events (${farm_head_load_events})<br>")"
-#				onTimeColor=$warnColor
-#			fi
-#		fi
+		DHLE=$(smartctl -a /dev/${drive} | grep -i "load_cycle" | cut -d '-' -f2 | tr -d ' ')
+		DHLE1=$(( $DHLE + 5 ))	# Establish an allowable offset
+		if [[ $farm_head_load_events -gt $DHLE1 ]]; then
+			if [[ $farmoffset == "i" ]]; then
+				onTimeColor=$ovrdColor	# Set the warning light on time only for ignore.
+				logfile_messages=$logfile_messages"$(printf "Drive: ${serial} S.M.A.R.T. Load Cycle Count (${DHLE}) mismatch to F.A.R.M. Head Load Events (${farm_head_load_events}) - Ignored<br>")"
+			else
+				logfile_warning=$logfile_warning"$(printf "Drive: ${serial} S.M.A.R.T. Load Cycle Count (${DHLE}) mismatch to F.A.R.M. Head Load Events (${farm_head_load_events})<br>")"
+				onTimeColor=$warnColor
+			fi
+		fi
 
 # Check Head Flight Hours
-#		DHFH=$(echo "$smartdata5" | grep -i "head_flying_hours" | cut -d '-' -f2 | tr -d ' ' | cut -d 'h' -f1)
-#		DHFH1=$(( $DHFH + 300 ))	# Using 300 hours due to factory testing "could" use over 100 hours.
-#		if [[ $farm_head_fly_hours -gt $DHFH1 ]]; then
-#			if [[ $farmoffset == "i" ]]; then
-#				onTimeColor=$ovrdColor	# Set the warning light on time only for ignore.
-#				logfile_messages=$logfile_messages"$(printf "Drive: ${serial} S.M.A.R.T. Head Flying Hours (${DHFH}) mismatch to F.A.R.M. Head Flight Hours (${farm_head_fly_hours}) - Ignored<br>")"
-#			else
-#				logfile_warning=$logfile_warning"$(printf "Drive: ${serial} S.M.A.R.T. Head Flying Hours (${DHFH}) mismatch to F.A.R.M. Head Flight Hours (${farm_head_fly_hours})<br>")"
-#				onTimeColor=$warnColor
-#			fi
-#		fi
+		DHFH=$(smartctl -a /dev/${drive} | grep -i "head_flying" | cut -d '-' -f2 | tr -d ' ' | cut -d 'h' -f1)
+		DHFH1=$(( $DHFH + 300 ))	# Using 300 hours due to factory testing "could" use over 100 hours.
+		if [[ $farm_head_fly_hours -gt $DHFH1 ]]; then
+			if [[ $farmoffset == "i" ]]; then
+				onTimeColor=$ovrdColor	# Set the warning light on time only for ignore.
+				logfile_messages=$logfile_messages"$(printf "Drive: ${serial} S.M.A.R.T. Head Flying Hours (${DHFH}) mismatch to F.A.R.M. Head Flight Hours (${farm_head_fly_hours}) - Ignored<br>")"
+			else
+				logfile_warning=$logfile_warning"$(printf "Drive: ${serial} S.M.A.R.T. Head Flying Hours (${DHFH}) mismatch to F.A.R.M. Head Flight Hours (${farm_head_fly_hours})<br>")"
+				onTimeColor=$warnColor
+			fi
+		fi
 
 # Check Reallocated Sectors
-#		DRAS=$(echo "$smartdata5" | grep -i "reallocated_sector" | cut -d '-' -f3 | tr -d ' ')
-#		DRAS1=$(( $DRAS + 5 ))	# Establish an allowable offset
-#		if [[ $farm_reallocated_sectors -gt $DRAS1 ]]; then
-#			if [[ $farmoffset == "i" ]]; then
-#				onTimeColor=$ovrdColor	# Set the warning light on time only for ignore.
-#				logfile_messages=$logfile_messages"$(printf "Drive: ${serial} S.M.A.R.T. Reallocated Sector Count (${DRAS}) mismatch to F.A.R.M. Number of Reallocated Sectors (${farm_reallocated_sectors}) - Ignored<br>")"
-#			else
-#				logfile_warning=$logfile_warning"$(printf "Drive: ${serial} S.M.A.R.T. Reallocated Sector Count (${DRAS}) mismatch to F.A.R.M. Number of Reallocated Sectors (${farm_reallocated_sectors})<br>")"
-#				onTimeColor=$warnColor
-#			fi
-#		fi
+		DRAS=$(smartctl -a /dev/${drive} | grep -i "reallocated_sector" | cut -d '-' -f3 | tr -d ' ')
+		DRAS1=$(( $DRAS + 5 ))	# Establish an allowable offset
+		if [[ $farm_reallocated_sectors -gt $DRAS1 ]]; then
+			if [[ $farmoffset == "i" ]]; then
+				onTimeColor=$ovrdColor	# Set the warning light on time only for ignore.
+				logfile_messages=$logfile_messages"$(printf "Drive: ${serial} S.M.A.R.T. Reallocated Sector Count (${DRAS}) mismatch to F.A.R.M. Number of Reallocated Sectors (${farm_reallocated_sectors}) - Ignored<br>")"
+			else
+				logfile_warning=$logfile_warning"$(printf "Drive: ${serial} S.M.A.R.T. Reallocated Sector Count (${DRAS}) mismatch to F.A.R.M. Number of Reallocated Sectors (${farm_reallocated_sectors})<br>")"
+				onTimeColor=$warnColor
+			fi
+		fi
 		
 # Check Write Power on Head 0
-#		WPOH0=$(( $onHours + 336 ))	# Establish an allowable offset
-#		if [[ $farm_head_write_hours_head_0 -gt $WPOH0 ]]; then
-#			if [[ $farmoffset == "i" ]]; then
-#				onTimeColor=$ovrdColor	# Set the warning light on time only for ignore.
-#				logfile_messages=$logfile_messages"$(printf "Drive: ${serial} S.M.A.R.T. Hours (${onHours}) mismatch to F.A.R.M. mismatch to F.A.R.M. Write Power on Head 0 (${farm_head_write_hours_head_0}) - Ignored<br>")"
-#			else
-#				logfile_warning=$logfile_warning"$(printf "Drive: ${serial} S.M.A.R.T. Hours (${onHours}) mismatch to F.A.R.M. mismatch to F.A.R.M. Write Power on Head 0  (${farm_head_write_hours_head_0})<br>")"
-#				onTimeColor=$warnColor
-#			fi
-#		fi	
+		WPOH0=$(( $onHours + 336 ))	# Establish an allowable offset
+		if [[ $farm_head_write_hours_head_0 -gt $WPOH0 ]]; then
+			if [[ $farmoffset == "i" ]]; then
+				onTimeColor=$ovrdColor	# Set the warning light on time only for ignore.
+				logfile_messages=$logfile_messages"$(printf "Drive: ${serial} S.M.A.R.T. Hours (${onHours}) mismatch to F.A.R.M. mismatch to F.A.R.M. Write Power on Head 0 (${farm_head_write_hours_head_0}) - Ignored<br>")"
+			else
+				logfile_warning=$logfile_warning"$(printf "Drive: ${serial} S.M.A.R.T. Hours (${onHours}) mismatch to F.A.R.M. mismatch to F.A.R.M. Write Power on Head 0  (${farm_head_write_hours_head_0})<br>")"
+				onTimeColor=$warnColor
+			fi
+		fi	
 
 # Check Write Power On Head 1
-#		WPOH1=$(( $onHours + 336 ))	# Establish an allowable offset
-#		if [[ $farm_head_write_hours_head_1 -gt $WPOH1 ]]; then
-#			if [[ $farmoffset == "i" ]]; then
-#				onTimeColor=$ovrdColor	# Set the warning light on time only for ignore.
-#				logfile_messages=$logfile_messages"$(printf "Drive: ${serial} S.M.A.R.T. Hours (${onHours}) mismatch to F.A.R.M. mismatch to F.A.R.M. Write Power on Head 1 (${farm_head_write_hours_head_1}) - Ignored<br>")"
-#			else
-#				logfile_warning=$logfile_warning"$(printf "Drive: ${serial} S.M.A.R.T. Hours (${onHours}) mismatch to F.A.R.M. mismatch to F.A.R.M. Write Power on Head 1 (${farm_head_write_hours_head_1})<br>")"
-#				onTimeColor=$warnColor
-#			fi
-#		fi
+		WPOH1=$(( $onHours + 336 ))	# Establish an allowable offset
+		if [[ $farm_head_write_hours_head_1 -gt $WPOH1 ]]; then
+			if [[ $farmoffset == "i" ]]; then
+				onTimeColor=$ovrdColor	# Set the warning light on time only for ignore.
+				logfile_messages=$logfile_messages"$(printf "Drive: ${serial} S.M.A.R.T. Hours (${onHours}) mismatch to F.A.R.M. mismatch to F.A.R.M. Write Power on Head 1 (${farm_head_write_hours_head_1}) - Ignored<br>")"
+			else
+				logfile_warning=$logfile_warning"$(printf "Drive: ${serial} S.M.A.R.T. Hours (${onHours}) mismatch to F.A.R.M. mismatch to F.A.R.M. Write Power on Head 1 (${farm_head_write_hours_head_1})<br>")"
+				onTimeColor=$warnColor
+			fi
+		fi
 		
-#	fi # > /dev/null 2<&1
-#echo "End of FARM function"
+		
+		
+	fi > /dev/null 2<&1
+
 	}
 
 ########## CREATE ATTACHMENT FILE ##########
@@ -1354,17 +1195,17 @@ create_attachment_file () {
 	if [[ $Debug_Steps == "true" ]]; then echo "create_attachment" | tee -a /tmp/multi_report_debug.txt; fi
 	if test -e "/tmp/attachment.json"; then		# If the file exists then we need to add on to the end, but need to delete the last ']'.
 
-		# LETS SEE IF THE LIST ALREADY CONTAINS THIS FILE
-		if grep -q $2 "/tmp/attachment.json"; then
-			return
-		fi
+	# LETS SEE IF THE LIST ALREADY CONTAINS THIS FILE
+	if grep -q $2 "/tmp/attachment.json"; then
+		return
+	fi
 	
 		# I need to read the file back, remove the last 2 lines, add line ' },', then add new header.
 		updating_attachment=$(head -n -2 /tmp/attachment.json)  # This removes the last lines.
 		(
 		echo "${updating_attachment}"
 		echo ' },'
-		) > /tmp/attachment.json	
+		) > /tmp/attachment.json
 	else
 		(
 		echo '['
@@ -1624,6 +1465,8 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_MR_script" | tee -a /tmp/mult
 		fi
 		if [[ $Keyboard_yn == "y" ]] || [[ $Keyboard_yn == "Y" ]]; then
 			echo "      - Updating Script..."
+
+#			sed '5s/.*/TrueNASConfigEmailEncryption="'$TrueNASConfigEmailEncryption'"	 # Set this to "" for no encryption, MUST REMAIN ON LINE 5./' /tmp/Multi-Report/multi_report.txt > /tmp/multi_report_update.txt
 			cp /tmp/Multi-Report/multi_report.txt /tmp/multi_report_update.txt
 			sleep .2
 			# Generate the full file name minus the .txt
@@ -1814,7 +1657,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "checkforupdate" | tee -a /tmp/multi_
 	echo "Checking for Updates"
 	if test -e "/tmp/Multi-Report"; then rm -R "/tmp/Multi-Report"; fi
 	if [[ "$(curl -is https://github.com | head -n 1)" ]]; then
-		# Go git the file "multi_report.txt"
+		# Go git the file
 		(
 			cd /tmp || exit 3
 			if ! test -e "Multi-Report"; then
@@ -1862,7 +1705,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "checkforupdate" | tee -a /tmp/multi_
 			echo "No GitHub Version File Available"
 		fi
 
-# Go git the file "drive_selftest.txt"
+# Go git the file
 		(
 			cd /tmp || exit 3
 			if ! test -e "Multi-Report"; then
@@ -1876,10 +1719,10 @@ if [[ $Debug_Steps == "true" ]]; then echo "checkforupdate" | tee -a /tmp/multi_
 			GitDriveMajorVersionNumber="$(echo $GitDriveVersion | cut -d '.' -f1)"
 			GitDriveMinorVersionNumber="$(echo $GitDriveVersion | cut -d '.' -f2)"
 			convert_to_decimal $GitDriveMajorVersionNumber
-			GitDriveMajorVersionNumber=$Return_Value
+			GitDriveMinorVersionNumber=$Return_Value
 			convert_to_decimal $GitDriveMinorVersionNumber
 			GitDriveMinorVersionNumber=$Return_Value
-		
+			
 			if test -e $SCRIPT_DIR"/drive_selftest.sh"; then
 				VersionDriveFilename="$(cat $SCRIPT_DIR"/drive_selftest.sh" | grep "##### Version" | cut -d 'n' -f2 | tr -d ' ' | head -1)"
 				MajorDriveVersionFilename="$(echo $VersionDriveFilename | cut -d '.' -f1)"
@@ -1967,7 +1810,6 @@ if [[ $Debug_Steps == "true" ]]; then echo "checkforupdate" | tee -a /tmp/multi_
 		else
 			echo "   3. Sendemail - Not Required on CORE"
 		fi
-
 # Go git the file
 		(
 			cd /tmp || exit 3
@@ -2502,8 +2344,6 @@ if [[ $Debug_Steps == "true" ]]; then echo "cleanup_files" | tee -a /tmp/multi_r
 	if [[ -f "${f[0]}" ]]; then rm /tmp/*_x.txt; fi
 	f=(/tmp/*.json)
 	if [[ -f "${f[0]}" ]]; then rm /tmp/*.json; fi
-	f=(/tmp/*.jso)
-	if [[ -f "${f[0]}" ]]; then rm /tmp/*.jso; fi
 	f=(/tmp/*.partition)
 	if [[ -f "${f[0]}" ]]; then rm /tmp/*.partition; fi
 	f=(/tmp/*.tar)
@@ -2550,7 +2390,6 @@ if [[ $Debug_Steps == "true" ]]; then echo "cleanup_files" | tee -a /tmp/multi_r
 	if test -e "/tmp/multi_report_debug.txt"; then rm "/tmp/multi_report_debug.txt"; fi
 	if test -e "/tmp/ds_logs.tar"; then rm "/tmp/ds_logs.tar"; fi
 	if test -e "/tmp/sendemail_error.txt"; then rm /tmp/sendemail_error.txt; fi
-	if test -e "/tmp/USER.txt"; then rm /tmp/USER.txt; fi
 
 	### Clean up Spencer File
 	if test -e "/tmp/spencer_report.txt"; then rm "/tmp/spencer_report.txt"; fi
@@ -2559,7 +2398,6 @@ if [[ $Debug_Steps == "true" ]]; then echo "cleanup_files" | tee -a /tmp/multi_r
 	if test -e "/tmp/drive_test_temp.txt"; then rm "/tmp/drive_test_temp.txt"; fi
 	if test -e "/tmp/drive_test_timer_temp.txt"; then rm "/tmp/drive_test_timer_temp.txt"; fi
 	if test -e "/tmp/smartdrive_selftest_text.txt"; then rm "/tmp/smartdrive_selftest_text.txt"; fi
-	
 
 	### Clean up complete!
 	
@@ -2740,9 +2578,7 @@ if test -e "/tmp/attachment_files.txt"; then
 #	fi		
 	create_attachment_file $logfile_header Chart.html
 	if [[ $dump_all != "0" ]]; then
-		if [[ $softver == "Linux" ]]; then
-			tar_attachments
-		fi
+		tar_attachments
 	fi
 	while read line; do eval "$line"; done < /tmp/attachment_files.txt
 	html_data="Due to TrueNAS 24.10.1 and later (for now) changing the email software, the chart you are use to seeing is now an attachment called <b>'Chart.html'</b>.<br><br>This will only happen when you have attachments accompanying the email.  If you have no attachments then the Email body will display the Chart.html data as it use to.<br><br>This will be fixed as soon as a solution becomes available.<br><br>Thank you,<br>The Management"
@@ -2763,7 +2599,8 @@ fi
 # No Attachments (No attachment file required) (works)
 
 if ! test -e "/tmp/attachment.json"; then touch "/tmp/attachment.json"; touch "/tmp/attachment_files.txt"; fi
-#echo $output_html > /tmp/output.html
+
+echo $output_html > /tmp/output.html
 
 	if [[ $dump_all -eq 4 ]]; then
 		if test -e "/tmp/multi_report_debug.txt"; then
@@ -3038,16 +2875,16 @@ if [[ $Debug_Steps == "true" ]]; then echo "dump_drive_data $drive" | tee -a /tm
 			fi
 		fi
 		
-		if test -e "/tmp/${tempfilepath}${drivetype}_${drive}_${serial1}.farm"; then
+		if test -e "/tmp/${drive}_${serial1}.farm"; then
 			if [[ "$truenas_sendmail_support" == "No" ]]; then
-				(echo "create_attachment_file /tmp/${tempfilepath}${drivetype}_${drive}_${serial1}.farm ${drivetype}_${drive}_${serial1}.farm" >> /tmp/attachment_files.txt)
+				(echo "create_attachment_file /tmp/${drive}_${serial1}.farm ${drive}_${serial1}.farm" >> /tmp/attachment_files.txt)
 			else
 				(
 				echo "--${boundary}"
 				echo "Content-Type: text/html"
 				echo "Content-Transfer-Encoding: base64"
-				echo "Content-Disposition: attachment; filename=${drivetype}_${drive}_${serial1}.farm"
-				base64 "/tmp/${tempfilepath}${drivetype}_${drive}_${serial1}.farm"
+				echo "Content-Disposition: attachment; filename=${drive}_${serial1}.farm"
+				base64 "/tmp/${drive}_${serial1}.farm"
 				) >> "$logfile"
 			fi
 		fi		
@@ -3055,39 +2892,38 @@ if [[ $Debug_Steps == "true" ]]; then echo "dump_drive_data $drive" | tee -a /tm
 	
 		if [[ $drivetype == "NVM" ]]; then
 			if [[ $softver != "Linux" ]]; then
-				$(nvmecontrol logpage -p 0x06 $drive > /tmp/${tempfilepath}${drivetype}_${drive}_${serial1}_selftest_log.jso)
-				$(nvmecontrol logpage -p 0x01 $drive > /tmp/${tempfilepath}${drivetype}_${drive}_${serial1}_error_log.txt)
+				$(nvmecontrol logpage -p 0x06 $drive > /tmp/${tempfilepath}${drivetype}_${drive}_${serial1}_Selftest_Log.jso)
+				$(nvmecontrol logpage -p 0x01 $drive > /tmp/${tempfilepath}${drivetype}_${drive}_${serial1}_Error_Log.jso)
 			else
-				$(nvme self-test-log --output-format=json /dev/${drive} > /tmp/${tempfilepath}${drivetype}_${drive}_${serial1}_selftest_log.jso)
-				$(nvme error-log /dev/${drive} > /tmp/${tempfilepath}${drivetype}_${drive}_${serial1}_error_log.txt)
+				$(nvme self-test-log --output-format=json /dev/${drive} > /tmp/${tempfilepath}${drivetype}_${drive}_${serial1}_Selftest_Log.jso)
+				$(nvme error-log /dev/${drive} > /tmp/${tempfilepath}${drivetype}_${drive}_${serial1}_Error_Log.jso)
 			fi
-
 		fi
 
-		if test -e "/tmp/${tempfilepath}${drivetype}_${drive}_${serial1}_selftest_log.jso"; then
+		if test -e "/tmp/${tempfilepath}${drivetype}_${drive}_${serial1}_Selftest_Log.jso"; then
 			if [[ "$truenas_sendmail_support" == "No" ]]; then
-				(echo "create_attachment_file /tmp/${tempfilepath}${drivetype}_${drive}_${serial1}_selftest_log.jso ${drivetype}_${drive}_${serial1}_selftest_log.jso" >> /tmp/attachment_files.txt)
+				(echo "create_attachment_file /tmp/${tempfilepath}${drivetype}_${drive}_${serial1}_Selftest_Log.jso ${drivetype}_${drive}_${serial1}_Selftest_Log.jso" >> /tmp/attachment_files.txt)
 			else
 				(
 				echo "--${boundary}"
 				echo "Content-Type: text/html"
 				echo "Content-Transfer-Encoding: base64"
-				echo "Content-Disposition: attachment; filename=${drivetype}_${drive}_${serial1}_selftest_log.jso"
-				base64 "/tmp/${tempfilepath}${drivetype}_${drive}_${serial1}_selftest_log.jso"
+				echo "Content-Disposition: attachment; filename=${drivetype}_${drive}_${serial1}_Selftest_Log.jso"
+				base64 "/tmp/${tempfilepath}${drivetype}_${drive}_${serial1}_Selftest_Log.jso"
 				) >> "$logfile"
 			fi
 		fi
 
-		if test -e "/tmp/${tempfilepath}${drivetype}_${drive}_${serial1}_error_log.txt"; then
+		if test -e "/tmp/${tempfilepath}${drivetype}_${drive}_${serial1}_Error_Log.jso"; then
 			if [[ "$truenas_sendmail_support" == "No" ]]; then
-				(echo "create_attachment_file /tmp/${tempfilepath}${drivetype}_${drive}_${serial1}_error_log.txt ${drivetype}_${drive}_${serial1}_error_log.txt" >> /tmp/attachment_files.txt)
+				(echo "create_attachment_file /tmp/${tempfilepath}${drivetype}_${drive}_${serial1}_Error_log.jso ${drivetype}_${drive}_${serial1}_Error_log.jso" >> /tmp/attachment_files.txt)
 			else
 				(
 				echo "--${boundary}"
 				echo "Content-Type: text/html"
 				echo "Content-Transfer-Encoding: base64"
-				echo "Content-Disposition: attachment; filename=${drivetype}_${drive}_${serial1}_error_log.txt"
-				base64 "/tmp/${tempfilepath}${drivetype}_${drive}_${serial1}_error_log.txt"
+				echo "Content-Disposition: attachment; filename=${drivetype}_${drive}_${serial1}_Error_log.jso"
+				base64 "/tmp/${tempfilepath}${drivetype}_${drive}_${serial1}_Error_log.jso"
 				) >> "$logfile"
 			fi
 		fi
@@ -3165,7 +3001,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "dump_drive_data $drive" | tee -a /tm
 				rm "/tmp/memory_free.txt"
 				) >> "$logfile"
 			fi
-		fi
+		fi	
 
 	fi
 
@@ -3653,7 +3489,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "get_tdr: $drive_name" | tee -a /tmp/
 
 # Check for LBAs First (
 	if [[ "$(echo "${smartdata5}" | jq -Mre '.ata_device_statistics.pages[]?.table[]? | select(.name == "Logical Sectors Read") | .value | values')" ]]; then
-		ssdtdr="$(echo "${smartdata5}" | jq -Mre '.ata_device_statistics.pages[0].table[]? | select(.name == "Logical Sectors Read") | .value | values')"
+		ssdtdr="$(echo "${smartdata5}" | jq -Mre '.ata_device_statistics.pages[]?.table[]? | select(.name == "Logical Sectors Read") | .value | values')"
 		ssdtdr="$((( $ssdtdr * 512 ) / 1000000 ))"   # Convert LBA into bytes
 #echo "LBA1"
 #echo "ssdtdr1="$ssdtdr
@@ -5025,12 +4861,10 @@ if [[ "$reAlloc" != "" ]] && [[ "$reAlloc" != "0" ]]; then convert_to_decimal $r
 	fi
 
 	get_json_data		# Save data for -dump routine
-	if [[ "$dump_all" != "0" ]]; then	# Dump '-dump | email'
+	if [[ "$dump_all" != "0" ]]; then	# Dump '-dump emailextra | emailall | email'
 		"$(echo "$smartdata" > /tmp/${tempfilepath}${drivetype}_${drive}_${serial}_a.txt)" 2> /dev/null
 		smartctl -x /dev/"$drive" > /tmp/${tempfilepath}${drivetype}_${drive}_${serial}_x.txt
-		smartctl -l farm /dev/"$drive" > /tmp/${tempfilepath}${drivetype}_${drive}_${serial}.farm
 	fi
-
 
 # Add a line return between drives
 	json_error_log=$json_error_log$'\n'
@@ -5963,39 +5797,12 @@ if [[ $Debug_Steps == "true" ]]; then echo "tar_attachments" | tee -a /tmp/multi
 	# Read all the attachments and tar them.
 	# Input file is /tmp/attachment_files.txt
 	# Format is file $2 = path/name and $3 = file to be named, ignore $1.
-
-while IFS= read -r line; do
-    src_file=$(echo "$line" | awk '{print $2}')
-    tar_file=$(echo "$line" | awk '{print $3}')
 	
-	new_directory="OTHER"		# Set the default directory
-    if [[ "$(echo $src_file | grep -i ".farm")" ]]; then new_directory="FARM"; fi
-	if [[ "$(echo $src_file | grep -i "a.txt")" ]]; then new_directory="SMART_A"; fi
-	if [[ "$(echo $src_file | grep -i "x.txt")" ]]; then new_directory="SMART_X"; fi
-	if [[ "$(echo $src_file | grep -i "API.jso")" ]]; then new_directory="API"; fi
-	if [[ "$(echo $src_file | grep -i "selftest_log")" ]]; then new_directory="SELFTEST_LOG"; fi
-	if [[ "$(echo $src_file | grep -i "error_log")" ]]; then new_directory="ERROR_LOG"; fi
-	if [[ "$(echo $src_file | grep -i ".json")" ]]; then new_directory="JSON"; fi
-	if [[ "$(echo $src_file | grep -i "config.txt")" ]]; then new_directory="CONFIG"; fi
-	if [[ "$(echo $src_file | grep -i ".csv")" ]]; then new_directory="STATISTICS"; fi
-	
-    # This is optional — to rename the file in the tar archive
-    # tar_file_rename=$(echo "$line" | awk '{print $3}')
-    
-    tar --append \
-        --file=/tmp/dump.tar \
-        --transform="s|.*$tar_file|$new_directory/$tar_file|" \
-        -C "$(dirname "$src_file")" "$(basename "$src_file")"
-done < /tmp/attachment_files.txt
-
-if test -e "/tmp/multi_report_debug.txt" ; then
-	tar --append \
-        --file=/tmp/dump.tar \
-        --transform="s|.*multi_report_debug.txt|DEBUG/multi_report_debug.txt|" \
-        -C "$(dirname "/tmp/multi_report_debug.txt")" "$(basename "/tmp/multi_report_debug.txt")"
-fi
-
-echo "create_attachment_file /tmp/dump.tar dump.tar" > /tmp/attachment_files.txt
+	while read line; do
+		tar_file=$(echo "$line" | awk '{print $2}')
+		tar -rf "/tmp/dump.tar" $tar_file > /dev/null 2<&1
+	done < /tmp/attachment_files.txt
+	echo "create_attachment_file /tmp/dump.tar dump.tar" > /tmp/attachment_files.txt
 
 	}
 
@@ -6029,7 +5836,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "attach_files" | tee -a /tmp/multi_re
 		fi
 		) > ${logfile_header}
 #echo "Output html file" | tee -a /tmp/multi_report_debug.txt
-#		output_html="$(cat $logfile_header)$(cat $logfile)"
+		output_html="$(cat $logfile_header)$(cat $logfile)"
 		output_x=1
 		
 		# Write MIME section header for file attachment (encoded with base64)
@@ -6049,6 +5856,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "attach_files" | tee -a /tmp/multi_re
 	#	fi	
 		doit="true"
 	fi
+	
 	
 	if test -e "/tmp/Old_multi_report_config.txt"; then Attach_Multi_Report="true"; Attach_Files1="true"; fi
 	
@@ -6119,8 +5927,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "attach_files" | tee -a /tmp/multi_re
 				fi
 			fi
 		fi
-		
-		
+
 		if [[ $dump_all != "0" ]]; then
 			$(zpool list > /tmp/zpoollist.txt)
 			if test -e "/tmp/zpoollist.txt"; then
@@ -6137,27 +5944,10 @@ if [[ $Debug_Steps == "true" ]]; then echo "attach_files" | tee -a /tmp/multi_re
 					) >> "$logfile"
 				fi
 			fi
-		
-		
-			$(echo "The script running guser is: $USER" > /tmp/USER.txt)
-			if test -e "/tmp/USER.txt"; then
-				if [[ "$truenas_sendmail_support" == "No" ]]; then
-					(echo "create_attachment_file /tmp/USER.txt USER.txt" >> /tmp/attachment_files.txt)
-				else
-					(
-					echo "--${boundary}"
-					echo "Content-Type: text/html"
-					echo "Content-Transfer-Encoding: base64"
-					echo "Content-Disposition: attachment; filename=USER.txt"
-					base64 "/tmp/USER.txt"
-					rm /tmp/USER.txt
-					) >> "$logfile"
-				fi
-			fi
 			
 			
 			if ! test -e "/tmp/ds_logs.tar"; then
-				tar -cvf /tmp/ds_logs.tar $LOG_DIR > /dev/null 2<&1
+				tar -cvf /tmp/ds_logs.tar $LOG_DIR
 			fi
 			
 			if test -e "/tmp/ds_logs.tar"; then
@@ -7746,17 +7536,6 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_config_file" | tee -a /tmp/mu
 				
 	) > "$Config_File_Name"
 	if [[ $MRChangedEmailSend == "enable" ]]; then MR_Attach_Config="1"; fi
-
-	# If the guides are not present, go get them.  This is typically required for a new installation.
-	if ! test -e "Multi_Report_User_Guide.pdf"; then
-		curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/Multi_Report_User_Guide.pdf
-	fi
-
-	if ! test -e "Multi_Report_Quick_Start_Guide.pdf"; then
-		curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/Multi_Report_Quick_Start_Guide.pdf
-	fi
-	
-	
 	}
 
 ########## GENERATE CONFIG FILE ##########
@@ -9032,7 +8811,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file" | tee -a /tmp/
 							echo "-- Do you want to enable or disable the Text Output from the email?"
 							echo " "
 							echo 'Current value: "'$Enable_Text_Section'" '
-							echo "(enable or disable)"
+							echo "(enable or diable)"
 							read Keyboard_yn
 							if [[ ! $Keyboard_yn == "" ]]; then
 								if [[ $Keyboard_yn == "e" ]] || [[ $Keyboard_yn == "enable" ]]; then Enable_Text_Section="enable"; else Enable_Text_Section="disable"; fi
@@ -11865,12 +11644,6 @@ if [[ $Debug_Steps == "true" ]]; then echo "display_help" | tee -a /tmp/multi_re
 	echo "      -ignore_lock  This will ignore multiple instances running."
 	echo "                    This option should be last on the command line."
 	echo " "
-	echo "      -disable_farm  This will modify the multi_report_config.txt file to"
-	echo "                    disable checking for FARM data.  This only needs to be done once."
-	echo " "
-	echo "      -enable_farm   This will modify the multi_report_config.txt file to"
-	echo "                    enable checking for FARM data.  This only needs to be done once."
-	echo " "
 	echo "      -disable_smr  This will modify the multi_report_config.txt file to"
 	echo "                    disable checking for SMR drives.  This only needs to be done once."
 	echo " "
@@ -11883,11 +11656,6 @@ if [[ $Debug_Steps == "true" ]]; then echo "display_help" | tee -a /tmp/multi_re
 	echo "                           SMR detection.  The Drive ID will remain unchanged."
 	echo " "
 	echo "      -enable_smr_alarm    This will reactivate SMR alarms."
-	echo " "
-	echo "      -tardrivedata  This switch will collect all the drives JSON and FARM data and create"
-	echo "                     a .tgz file in the scrpt runing directory.  This is only expected to be"
-	echo "                     used when a -dump email does not collect all the drive data due to a"
-	echo "                     script running error.  Joe will specifically ask for this data if needed."
 	echo " "
 	echo "      Running the script without any switches will collect statistical data"
 	echo "      and generate an email report."
@@ -11969,7 +11737,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "display_help" | tee -a /tmp/multi_re
 	echo "         in the order the gptid numbers are listed.*'"
 	echo "      -- Drive relevant SMART data followed by if TLER/SCT is enabled/disabled"
 	echo "         or available."
-	echo "      -- NON-SMART data will be listed for drives that do not support SMART."
+#	echo "      -- NON-SMART data will be listed for drives that do not support SMART."
 	echo " "
 	echo "      While all this data is nice to have, there is no substitute for having"
 	echo "      due diligence in examining your hardware and ensuring it is working"
@@ -12064,6 +11832,69 @@ if [[ $Debug_Steps == "true" ]]; then echo "display_help" | tee -a /tmp/multi_re
 	echo " "
 	}
 
+########## HELP COMMANDS ##########
+
+display_help_commands () {
+if [[ $Debug_Steps == "true" ]]; then echo "display_help_commands" | tee -a /tmp/multi_report_debug.txt; fi
+	clear
+	echo "NAME"
+	echo "      Multi Report - System status reporting for TrueNAS Core and Scale"
+	echo " "
+	echo "SYNOPSIS"
+	echo "      multi_report.sh [options]"
+	echo " "
+	echo "COPYRIGHT AND LICENSE"
+	echo "      Multi Report is Copyright (C) by its authors and licensed under the"
+	echo "      GNU General Public License v3.0"
+	echo " "
+	echo "COMMON OPTIONS"
+	echo "      -h            This message."
+	echo " "
+	echo "      -help         Full Help message."
+	echo " "
+	echo "      -s [-m]       Record drive statistics only, do not generate a"
+	echo '                    corresponding email, unless used with "-m".'
+	echo " "
+	echo "      -m [-s]       Monitor Drive Temperature Alarms, Warning and Critical Errors"
+	echo "                    and ONLY generate an email when a an issue exists."
+	echo " "
+	echo "      -cleanup      Cleanup any left over Multi-Report files then may have been"
+	echo "                    abandoned due to script error.  A reboot will do the same thing."
+	echo " "
+	echo "      -config       Generate or edit a configuration file in the directory the"
+	echo "                    script is run from."
+	echo " "
+	echo "      -dump [all]   Generates an email with attachments of all drive data"
+	echo "            [email] and the multi_report_config.txt additionally it also"
+	echo "                    suppress the config_backup file and statistics file"
+	echo "                    from being attached to the email unless you use"
+	echo "                    the [all] option, then the config_backup and statistics files"
+	echo "                    will be appended. The [email] option runs the normal -dump"
+	echo "                    command but also will send the email to"
+	echo "                    joeschmuck2023@hotmail.com for further analysis or just to"
+	echo "                    provide drive data information to Joe to help make improvements"
+	echo "                    to the script.  If you use the [-dump email] option, you will"
+	echo "                    be asked to confirm sending of the email. So you cannot run"
+	echo "                    this parameter from a script, it must be CLI.  You will also"
+	echo "                    be asked to enter a comment to aid Joe in your problem."
+	echo " "
+	echo "      -scsismart    This will allow running a SMART Short Self-test is required to"
+	echo "                    obtain the current power_on_time from a SCSI drive.  A 130 second"
+	echo "                    delay will allow the test to complete, and the delay is definable."
+	echo " "
+	echo "      -update       Manually check GitHub for an update."
+	echo " "
+	echo "      -ignore_lock  This will ignore multiple instances running."
+	echo "			  This option should be last on the command line."
+	echo " "
+	echo "Recommendation:  When troubleshooting a problem you may be asked to provide"
+	echo "dump data to assist troubleshooting. Use the [-dump email] to include all"
+	echo "relevant data (drive data and configuration file) which sends an email to"
+	echo "joeschmuck2023@hotmail.com, your email address will not be shared!."
+	echo "If you prefer you can use [-dump] or [-dump all] and then open up a dialog"
+	echo "with Joe Schmuck and attach the files in a message on the TrueNAS forum."
+	echo " "
+	}
 
 ### DEFINE FUNCTIONS END ###
 
@@ -12250,20 +12081,11 @@ for command in "${auxillary_commands[@]}"; do
 	fi
 done
 
-if ! [[ "$1" == "-config" || "$1" == "-help" || "$1" == "-delete" || "$1" == "-s" || "$1" == "" || "$1" == "-dump" || "$1" == "-purge" || "$1" == "-h" || "$1" == "-t" || "$1" == "-m" || "$1" == "-u7zip" || "$1" == "-update" || "$1" == "-update_selftest" || "$1" == "-update_sendemail" || "$1" == "-update_all" || "$1" == "-ignore_lock" || "$1" == "-cleanup" || "$1" == "-scsismart" || "$1" == "-smr_update" || "$1" == "-check_smr"  || "$1" == "-disable_smr" || "$1" == "-enable_smr" || "$1" == "-disable_smr_alarm" || "$1" == "-enable_smr_alarm" || "$1" == "-disable_farm" || "$1" == "-enable_farm" || "$1" == "-tardrivedata" ]]; then
+if ! [[ "$1" == "-config" || "$1" == "-help" || "$1" == "-delete" || "$1" == "-s" || "$1" == "" || "$1" == "-dump" || "$1" == "-purge" || "$1" == "-h" || "$1" == "-t" || "$1" == "-m" || "$1" == "-u7zip" || "$1" == "-update" || "$1" == "-update_selftest" || "$1" == "-update_sendemail" || "$1" == "-update_all" || "$1" == "-ignore_lock" || "$1" == "-cleanup" || "$1" == "-scsismart" || "$1" == "-smr_update" || "$1" == "-check_smr"  || "$1" == "-disable_smr" || "$1" == "-enable_smr" || "$1" == "-disable_smr_alarm" || "$1" == "-enable_smr_alarm" ]]; then
 	echo '"'$1'" is not a valid option.'
 	echo "Use -h for help and look under OPTIONS."
 	echo " "
 	exit 1
-fi
-
-if [[ "$1" == "-tardrivedata" ]]; then
-	echo "Gathering up SMART JSON and FARM data to create a .tar file to aid in troubleshooting efforts."
-	echo "Not operational yet..."
-	# We need to cycle through all the drives and generate the /tmp/ files, then tar them up.
-get_API_Drives_and_tar
-	echo "All SMART json and FARM data are in a file called TARDRIVEDATA.tar in the script directory."
-	exit 0
 fi
 
 # Cleanup Any Leftover Files from a previous run.
@@ -12298,15 +12120,15 @@ if [[ "$1" == "-config" ]]; then
 	exit 0
 fi
 
-if [[ "$1" == "-help" || "1" == "-h" ]]; then
+if [[ "$1" == "-help" ]]; then
 	display_help | more
 	exit 0
 fi
 
-#if [[ "$1" == "-h" ]]; then
-#	display_help_commands | more
-#	exit 0
-#fi
+if [[ "$1" == "-h" ]]; then
+	display_help_commands | more
+	exit 0
+fi
 
 if [[ "$1" == "-delete" ]]; then
 	echo "Preparing to Delete Statistical Data File" | tee -a /tmp/multi_report_debug.txt
@@ -12386,16 +12208,6 @@ if [[ "$1" == "-update_all" ]]; then
 fi
 
 load_config
-
-if [[ "$1" == "-disable_farm" ]]; then
-	echo "Disabling FARM Checking." | tee -a /tmp/multi_report_debug.txt
-	DriveFARMCheck="disable"
-	update_config_file
-elif [[ "$1" == "-enable_farm" ]]; then
-	echo "Enabling FARM Checking." | tee -a /tmp/multi_report_debug.txt
-	DriveFARMCheck="enable"
-	update_config_file
-fi
 
 if [[ "$1" == "-disable_smr" ]]; then
 	echo "Disabling SMR Checking.  Use '-check_smr' for a onetime check." | tee -a /tmp/multi_report_debug.txt
@@ -12484,9 +12296,6 @@ fi
 # Command Format: -t /path/to/files [-dump|-config|-m]
 
 if [[ "$1" == "-t" ]]; then
-	# Disable Drive Testing
-	External_SMART_Testing="disable"
-	
 	# $2 is the path for the test files, it must be present.
 	if [[ "$2" == "" ]]; then
 		echo "Invalid Test File Path" | tee -a /tmp/multi_report_debug.txt
@@ -12497,10 +12306,13 @@ if [[ "$1" == "-t" ]]; then
 		echo 'Invalid Path - Cannot contain "HDD, SSD, or NVM"' | tee -a /tmp/multi_report_debug.txt
 		exit 1
 	fi
+	
+	# If using test files, disable FARM check as it will fail.
+	DriveFARMCheck="disable"
 
 	# Set testfilepath
 	testfilepath=$2
-	
+
 	# How many test files are there?
 	testfilecount="$(ls $2/*.json | wc -l)"
 
@@ -12510,7 +12322,7 @@ if [[ "$1" == "-t" ]]; then
 	testfilenames=(
 		"$testfilepath"/*.json
 		)
-		
+
 	# Separate into HDD, SSD, NVM
 
 	for (( i=0; i<=$testfilecount; i++ )); do
