@@ -81,6 +81,10 @@ fi
 # Version
 ### Changelog:
 
+# V3.19 (30 June 2025)
+#
+#  - Minor fix for `-h` switch not working.  Not worth an entire release.
+
 # V3.19 (27 June 2025)
 #
 #  - Updated FARM check function to convert numerical strings in to numbers.  Limited checks to Serial Number and Power On Hours.
@@ -828,7 +832,7 @@ logfile_header="/tmp/${tempfilepath}smart_report_header.tmp"
 logfile_temp="/tmp/${tempfilepath}smart_report_temp.tmp"
 boundary="gc0p4Jq0M2Yt08jU534c0p"
 
-CurrentFilename="multi_report_v3.19_2025_06_27.txt"
+CurrentFilename="multi_report_v3.19_2025_06_30.txt"
 valid_config_version_date="2025-06-24"	# Configuration file valid date
 progverdate="$(echo $CurrentFilename | cut -d '_' -f4,5,6 | cut -d '.' -f1 | sed -r 's/[_]+/-/g')"
 progname="Multi-Report "$(echo $CurrentFilename | cut -d '_' -f3)" dtd:"
@@ -11806,10 +11810,13 @@ if [[ $Debug_Steps == "true" ]]; then echo "display_help" | tee -a /tmp/multi_re
 	echo "      long-term monitoring. This script currently runs on both CORE (FreeBSD)"
 	echo "      and SCALE (Debian Linux) versions."
 	echo " "
-	echo "OPTIONS"
-	echo "      -help         This message."
+	echo "Page 1 of 12"
+	echo "Press any key to continue to COMMAND LINE OPTIONS"
+	read -s -n 1 Keyboard_yn
 	echo " "
-	echo "      -h            List the most common options."
+	echo "COMMAND LINE OPTIONS"
+	echo " "
+	echo "      -h or -help   This message."
 	echo " "
 	echo "      -s [-m]       Record drive statistics only, do not generate a"
 	echo '                    corresponding email, unless used with "-m"'
@@ -11835,6 +11842,10 @@ if [[ $Debug_Steps == "true" ]]; then echo "display_help" | tee -a /tmp/multi_re
 	echo "                    to the script.  You will be asked to enter a comment to aid Joe in"
     echo "                    your specific problem."
 	echo " "
+	echo "Page 2 of 12"
+	echo "Press any key to continue COMMAND LINE OPTIONS"
+	read -s -n 1 Keyboard_yn
+	echo " "
 	echo "      -m [-s]       Monitor Drive Temperature Alarms. This will generate"
 	echo '                    an email to "AlertEmail" that contains a'
 	echo "                    notification when a drive reaches the Warning Temp Limit,"
@@ -11850,9 +11861,13 @@ if [[ $Debug_Steps == "true" ]]; then echo "display_help" | tee -a /tmp/multi_re
 	echo "                    delay will allow the test to complete, and the delay is definable."
 	echo " "
 	echo "      -t [path] [-dump]	Use strictly for test files (.json format)"
-	echo "	   			This is strictly for development."
+	echo "                          This is strictly for development."
 	echo " "
-	echo " 	    -u7zip        This will remove 7-Zip from Scale if it was installed."
+	echo "      -u7zip        This will remove 7-Zip from SCALE if it was installed."
+	echo " "
+	echo "Page 3 of 12"
+	echo "Press any key to continue COMMAND LINE OPTIONS"
+	read -s -n 1 Keyboard_yn
 	echo " "
 	echo "      -update       Manually check GitHub for a Multi-Report update."
 	echo " "
@@ -11877,6 +11892,10 @@ if [[ $Debug_Steps == "true" ]]; then echo "display_help" | tee -a /tmp/multi_re
 	echo "      -enable_smr   This will modify the multi_report_config.txt file to"
 	echo "                    enable checking for SMR drives.  This only needs to be done once."
 	echo " "
+	echo "Page 4 of 12"
+	echo "Press any key to continue COMMAND LINE OPTIONS"
+	read -s -n 1 Keyboard_yn
+	echo " "
 	echo "      -check_smr    This will run a single SMR check if SMR checking was disabled."
 	echo " "
 	echo "      -disable_smr_alarm   This will discontinue generating an alarm related to"
@@ -11891,6 +11910,10 @@ if [[ $Debug_Steps == "true" ]]; then echo "display_help" | tee -a /tmp/multi_re
 	echo " "
 	echo "      Running the script without any switches will collect statistical data"
 	echo "      and generate an email report."
+	echo " "
+	echo "Page 5 of 12"
+	echo "Press any key to continue to CONFIGURATION"
+	read -s -n 1 Keyboard_yn
 	echo " "
 	echo "CONFIGURATION"
 	echo "      The script has become quite complex over time and with added features"
@@ -11920,6 +11943,10 @@ if [[ $Debug_Steps == "true" ]]; then echo "display_help" | tee -a /tmp/multi_re
 	echo " "
 	echo "      The default settings should be sufficient to test this script."
 	echo " "
+	echo "Page 6 of 12"
+	echo "Press any key to continue CONFIGURATION / STATISTICAL DATA"
+	read -s -n 1 Keyboard_yn
+	echo " "
 	echo "      A)dvanced configuration allows you to customize the Multi-Report script,"
 	echo "      changing the default parameters as desired.  Before exiting the"
 	echo "      advanced configuration screen, ensure you Write and changes you wish"
@@ -11937,6 +11964,10 @@ if [[ $Debug_Steps == "true" ]]; then echo "display_help" | tee -a /tmp/multi_re
 	echo "      that can be opened in any spreadsheet program such as Microsoft Excel."
 	echo "      This data could prove to be useful in diagnosing and troubleshooting"
 	echo "      drive or system problems."
+	echo " "
+	echo "Page 7 of 12"
+	echo "Press any key to continue to EMAIL CONTENT"
+	read -s -n 1 Keyboard_yn
 	echo " "
 	echo "EMAIL CONTENT"
 	echo "      Normal operation of this script will produce an output email and it may"
@@ -11971,6 +12002,10 @@ if [[ $Debug_Steps == "true" ]]; then echo "display_help" | tee -a /tmp/multi_re
 	echo "         or available."
 	echo "      -- NON-SMART data will be listed for drives that do not support SMART."
 	echo " "
+	echo "Page 8 of 12"
+	echo "Press any key to continue EMAIL CONTENT / USAGE"
+	read -s -n 1 Keyboard_yn
+	echo " "
 	echo "      While all this data is nice to have, there is no substitute for having"
 	echo "      due diligence in examining your hardware and ensuring it is working"
 	echo "      correctly.  This means you may need to examine your SMART data closer."
@@ -11985,13 +12020,17 @@ if [[ $Debug_Steps == "true" ]]; then echo "display_help" | tee -a /tmp/multi_re
 	echo "      day at e.g. 2:00AM using no switches. This will produce an email snapshot"
 	echo "      once a day."
 	echo " "
-	echo "      In addition if you are trying to troubleshoot drive problems where SMART"
+	echo "      In addition if you are trying to troubleshoot drive problems where SMART" 
 	echo "      data would benefit you, I would recommend you setup an additional CRON"
 	echo "      job using the [-s] switch for collecting statistical data only (ie. no"
 	echo "      email report). This statistics cron job should run more frequently."
 	echo "      The corresponding cron job should be scheduled to not overlap with the"
 	echo "      daily report email."
 	echo "      --If you sleep your drives then this option may not be desirable.--"
+	echo " "
+	echo "Page 9 of 12"
+	echo "Press any key to continue to CUSTOMIZATIONS AND FEATURES"
+	read -s -n 1 Keyboard_yn
 	echo " "
 	echo "CUSTOMIZATIONS AND FEATURES"
 	echo "      There are quite a few built in features in the external configuration file"
@@ -12028,6 +12067,10 @@ if [[ $Debug_Steps == "true" ]]; then echo "display_help" | tee -a /tmp/multi_re
 	echo "          drive just giving you problems? With this feature the drive will be"
 	echo "          completely ignored in the script."
 	echo " "
+	echo "Page 10 of 12"
+	echo "Press any key to continue CUSTOMIZATIONS AND FEATURES"
+	read -s -n 1 Keyboard_yn
+	echo " "
 	echo "      Warranty Expiring Warning: You can configure the configuration file to"
 	echo "          provide a warning message for a drive on a certain date.  This a great"
 	echo "          tool to keep track on when it might be time to consider buying some"
@@ -12045,6 +12088,10 @@ if [[ $Debug_Steps == "true" ]]; then echo "display_help" | tee -a /tmp/multi_re
 	echo "      that you need to maintain the proper formatting of the text or you will"
 	echo "      throw a wrench into things."
 	echo " "
+	echo "Page 11 of 12"
+	echo "Press any key to continue to HOW TO HANDLE ERRORS / Recommendations"
+	read -s -n 1 Keyboard_yn
+	echo " "
 	echo "HOW TO HANDLE ERRORS"
 	echo "      If you run across errors running the script, odds are it is because a drive"
 	echo "      was not recognized properly.  I recommend you post your error to the forum"
@@ -12061,6 +12108,10 @@ if [[ $Debug_Steps == "true" ]]; then echo "display_help" | tee -a /tmp/multi_re
 	echo "email to joeschmuck2023@hotmail.com, your email address will not be shared!."
 	echo "If you prefer you can use [-dump] or [-dump all] and then open up a dialog"
 	echo "with Joe Schmuck and attach the files in a message on the TrueNAS forum."
+	echo " "
+	echo "Page 12 of 12"
+	echo "Press any key to exit"
+	read -s -n 1 Keyboard_yn
 	echo " "
 	}
 
@@ -12298,8 +12349,8 @@ if [[ "$1" == "-config" ]]; then
 	exit 0
 fi
 
-if [[ "$1" == "-help" || "1" == "-h" ]]; then
-	display_help | more
+if [[ "$1" == "-help" || "$1" == "-h" ]]; then
+	display_help
 	exit 0
 fi
 
