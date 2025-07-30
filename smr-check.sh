@@ -1,9 +1,9 @@
 #!/bin/bash
 
-#
-# This is originally from Basil Hendroff Github repository.
-# Due to security concerns, Multi-Report will only download this file from the Multi-Report respository.
-#
+# Forked from BasilHendroff due to not having been updated in several years.
+
+##### Version 2.0
+echo "smr_check Version 2.0"
 
 # Table column widths
 DeviceWidth=7
@@ -63,28 +63,32 @@ done
 # 6. https://www.seagate.com/www-content/datasheets/pdfs/barracuda-2-5-DS1907-3-2005GB-en_AU.pdf
 # 7. https://gutendata.de/portfolio-item/how-to-shoose-hard-drive-introduction-in-magnetic-recording-technology-that-maybe-you-heard-on-pmr-cmr-and-epmr-smr-hamr-and-mamr-tdmr-and-bpmr/
 # 8. https://documents.westerndigital.com/content/dam/doc-library/en_us/assets/public/western-digital/product/data-center-drives/ultrastar-dc-hc600-series/data-sheet-ultrastar-dc-hc620.pdf 
-# 9. https://documents.westerndigital.com/content/dam/doc-library/en_us/assets/public/western-digital/product/data-center-drives/ultrastar-dc-hc600-series/data-sheet-ultrastar-dc-hc650.pdf 
+# 9. https://documents.westerndigital.com/content/dam/doc-library/en_us/assets/public/western-digital/product/data-center-drives/ultrastar-dc-hc600-series/data-sheet-ultrastar-dc-hc650.pdf
+# 10. https://www.toshiba-storage.com/wp/wp-content/uploads/2017/08/TOSH_16046_P300_GB_30_11.pdf
+# 11. https://www.seagate.com/products/enterprise-drives/exos/exos-m/
 
+# DRIVE MANUFACTURERE AND MODEL            REF    DESCRIPTION
+#----------------------------------------- ---    -----------------------------------------
 # Western Digital
-WD01=("WDC WD" "40" "60" "EDAZ")            #3 WD Elements(3.5) 4TB 6TB
-WD02=("WDC WD" "20" "30" "40" "60" "EFAX")  #1 WD Red(3.5) 2TB 3TB 4TB 6TB  
+WD01=("WDC WD" "40" "60" "EDAZ")            #3    WD Elements(3.5) 4TB 6TB
+WD02=("WDC WD" "20" "30" "40" "60" "EFAX")  #1    WD Red(3.5) 2TB 3TB 4TB 6TB  
 WD03=("WDC WD" "40" "60" "EMAZ")            #3 #7 WD Elements/MyBook/Easystore(3.5) 6TB
 WD04=("WDC WD" "20" "30" "40" "60" "EZAZ")  #1 #7 WD Blue/Elements(3.5) 2TB 3TB 4TB 6TB  
-WD05=("WDC WD" "5000" "LPSX")               #2 WD Black(2.5) 500GB
-WD06=("WDC WD" "9000" "LPZX")               #1 WD Blue(2.5) 900GB
-WD07=("WDC WD" "40" "50" "NDZM")            #7 WD ArmorATD/MyPassport/G-DRIVE(2.5) 4TB 5TB
-WD08=("WDC WD" "40" "50" "NDZW")            #7 WD MyPassport(2.5) 4TB 5TB
-WD09=("WDC WD" "30" "NMRW")                 #7 WD Easystore(2.5) 3TB
-WD10=("WDC WD" "40" "NMZM")                 #7 WD ArmorATD/MyPassport/G-DRIVE(2.5) 4TB 
-WD11=("WDC WD" "30" "40" "50" "NMZW")       #7 WD P10/Elements/Easystore/PS4/Xbox(2.5) 4TB
-WD12=("WDC WD" "40" "NPZZ")                 #3 WD Blue(2.5) 4TB
-WD13=("WDC WD" "10" "20" "SDZM")            #7 WD MyPassport(2.5) 1TB 2TB
-WD14=("WDC WD" "10" "20" "SMZM")            #7 WD ArmorATD/G-DRIVE(2.5) 1TB 2TB
-WD15=("WDC WD" "10" "20" "SDZW")            #7 WD MyPassport(2.5) 1TB 2TB
-WD16=("WDC WD" "10" "20" "SMZW")            #7 WD P10/Easystore/Elements(2.5) 2TB
-WD17=("WDC WD" "10" "SPSX")                 #1 WD Black(2.5) 1TB
-WD18=("WDC WD" "10" "SPWX")                 #1 WD Blue(2.5) 1TB
-WD19=("WDC WD" "10" "20" "SPZX")            #1 WD Blue(2.5) 1TB 2TB
+WD05=("WDC WD" "5000" "LPSX")               #2    WD Black(2.5) 500GB
+WD06=("WDC WD" "9000" "LPZX")               #1    WD Blue(2.5) 900GB
+WD07=("WDC WD" "40" "50" "NDZM")            #7    WD ArmorATD/MyPassport/G-DRIVE(2.5) 4TB 5TB
+WD08=("WDC WD" "40" "50" "NDZW")            #7    WD MyPassport(2.5) 4TB 5TB
+WD09=("WDC WD" "30" "NMRW")                 #7    WD Easystore(2.5) 3TB
+WD10=("WDC WD" "40" "NMZM")                 #7    WD ArmorATD/MyPassport/G-DRIVE(2.5) 4TB 
+WD11=("WDC WD" "30" "40" "50" "NMZW")       #7    WD P10/Elements/Easystore/PS4/Xbox(2.5) 4TB
+WD12=("WDC WD" "40" "NPZZ")                 #3    WD Blue(2.5) 4TB
+WD13=("WDC WD" "10" "20" "SDZM")            #7    WD MyPassport(2.5) 1TB 2TB
+WD14=("WDC WD" "10" "20" "SMZM")            #7    WD ArmorATD/G-DRIVE(2.5) 1TB 2TB
+WD15=("WDC WD" "10" "20" "SDZW")            #7    WD MyPassport(2.5) 1TB 2TB
+WD16=("WDC WD" "10" "20" "SMZW")            #7    WD P10/Easystore/Elements(2.5) 2TB
+WD17=("WDC WD" "10" "SPSX")                 #1    WD Black(2.5) 1TB
+WD18=("WDC WD" "10" "SPWX")                 #1    WD Blue(2.5) 1TB
+WD19=("WDC WD" "10" "20" "SPZX")            #1    WD Blue(2.5) 1TB 2TB
 
 # Hitachi Global Storage Technologies (now Western Digital) 
 HGST01=("HSH72" "1414" "1415" "AL42M0")     #7 #8 Ultrastar HC620(3.5) 14TB 15TB
@@ -103,58 +107,59 @@ HGST13=("WSH72" "2020" "AL4204")            #7 #9 Ultrastar HC650(3.5) 20TB
 HGST14=("WSH72" "2020" "AL4205")            #7 #9 Ultrastar HC650(3.5) 20TB
 
 # Seagate
-ST01=("ST" "6000" "8000" "AS0002")          #1 Archive(3.5) 6TB 8TB 
-ST02=("ST" "8000" "AS0003")                 #1 Exos (3.5) 8TB 
-ST03=("ST" "5000" "AS0011")                 #1 Archive(3.5) 5TB
+ST01=("ST" "6000" "8000" "AS0002")          #1    Archive(3.5) 6TB 8TB 
+ST02=("ST" "8000" "AS0003")                 #1    Exos (3.5) 8TB 
+ST03=("ST" "5000" "AS0011")                 #1    Archive(3.5) 5TB
 ST04=("ST" "4000" "5000" "DM000")           #1 #7 Desktop/Expansion(3.5) 4TB 5TB
 ST05=("ST" "5000" "6000" "DM003")           #1 #7 Barracuda/Expansion/BackupoPlus(3.5) 5TB 6TB
 ST06=("ST" "4000" "8000" "DM004")           #1 #7 Barracuda/Expansion/LaCie(3.5) 4TB 8TB
-ST07=("ST" "2000" "DM005")                  #1 Barracuda(3.5) 4TB 2TB
-ST08=("ST" "3000" "DM007")                  #1 Barracuda(3.5) 3TB
-ST09=("ST" "2000" "DM008")                  #1 Barracuda(3.5) 2TB
-ST10=("ST" "500" "DM009")                   #7 Barracuda(3.5) 500GB
-ST11=("ST" "5000" "LM000")                  #1 #6 #7 Barracuda/BackupPlus/Expansion/LaCie/Portable/Xbox(2.5) 5TB
-ST12=("ST" "2000" "LM007")                  #7 BackupPlus/Expansion/LaCie/Portable/PS/Xbox/DJI(2.5) 2TB
-ST13=("ST" "2000" "LM010")                  #7 LaCie/BackupPlus(2.5) 2TB
+ST07=("ST" "2000" "DM005")                  #1    Barracuda(3.5) 4TB 2TB
+ST08=("ST" "3000" "DM007")                  #1    Barracuda(3.5) 3TB
+ST09=("ST" "2000" "DM008")                  #1    Barracuda(3.5) 2TB
+ST10=("ST" "500" "DM009")                   #7    Barracuda(3.5) 500GB
+ST11=("ST" "5000" "LM000")                  #1 #6 #7  Barracuda/BackupPlus/Expansion/LaCie/Portable/Xbox(2.5) 5TB
+ST12=("ST" "2000" "LM007")                  #7    BackupPlus/Expansion/LaCie/Portable/PS/Xbox/DJI(2.5) 2TB
+ST13=("ST" "2000" "LM010")                  #7    LaCie/BackupPlus(2.5) 2TB
 ST14=("ST" "2000" "LM015")                  #1 #6 Barracuda/Xbox(2.5) 2TB
 ST15=("ST" "3000" "4000" "LM024")           #1 #6 #7 Barracuda/BackupPlus/ExpaPS4/nsion/LaCie/Portable/PS4/Xbox(2.5) 3TB 4TB
-ST16=("ST" "500" "LM030")                   #6 Barracuda(2.5) 500GB
-ST17=("ST" "500" "LM034")                   #6 Barracuda(2.5) 500GB
-ST18=("ST" "1000" "LM035")                  #7 BackupPlus/Expansion/LaCie/Portable/Chromebook/Duet/Joy(2.5) 1TB
-ST19=("ST" "1000" "LM038")                  #7 LaCie/BackupPlus(2.5) 1TB
+ST16=("ST" "500" "LM030")                   #6    Barracuda(2.5) 500GB
+ST17=("ST" "500" "LM034")                   #6    Barracuda(2.5) 500GB
+ST18=("ST" "1000" "LM035")                  #7    BackupPlus/Expansion/LaCie/Portable/Chromebook/Duet/Joy(2.5) 1TB
+ST19=("ST" "1000" "LM038")                  #7    LaCie/BackupPlus(2.5) 1TB
 ST20=("ST" "1000" "LM048")                  #1 #6 Barracuda(2.5) 1TB
-ST21=("ST" "1000" "LM049")                  #6 Barracuda(2.5) 1TB
-ST22=("ST" "2000" "LX001")                  #7 FireCuda(2.5) 2TB
-ST23=("ST" "1000" "LX015")                  #7 FireCuda(2.5) 1TB
-ST24=("ST" "500" "LX025")                   #7 FireCuda(2.5) 500GB
+ST21=("ST" "1000" "LM049")                  #6    Barracuda(2.5) 1TB
+ST22=("ST" "2000" "LX001")                  #7    FireCuda(2.5) 2TB
+ST23=("ST" "1000" "LX015")                  #7    FireCuda(2.5) 1TB
+ST24=("ST" "500" "LX025")                   #7    FireCuda(2.5) 500GB
 ST25=("ST" "8000" "VX002")                  #2 #4 Skyhawk(3.5) 8TB
 ST26=("ST" "4000" "VX005")                  #2 #4 Skyhawk(3.5) 4TB
-ST27=("ST" "2000" "VX007")                  #2 Skyhawk(3.5) 2TB
-ST28=("ST" "1000" "8000" "VX008")           #1,#2 Skyhawk(3.5) 1TB 8TB 
-ST29=("ST" "6000" "VX010")                  #2 Skyhawk(3.5) 6TB
+ST27=("ST" "2000" "VX007")                  #2    Skyhawk(3.5) 2TB
+ST28=("ST" "1000" "8000" "VX008")           #1 #2 Skyhawk(3.5) 1TB 8TB 
+ST29=("ST" "6000" "VX010")                  #2    Skyhawk(3.5) 6TB
 ST30=("ST" "6000" "VX011")                  #2 #4 Skyhawk(3.5) 6TB
 ST31=("ST" "2000" "VX012")                  #2 #4 Skyhawk(3.5) 2TB
 ST32=("ST" "4000" "VX013")                  #2 #5 Skyhawk(3.5 UK) 4TB
 ST33=("ST" "2000" "VX015")                  #2 #5 Skyhawk(3.5 UK) 2TB
-ST34=("ST" "3000" "VX016")                  #2 Skyhawk(3.5) 3TB
-ST35=("ST" "3000" "VX017")                  #2 Skyhawk(3.5) 3TB
+ST34=("ST" "3000" "VX016")                  #2    Skyhawk(3.5) 3TB
+ST35=("ST" "3000" "VX017")                  #2    Skyhawk(3.5) 3TB
+ST36=("ST" "32000" "26000" "NM003K")        #10   Mosaic 3+ (3.5) 32TB 36TB
 
 # Toshiba
 TO01=("DT02" "400" "600" "ABA")             #1 #7 DT02(3.5) 4TB 6TB
 TO02=("MQ04" "200" "ABD")                   #1 #7 MQ04(2.5) 2TB
 TO03=("MQ04" "100" "ABF")                   #1 #7 MQ04(2.5) 1TB
-TO04=("MQ04" "400" "UBB")                   #7 Canvio(2.5) 4TB
-TO05=("MQ04" "200" "UBD")                   #7 Canvio(2.5) 2TB
-TO06=("MQ04" "100" "UBF")                   #7 Canvio(2.5) 1TB
-TO07=("HDWC" "360" "EK3JB")                 #7 Canvio(3.5) 6TB
-TO08=("HDWD" "240" "260" "UZSVA")           #1 #7 P300(3.5) 4TB 6TB
+TO04=("MQ04" "400" "UBB")                   #7    Canvio(2.5) 4TB
+TO05=("MQ04" "200" "UBD")                   #7    Canvio(2.5) 2TB
+TO06=("MQ04" "100" "UBF")                   #7    Canvio(2.5) 1TB
+TO07=("HDWC" "360" "EK3JB")                 #7    Canvio(3.5) 6TB
+TO08=("HDWD" "240" "260" "320" "UZSVA")     #1 #7 #10 P300(3.5) 2TB 4TB 6TB
 TO09=("HDWL" "110" "120" "EZSTA")           #1 #7 L200(2.5) 1TB 2TB
 TO10=("HDWL" "110" "120" "UZSVA")           #1 #7 L200(2.5) 1TB 2TB
 
 # To test this script when you have no SMR drives, configure and temporarily uncomment one of the the TEST arrays below with a valid CMR drives on your system. 
 # TEST=("WDC WD" "30" "EFRX")
 # TEST=("ST" "6000" "VN0041")
-# Now uncomment the TEST lines below (there should be two of them), and run the script. Remeber to comment oall TEST lines again when you've finished.
+# Now uncomment the TEST lines below (there should be two of them), and run the script. Remeber to comment all TEST lines again when you've finished.
 
 # Quiet detection phase. If an SMR drive is detected flag f will be set.
 f=0
@@ -170,7 +175,7 @@ for k in {01..14}; do
 done
 
 # Detect Seagate SMR drives
-for k in {01..35}; do
+for k in {01..36}; do
   DetectSMR ST"$k" q
 done
 
@@ -209,7 +214,7 @@ for k in {01..14}; do
 done
 
 # Detect Seagate SMR drives
-  for k in {01..35}; do
+  for k in {01..36}; do
     DetectSMR ST"$k"
   done
 
