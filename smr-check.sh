@@ -1,10 +1,13 @@
 #!/bin/bash
 
-# Forked from BasilHendroff due to not having been updated in several years.
-
 ##### Version 2.0
-echo "smr_check Version 2.0"
+echo "smr-check Version 2.0"
 
+# Forked from BasilHendroff repository as it has not been updated in several years.
+# Updated on 3 August 2025 by JoeSchmuckatelli (joeschmuck2023@hotmail.com) with ten more drives.
+
+
+###### 	MODEL NUMBER MATCH ######
 # Table column widths
 DeviceWidth=7
 ModelWidth=15
@@ -23,35 +26,35 @@ rm tmp.json
 # $1 = Name of array
 # $2 = Any character to trigger silent mode
 function DetectSMR() {
-# Initialise
-name=$1[@]
-SMR=("${!name}")
-unset TMP
+	# Initialise
+	name=$1[@]
+	SMR=("${!name}")
+	unset TMP
 
-# For each drive
-for ((i=0;i<${#Device[@]};i++)); do
-# Is this manufacturer prefix in the model name?
-  if [[ "${Model[$i]:0:6}" == *"${SMR[0]}"* ]]; then
-# If so, add the trimmed model name to a temporary array  
-    TMP[$i]="${Model[$i]#*" "}"
-    TMP[$i]="${TMP[$i]%%-*}"
-# Is this string in the trimmed model name (usually a suffix)?
-    if [[ "${TMP[$i]}" == *"${SMR[-1]}"* ]]; then
-      for ((j=1;j<$((${#SMR[@]}-1));j++)); do
-# Is this number in the trimmed model name?
-        if [[ "${TMP[$i]}" == *"${SMR[j]}"* ]]; then
-          if [[ -z "$2" ]]; then  
-            printf "$fmt" "${Device[$i]}" "${TMP[$i]}" "${Serial[$i]}"
-          else
-            f=1
-          fi
-        fi
-      done
-    fi
-  fi
-done
-}
-
+	# For each drive
+	for ((i=0;i<${#Device[@]};i++)); do
+	# Is this manufacturer prefix in the model name?
+	  if [[ "${Model[$i]:0:6}" == *"${SMR[0]}"* ]]; then
+	# If so, add the trimmed model name to a temporary array  
+		TMP[$i]="${Model[$i]#*" "}"
+		TMP[$i]="${TMP[$i]%%-*}"
+	# Is this string in the trimmed model name (usually a suffix)?
+		if [[ "${TMP[$i]}" == *"${SMR[-1]}"* ]]; then
+		  for ((j=1;j<$((${#SMR[@]}-1));j++)); do
+	# Is this number in the trimmed model name?
+			if [[ "${TMP[$i]}" == *"${SMR[j]}"* ]]; then
+			  if [[ -z "$2" ]]; then  
+				printf "$fmt" "${Device[$i]}" "${TMP[$i]}" "${Serial[$i]}"
+			  else
+				f=1
+			  fi
+			fi
+		  done
+		fi
+	  fi
+	done
+	}
+	
 # The SMR database is made up of a number of arrays (sorted by suffix below)
 #
 # References:
@@ -66,8 +69,19 @@ done
 # 9. https://documents.westerndigital.com/content/dam/doc-library/en_us/assets/public/western-digital/product/data-center-drives/ultrastar-dc-hc600-series/data-sheet-ultrastar-dc-hc650.pdf
 # 10. https://www.toshiba-storage.com/wp/wp-content/uploads/2017/08/TOSH_16046_P300_GB_30_11.pdf
 # 11. https://www.seagate.com/products/enterprise-drives/exos/exos-m/
+# 12. https://www.westerndigital.com/products/internal-drives/data-center-drives/ultrastar-dc-hc650-hdd?sku=ultrastar-dc-hc650-20-tb
+# 13. https://www.westerndigital.com/products/internal-drives/data-center-drives/ultrastar-dc-hc690-hdd?sku=WSH723200AL4201
+# 14. https://www.westerndigital.com/products/internal-drives/data-center-drives/ultrastar-dc-hc670-hdd?sku=ultrastar-dc-hc670-26-tb
+# 15. https://www.westerndigital.com/products/internal-drives/data-center-drives/ultrastar-dc-hc680-hdd?sku=ultrastar-dc-hc680-28tb-se
 
-# DRIVE MANUFACTURERE AND MODEL            REF    DESCRIPTION
+# Format of data:
+# Need the model number as presented by midclt. `midclt call disk.query | jq`
+# The first column must be contained in the drive model.
+# The last column must match.  Use null "" to ignore the last column.
+# Any column in between, one must match as well.
+
+
+# DRIVE MANUFACTURER AND MODEL            REF    DESCRIPTION
 #----------------------------------------- ---    -----------------------------------------
 # Western Digital
 WD01=("WDC WD" "40" "60" "EDAZ")            #3    WD Elements(3.5) 4TB 6TB
@@ -89,6 +103,10 @@ WD16=("WDC WD" "10" "20" "SMZW")            #7    WD P10/Easystore/Elements(2.5)
 WD17=("WDC WD" "10" "SPSX")                 #1    WD Black(2.5) 1TB
 WD18=("WDC WD" "10" "SPWX")                 #1    WD Blue(2.5) 1TB
 WD19=("WDC WD" "10" "20" "SPZX")            #1    WD Blue(2.5) 1TB 2TB
+WD20=("WSH" "723200" "723220" "AL")			#13	  WD Ultrastar DC HC690 Data Center Drive (3.5) 30TB 32TB
+WD21=("ULTRASTAR" "HC650" "HC670" "TB")		#12	#14 WD Ultrastar DC HC650/HC670 Data Center Drive (3.5) 20TB/26TB
+WD22=("ULTRASTAR" "HC680" "26TB" "27TB" "28TB" "")	#15 WD Ultrastar DC HC680 Data Center Drive (3.5) 26TB 27TB 28TB
+# New upcoming SMR drives: UltraSMR 36TB and 44TB (2026/2027)
 
 # Hitachi Global Storage Technologies (now Western Digital) 
 HGST01=("HSH72" "1414" "1415" "AL42M0")     #7 #8 Ultrastar HC620(3.5) 14TB 15TB
@@ -142,7 +160,7 @@ ST32=("ST" "4000" "VX013")                  #2 #5 Skyhawk(3.5 UK) 4TB
 ST33=("ST" "2000" "VX015")                  #2 #5 Skyhawk(3.5 UK) 2TB
 ST34=("ST" "3000" "VX016")                  #2    Skyhawk(3.5) 3TB
 ST35=("ST" "3000" "VX017")                  #2    Skyhawk(3.5) 3TB
-ST36=("ST" "32000" "26000" "NM003K")        #10   Mosaic 3+ (3.5) 32TB 36TB
+ST36=("ST" "32000" "36000" "NM003K")        #10   Mosaic 3+ (3.5) 32TB 36TB
 
 # Toshiba
 TO01=("DT02" "400" "600" "ABA")             #1 #7 DT02(3.5) 4TB 6TB
@@ -152,12 +170,13 @@ TO04=("MQ04" "400" "UBB")                   #7    Canvio(2.5) 4TB
 TO05=("MQ04" "200" "UBD")                   #7    Canvio(2.5) 2TB
 TO06=("MQ04" "100" "UBF")                   #7    Canvio(2.5) 1TB
 TO07=("HDWC" "360" "EK3JB")                 #7    Canvio(3.5) 6TB
-TO08=("HDWD" "240" "260" "320" "UZSVA")     #1 #7 #10 P300(3.5) 2TB 4TB 6TB
-TO09=("HDWL" "110" "120" "EZSTA")           #1 #7 L200(2.5) 1TB 2TB
-TO10=("HDWL" "110" "120" "UZSVA")           #1 #7 L200(2.5) 1TB 2TB
+TO08=("HDWD" "240" "260" "320" "UZSVA" "")  #1 #7 #10 P300(3.5) 2TB 4TB 6TB		# Added null as the drive model numbers do not always list "UZSVZ"
+TO09=("HDWL" "110" "120" "EZSTA" "")        #1 #7 L200(2.5) 1TB 2TB				# Repeated
+TO10=("HDWL" "110" "120" "UZSVA" "")        #1 #7 L200(2.5) 1TB 2TB				# Repeated
 
 # To test this script when you have no SMR drives, configure and temporarily uncomment one of the the TEST arrays below with a valid CMR drives on your system. 
 # TEST=("WDC WD" "30" "EFRX")
+# TEST=("HGST" "HDN72" "HDN92" "6060" "ALE")
 # TEST=("ST" "6000" "VN0041")
 # Now uncomment the TEST lines below (there should be two of them), and run the script. Remeber to comment all TEST lines again when you've finished.
 
@@ -165,7 +184,7 @@ TO10=("HDWL" "110" "120" "UZSVA")           #1 #7 L200(2.5) 1TB 2TB
 f=0
 
 # Detect Western Digital SMR drives
-for k in {01..19}; do
+for k in {01..22}; do
   DetectSMR WD"$k" q
 done
 
@@ -189,12 +208,12 @@ done
 # If the flag f is still unset, no SMR drive was detected. :)
 if [[ "$f" == 0 ]]; then
   echo
-  echo -e "\e[1;32mNo known SMR drives detected. That's a good sign, but it isn't a guarantee. Double-check using other means.\e[0m"
+  echo "No known SMR drives detected based on midclt provided model number."
   echo
 else
 # otherwise, one or more SMR drives were detected so diplay all SMR drives in a table :(
   echo
-  echo -e "\e[1;31mKnown SMR drive(s) detected.\e[0m"
+  echo "Known SMR drive(s) detected based on midclt provided model number."
   echo
 
   fmt="%${DeviceWidth}s | %${ModelWidth}s | %${SerialWidth}s |\n"
@@ -204,7 +223,7 @@ else
   echo "${separator// /-}"
 
 # Detect Western Digital SMR drives
-  for k in {01..19}; do
+  for k in {01..22}; do
     DetectSMR WD"$k"
   done
 
