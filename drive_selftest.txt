@@ -4,7 +4,7 @@ LANG="en_US.UTF-8"
 if [[ $TERM == "dumb" ]]; then          # Set a terminal as the script may generate an error message if using 'dumb'.
     export TERM=unknown
 fi
-##### Version 1.05
+##### Version 1.06
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
@@ -53,6 +53,10 @@ SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 ### USE [-help] FOR ADDITIONAL INFORMATION
 
 # Change Log
+#
+# Version 1.06 (18 September 2025)
+#
+# - Basic Ubuntu support - can potentially support other Linux based OS' as well, needs testing
 #
 # Version 1.05 (07 June 2025)
 #
@@ -182,7 +186,8 @@ simulated_drives=0      # Set to '0' to use actual drives, or to any number to u
 ###### Auto-generated Parameters
 softver=$(uname -s)
 
-if [[ $softver != "Linux" ]]; then
+# Check if the OS is FreeBSD (TrueNAS Core or FreeNAS)
+if [[ "$softver" == "FreeBSD" ]]; then
   if [[ "$(cat /etc/version | grep "FreeNAS")" ]]; then
     programver="FreeNAS "$(cat /etc/version | cut -d " " -f1 | sed 's/FreeNAS-//')
     programver3="$(cat /etc/version | cut -d " " -f1 | sed 's/FreeNAS-//' | cut -d "." -f1)"
@@ -192,13 +197,43 @@ if [[ $softver != "Linux" ]]; then
     programver3="$(cat /etc/version | cut -d " " -f1 | sed 's/TrueNAS-//' | cut -d "." -f1)"
     programver4="$(cat /etc/version | cut -d "." -f2 | cut -c1)"
   fi
+# Check if the OS is Linux (TrueNAS Scale or Ubuntu)
+elif [[ "$softver" == "Linux" ]]; then
+  if [[ -f "/etc/os-release" ]]; then
+    . /etc/os-release
+    # Check specifically for TrueNAS Scale
+    if [[ "$ID" == "truenas" ]]; then
+      programver="TrueNAS Scale "$(cat /etc/version)
+      programver3="$(cat /etc/version | cut -d "." -f1)"
+      programver4=6            # Using symbolic value so script works as written, just for SCALE.
+    # Check for a generic Ubuntu system
+    elif [[ "$ID" == "ubuntu" ]]; then
+      programver="$NAME $VERSION_ID"
+      major_version=$(echo "$VERSION_ID" | cut -d'.' -f1)
+      minor_version=$(echo "$VERSION_ID" | cut -d'.' -f2)
+      programver3=$((major_version + 0))
+      programver4=$((minor_version + 0))
+    else
+      echo "This script is not designed to run on this specific Linux distribution."
+      exit 1
+    fi
+  else
+    echo "Could not find /etc/os-release. This script may not run correctly on this system."
+    exit 1
+  fi
 else
-    programver="TrueNAS Scale "$(cat /etc/version)
-    programver3="$(cat /etc/version | cut -d "." -f1)"
-    programver4=6            # Using symbolic value so script works as written, just for SCALE.
+  echo "This script is not designed to run on a non-FreeBSD or non-Linux distribution."
+  exit 1
 fi
+
 programver3=$(( programver3 + 0 ))        # Make Base 10
 programver4=$(( programver4 + 0 ))
+
+# Ensure OS / version is correct
+echo "Detected OS: $programver"
+echo "Major Version: $programver3"
+echo "Minor Version: $programver4"
+
 Program_Name="drive_selftest.sh"
 Version="1.05"                            # Current version of the script
 Version_Date="(07 June 2025)"
@@ -385,59 +420,120 @@ check_scrub () {
 	if [[ $Debug_Steps == "true" ]]; then echo "check_scrub" | tee -a /tmp/drive_selftest/drive_test_temp.txt; fi
     # Check if a SCRUB or RESILVER is in progress and if if so, how much time remains.
     # If greater than $SCRUB_Minutes_Remaining then we will not run a SMART Long test, we substitute it with a Short test.
+	if [[ "$softver" == "Linux" ]] && [[ "$ID" == "ubuntu" ]]; then
+        # Ubuntu specific code using zpool commands
+        zpool_list=$(zpool list -H | cut -f1)
 
-    for i in {0..100}; do            # ARE WE REALLY GOING TO SEE 100 POOLS, well just in case?  THIS IS NOT THE ID NUMBER
-        Function_Pool_Name=$(midclt call pool.query | jq -r '.['$i'].name')
-        Function_temp=$(midclt call pool.query | jq -r '.['$i'].scan.function')
-        Function_Time_Left=$(midclt call pool.query | jq -r '.['$i'].scan.total_secs_left')
-
-        if [[ $Function_temp == "null" ]]; then
-            break
-        else
-            Function=$Function_temp
-        fi
-		
-        if [[ $Function == "RESILVER" ]]; then SCRUB_Minutes_Remaining=0; SCRUB_In_Progress="true"; fi
-        if [[ $Function == "SCRUB" ]] || [[ $Function == "RESILVER" ]]; then
-            if [[ $Function_Time_Left != "null" ]]; then         # We should have a number, lets convert it to hours.
+		while IFS= read -r pool; do
+            # Get pool status and scrub info
+            pool_status=$(zpool status "$pool")
+			if [[ $Debug == "true" ]]; then
+				echo "Debug: Pool Status for $pool"
+			fi
+            
+            # Check for RESILVER
+            if echo "$pool_status" | grep -q "resilver in progress"; then
+                SCRUB_Minutes_Remaining=0
                 SCRUB_In_Progress="true"
+                Function="RESILVER"
+                Function_Time_Left=$(echo "$pool_status" | grep "scan:" | grep -o '[0-9]\+:[0-9]\+:[0-9]\+' | tail -1)
+                # Convert HH:MM:SS to minutes
+                IFS=: read -r hours minutes seconds <<< "$Function_Time_Left"
+                Function_Time_Left=$((hours * 3600 + minutes * 60 + seconds))
+            # Check for SCRUB
+            elif echo "$pool_status" | grep -q "scrub in progress"; then
+                SCRUB_In_Progress="true"
+                Function="SCRUB"
+                Function_Time_Left=$(echo "$pool_status" | grep "scan:" | grep -o '[0-9]\+:[0-9]\+:[0-9]\+' | tail -1)
+                # Convert HH:MM:SS to minutes
+                IFS=: read -r hours minutes seconds <<< "$Function_Time_Left"
+                Function_Time_Left=$((hours * 3600 + minutes * 60 + seconds))
+            fi
+
+            if [[ $SCRUB_In_Progress == "true" ]]; then
                 Function_Time_Left_Min=$((Function_Time_Left / 60))    # Seconds to Minutes
-                Function_Time_Left_Hour=$((Function_Time_Left_Min * 10 ))   # *10 due to rounding the hours
+                Function_Time_Left_Hour=$((Function_Time_Left_Min * 10))   # *10 due to rounding the hours
                 Function_Time_Left_Whole0=$((Function_Time_Left_Hour / 60))
                 Function_Time_Left_Whole1=$((Function_Time_Left_Whole0 / 10))
-                Function_Time_Left_Fraction=$((Function_Time_Left_Whole0 - $((Function_Time_Left_Whole1 * 10 ))))
+                Function_Time_Left_Fraction=$((Function_Time_Left_Whole0 - $((Function_Time_Left_Whole1 * 10))))
+
                 if [[ $SCRUB_Minutes_Remaining -gt 0 ]]; then
-                    if [[ $Function_Time_Left_Min -gt $SCRUB_Minutes_Remaining ]]; then        # SCRUB Too Long
-                        echo "  Pool: "$Function_Pool_Name | tee -a /tmp/drive_selftest/drive_test_temp.txt
-                        if [[ $Function_Time_Left_Min -gt 59 ]]; then    # JUST TO FORMAT TIME CORRECTLY
-                            # OVER 1 HOUR
-                            echo "  "$Function" In Progress: ~"$Function_Time_Left_Whole1"."$Function_Time_Left_Fraction" Hours remain. " | tee -a /tmp/drive_selftest/drive_test_temp.txt
-                            echo "  The "$Function" remaining time exceeds "$SCRUB_Minutes_Remaining" minutes, running SMART SHORT tests vice any pending LONG tests." | tee -a /tmp/drive_selftest/drive_test_temp.txt
+                    if [[ $Function_Time_Left_Min -gt $SCRUB_Minutes_Remaining ]]; then
+                        echo "  Pool: $pool" | tee -a /tmp/drive_selftest/drive_test_temp.txt
+                        if [[ $Function_Time_Left_Min -gt 59 ]]; then
+                            echo "  $Function In Progress: ~$Function_Time_Left_Whole1.$Function_Time_Left_Fraction Hours remain. " | tee -a /tmp/drive_selftest/drive_test_temp.txt
+                            echo "  The $Function remaining time exceeds $SCRUB_Minutes_Remaining minutes, running SMART SHORT tests vice any pending LONG tests." | tee -a /tmp/drive_selftest/drive_test_temp.txt
                         else
-                            # LESS THAN 1 HOUR
-                            echo $Function" In Progress: "$Function_Time_Left" minutes remain." | tee -a /tmp/drive_selftest/drive_test_temp.txt
+                            echo "$Function In Progress: $Function_Time_Left minutes remain." | tee -a /tmp/drive_selftest/drive_test_temp.txt
                         fi
                     else
-                        # LESS THAN MAX TIME - WE CAN RUN A LONG TEST
-                        echo "  Pool: "$Function_Pool_Name | tee -a /tmp/drive_selftest/drive_test_temp.txt
-                        echo "  "$Function" In Progress: ~"$Function_Time_Left_Whole1"."$Function_Time_Left_Fraction" Hours remain. " | tee -a /tmp/drive_selftest/drive_test_temp.txt
-                        echo "  The "$Function" remaining time is less than "$SCRUB_Minutes_Remaining" minutes, running all SMART tests as planned." | tee -a /tmp/drive_selftest/drive_test_temp.txt
+                        echo "  Pool: $pool" | tee -a /tmp/drive_selftest/drive_test_temp.txt
+                        echo "  $Function In Progress: ~$Function_Time_Left_Whole1.$Function_Time_Left_Fraction Hours remain. " | tee -a /tmp/drive_selftest/drive_test_temp.txt
+                        echo "  The $Function remaining time is less than $SCRUB_Minutes_Remaining minutes, running all SMART tests as planned." | tee -a /tmp/drive_selftest/drive_test_temp.txt
                     fi
                 else
-                    # SCRUB/RESILVER IN PROGRESS - NO SMART TESTING AT ALL
-                    echo "  Pool: "$Function_Pool_Name | tee -a /tmp/drive_selftest/drive_test_temp.txt
-                    echo "  "$Function" In Progress: ~"$Function_Time_Left_Whole1"."$Function_Time_Left_Fraction" Hours remain. " | tee -a /tmp/drive_selftest/drive_test_temp.txt
-                    echo "  SMART testing disabled during "$Function"." | tee -a /tmp/drive_selftest/drive_test_temp.txt
+                    echo "  Pool: $pool" | tee -a /tmp/drive_selftest/drive_test_temp.txt
+                    echo "  $Function In Progress: ~$Function_Time_Left_Whole1.$Function_Time_Left_Fraction Hours remain. " | tee -a /tmp/drive_selftest/drive_test_temp.txt
+                    echo "  SMART testing disabled during $Function." | tee -a /tmp/drive_selftest/drive_test_temp.txt
                     # Lets cancel all testing.
                     Short_Test_Mode=0
                     Long_Test_Mode=0
                 fi
             fi
-        elif [[ $Function == "null" ]]; then    # We exit, no more pools in the list.
-            break
-        fi
-    done
+        done <<< "$zpool_list"
+	else
+		for i in {0..100}; do            # ARE WE REALLY GOING TO SEE 100 POOLS, well just in case?  THIS IS NOT THE ID NUMBER
+			Function_Pool_Name=$(midclt call pool.query | jq -r '.['$i'].name')
+			Function_temp=$(midclt call pool.query | jq -r '.['$i'].scan.function')
+			Function_Time_Left=$(midclt call pool.query | jq -r '.['$i'].scan.total_secs_left')
 
+			if [[ $Function_temp == "null" ]]; then
+				break
+			else
+				Function=$Function_temp
+			fi
+			
+			if [[ $Function == "RESILVER" ]]; then SCRUB_Minutes_Remaining=0; SCRUB_In_Progress="true"; fi
+			if [[ $Function == "SCRUB" ]] || [[ $Function == "RESILVER" ]]; then
+				if [[ $Function_Time_Left != "null" ]]; then         # We should have a number, lets convert it to hours.
+					SCRUB_In_Progress="true"
+					Function_Time_Left_Min=$((Function_Time_Left / 60))    # Seconds to Minutes
+					Function_Time_Left_Hour=$((Function_Time_Left_Min * 10 ))   # *10 due to rounding the hours
+					Function_Time_Left_Whole0=$((Function_Time_Left_Hour / 60))
+					Function_Time_Left_Whole1=$((Function_Time_Left_Whole0 / 10))
+					Function_Time_Left_Fraction=$((Function_Time_Left_Whole0 - $((Function_Time_Left_Whole1 * 10 ))))
+					if [[ $SCRUB_Minutes_Remaining -gt 0 ]]; then
+						if [[ $Function_Time_Left_Min -gt $SCRUB_Minutes_Remaining ]]; then        # SCRUB Too Long
+							echo "  Pool: "$Function_Pool_Name | tee -a /tmp/drive_selftest/drive_test_temp.txt
+							if [[ $Function_Time_Left_Min -gt 59 ]]; then    # JUST TO FORMAT TIME CORRECTLY
+								# OVER 1 HOUR
+								echo "  "$Function" In Progress: ~"$Function_Time_Left_Whole1"."$Function_Time_Left_Fraction" Hours remain. " | tee -a /tmp/drive_selftest/drive_test_temp.txt
+								echo "  The "$Function" remaining time exceeds "$SCRUB_Minutes_Remaining" minutes, running SMART SHORT tests vice any pending LONG tests." | tee -a /tmp/drive_selftest/drive_test_temp.txt
+							else
+								# LESS THAN 1 HOUR
+								echo $Function" In Progress: "$Function_Time_Left" minutes remain." | tee -a /tmp/drive_selftest/drive_test_temp.txt
+							fi
+						else
+							# LESS THAN MAX TIME - WE CAN RUN A LONG TEST
+							echo "  Pool: "$Function_Pool_Name | tee -a /tmp/drive_selftest/drive_test_temp.txt
+							echo "  "$Function" In Progress: ~"$Function_Time_Left_Whole1"."$Function_Time_Left_Fraction" Hours remain. " | tee -a /tmp/drive_selftest/drive_test_temp.txt
+							echo "  The "$Function" remaining time is less than "$SCRUB_Minutes_Remaining" minutes, running all SMART tests as planned." | tee -a /tmp/drive_selftest/drive_test_temp.txt
+						fi
+					else
+						# SCRUB/RESILVER IN PROGRESS - NO SMART TESTING AT ALL
+						echo "  Pool: "$Function_Pool_Name | tee -a /tmp/drive_selftest/drive_test_temp.txt
+						echo "  "$Function" In Progress: ~"$Function_Time_Left_Whole1"."$Function_Time_Left_Fraction" Hours remain. " | tee -a /tmp/drive_selftest/drive_test_temp.txt
+						echo "  SMART testing disabled during "$Function"." | tee -a /tmp/drive_selftest/drive_test_temp.txt
+						# Lets cancel all testing.
+						Short_Test_Mode=0
+						Long_Test_Mode=0
+					fi
+				fi
+			elif [[ $Function == "null" ]]; then    # We exit, no more pools in the list.
+				break
+			fi
+		done
+	fi
     }
 
 remove_duplicate_tests () {
@@ -1424,7 +1520,13 @@ get_API_Drives () {
         if [[ $Test_ONLY_NVMe_Drives == "enable" ]]; then
             echo "Testing ONLY NVMe Drives" | tee -a /tmp/drive_selftest/drive_test_temp.txt
         fi
-    Drive_Disk_Query=$(midclt call disk.query)
+	if [[ "$softver" == "Linux" ]] && [[ "$ID" == "ubuntu" ]]; then
+		# For Ubuntu, use lsblk to get disk info in JSON format
+		Drive_Disk_Query=$(lsblk -J -o NAME,SERIAL,MODEL,TYPE,TRAN | jq '.blockdevices | map(select(.type == "disk"))')
+	else
+		# For TrueNAS, use midclt call
+		Drive_Disk_Query=$(midclt call disk.query)
+	fi
 
     # 1. Get all API data in a variable, one call. -- Can we find API that says SMART Self-test is supported or not?  May need to use smartctl for one thing.
     #    `supports_smart:null`, maybe check if null and if so or `no`, use smartctl.
