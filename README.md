@@ -1,6 +1,18 @@
 # Multi-Report for FreeNAS/TrueNAS Core & Scale
+# and
+# Drive-Selftest
 
-New in Version 3.19
+New in Multi-Report Version 3.20
+
+  - Added Drive Location Data - For locating your drive by serial number and your noted location entry.
+  - Added Font changing capability.
+  - Added Override for drives with SMART DISABLED.
+  - Made change to display the "REAL" error data for Seagate "Raw_Read_Rate" and "Seek_Error_Rate", no more manual number conversions.
+  - Incorporated Drive-Selftest v1.06 changes into Multi-Report.
+  - Updated clearing variables for invalid Media Errors.
+  - Updated -dump to include new csv file from Drive-Selftest script.
+  - Change to downloading "sendemail.py" vice "multireport_sendemail.py"
+
 
 This script will perform five main functions:
 1) Generate a report and send an email on your drive(s) status. 
@@ -24,6 +36,14 @@ A User Guide exists (needs a bit of updating).
 
 # Drive Self-test for TrueNAS
 
+New in Drive-Selftest Version 1.06
+
+ - Updated Silent to be more effective when enabled.
+ - Changed RESILVER and SCRUB to limit SMART tests to only the pools affected.
+ - Changed RESILVER and SCRUB to have a 'disable' option and let SMART tests run regardless of RESIVLER or SCRUB in progress.
+ - Added drive testing tracking in CSV file.  This will ensure all drives are SMART LONG tested promptly if the script is not run everyday and a drive is missed.
+ - Added a "Maximum_Catchup_Drive_Count" variable to limit how many additional drives can be LONG tested if they were missed.
+
 Drive Self-test is a new script specifically to perform the SMART testing.
 The SMART testing was removed from Multi-Report placed in this script.
 This script has many benefits being a seperate script:
@@ -31,4 +51,4 @@ This script has many benefits being a seperate script:
 2) Run standalone without Multi-Report.
 3) Schedules both Short and Long tests to be accomplished Daily, Weekly, and/or Monthly.
 4) Can schedule over 1000 drives to be tested (OMG!).
-5) Able to test ONLY Nvme while TrueNAS is not able to schedule NVMe SMART tests in the GUI.
+5) Able to test ONLY NVMe while TrueNAS is not able to schedule NVMe SMART tests in the GUI.
