@@ -1,6 +1,6 @@
 # Multi-Report and Drive-Selftest for FreeNAS/TrueNAS Core/Scale
 
-Bug-Fix Multi-Report Version 3.21 amd Drive-Selftest Version 1.07
+Bug-Fix Multi-Report Version 3.21 and Drive-Selftest Version 1.07
   Yes, a few bugs of course.  Here is what changed for MR:
   - Fixed "Test_ONLY_NVMe_Drives" in the multi_report_config.txt file.
   - Fixed corrupt statistical data file and added routine to purge the corrupt data.
