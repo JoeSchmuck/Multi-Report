@@ -1,6 +1,16 @@
-# Multi-Report for FreeNAS/TrueNAS Core & Scale
-# and
-# Drive-Selftest
+# Multi-Report and Drive-Selftest for FreeNAS/TrueNAS Core/Scale
+
+Bug-Fix Multi-Report Version 3.21 amd Drive-Selftest Version 1.07
+  Yes, a few bugs of course.  Here is what changed for MR:
+  - Fixed "Test_ONLY_NVMe_Drives" in the multi_report_config.txt file.
+  - Fixed corrupt statistical data file and added routine to purge the corrupt data.
+  - Added recognition of `nvme_total_capacity` SMART value.
+
+  Here is what changed in DS:
+  - Optimized the API function.  The function was taking a long time for people with a large number of drives.  Optimizing improved performance by 1987.58% (8 minutes reduced to 24.15 seconds).
+  - Fixed SCRUB and RESILVER Time Remaining Count.
+
+==============================================================================
 
 New in Multi-Report Version 3.20
 
