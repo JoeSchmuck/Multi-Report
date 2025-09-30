@@ -8262,6 +8262,8 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_config_file" | tee -a /tmp/mu
 		echo 'LOG_DIR="'$LOG_DIR'"               		# The default log directory is the script directory.'
 		echo 'Silent="'$Silent'"                          	  			# When "enable" only error messages will be output to the stdout.'
 		echo 'selftest_data_file="'$selftest_data_file'"	# This is the location and file name for the tracking of the selftest drive dates.'
+		echo " "
+		echo 'truenas_sendmail_support="'$truenas_sendmail_support'"'
 	) > "$Config_File_Name"
 	if [[ $MRChangedEmailSend == "enable" ]]; then MR_Attach_Config="1"; fi
 
