@@ -83,7 +83,14 @@ fi
 # Version
 ### Changelog:
 
-# V3.21 (28 Sept 2024)
+# V3.22 (29 Sept 2025)
+#
+# - Updated to allow proper use of the truenas_sendmail_support="No" in the config file.
+# - Fixed the hard-coding of the fonts, not hard coded now.
+#
+
+
+# V3.21 (28 Sept 2025)
 #
 # - Fixed "Test_ONLY_NVMe_Drives" in the multi_report_config.txt file.
 # - Fixed corrupt statistical data file and added routine to purge the corrupt data.
@@ -2142,7 +2149,9 @@ if [[ $Debug_Steps == "true" ]]; then echo "checkforupdate" | tee -a /tmp/multi_
 		fi
 
 # Go git the file
-		if [[ $softver == "Linux" ]]; then
+#		if [[ $softver == "Linux" ]]; then
+		if [[ $truenas_sendmail_support == "No" ]]; then
+
 			(
 				cd /tmp || exit 3
 				if ! test -e "Multi-Report"; then
@@ -7714,12 +7723,12 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_config_file" | tee -a /tmp/mu
 		echo "# The configuration file will override the default values coded into the script."
 		echo " "
 		echo '###### EMAIL FONTS #####		# Monospaced Fonts will result in a better aligned Text Section.'
-		echo 'font="courier new"				# Typical options are: courier new, Source Code Pro, Cascadia Code, stencil, OCR A Extended, etc.'
-		echo 'font_size=16					# Typical options are: 14, 16, 18.  This only affects the Text fonts, not the Chart fonts.'
+		echo 'font="'$font'"				# Typical options are: courier new, Source Code Pro, Cascadia Code, stencil, OCR A Extended, etc.'
+		echo "font_size='$font_size'					# Typical options are: 14, 16, 18.  This only affects the Text fonts, not the Chart fonts."
 
 		echo '								# Chart fonts look better if they are proportional.'
-		echo 'chartfont="times new roman"		# Typical options are: courier new, times new roman, Cascadia Code, stencil, OCR A Extended, etc.'
-		echo 'chart_font_size=15				# Typical options are: 14, 16, 18.  This only affects the Chart fonts, not the Text fonts.'
+		echo 'chartfont="'$chartfont'"		# Typical options are: courier new, times new roman, Cascadia Code, stencil, OCR A Extended, etc.'
+		echo "chart_font_size='$chart_font_size'				# Typical options are: 14, 16, 18.  This only affects the Chart fonts, not the Text fonts."
 		echo " "
 		echo "###### Email Address(s)"
 		echo '### Enter your Email address to send the report to.  To send to multiple email addresses separate those using a semicolon ";".'
@@ -13132,6 +13141,8 @@ echo " "
 exit 0
 fi
 
+load_config
+
 if [[ "$1" == "-update" ]]; then
 	update_MR_script
 	echo "The Multi-Report script has been updated.  Exiting." | tee -a /tmp/multi_report_debug.txt
@@ -13165,7 +13176,8 @@ if [[ "$1" == "-update_all" ]]; then
 	update_all="true"
 	update_MR_script
 	update_Drive_script
-	if [[ $softver == "Linux" ]]; then		# Sendemail.py is not required in CORE.
+#	if [[ $softver == "Linux" ]]; then		# Sendemail.py is not required in CORE.
+	if [[ $truenas_sendmail_support == "No" ]]; then
 		update_Sendemail_script
 	fi
 	echo "All scripts have been updated.  Exiting." | tee -a /tmp/multi_report_debug.txt
@@ -13180,7 +13192,7 @@ else
 	SMART_check_status
 fi
 
-load_config
+#load_config
 
 if [[ "$1" == "-test_sendemail" ]]; then
 	python3 sendemail.py --test_mode
