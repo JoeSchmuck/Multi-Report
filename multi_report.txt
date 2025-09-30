@@ -4490,7 +4490,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "get_drive_data: $drive" | tee -a /tm
 # Get Capacity
 	if [[ "$(echo "${smartdata5}" | jq -Mre '.logical_block_size | values')" ]]; then capacity1="$(echo "${smartdata5}" | jq -Mre '.logical_block_size | values')"; else json_error_log=$json_error_log$'\n'"$(echo $1" "$serial" .logical_block_size not in json")"; fi > /dev/null 2<&1
 	if [[ "$(echo "${smartdata5}" | jq -Mre '.user_capacity.blocks | values')" ]]; then capacity2="$(echo "${smartdata5}" | jq -Mre '.user_capacity.blocks | values')"; else json_error_log=$json_error_log$'\n'"$(echo $1" "$serial" .user_capacity.blocks not in json")"; fi > /dev/null 2<&1
-	if [[ $capacity1 == "" ]] || [[ $capacity2 == "" ]] then capacity1=1; capacity2=500; fi
+	if [[ $capacity1 == "" ]] || [[ $capacity2 == "" ]]; then capacity1=1; capacity2=500; fi
 	# Calculate Capacity and adjust for GB/TB
 	capacity=$(( ${capacity1} * ${capacity2} ))
 
