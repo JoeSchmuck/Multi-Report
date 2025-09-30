@@ -2,7 +2,7 @@
 # shellcheck disable=SC1075,SC2027,SC2034,SC2128,SC2002,SC2004,SC2086,SC2162
 LANG="en_US.UTF-8"
 
-##### Version 3.21
+##### Version 3.22
 
 ###### Get Config File Name and Location
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
@@ -83,10 +83,11 @@ fi
 # Version
 ### Changelog:
 
-# V3.22 (29 Sept 2025)
+# V3.22 (30 Sept 2025)
 #
 # - Updated to allow proper use of the truenas_sendmail_support="No" in the config file.
 # - Fixed the hard-coding of the fonts, not hard coded now.
+# - Fixed Capacity line in code (missing a semicolon).
 #
 
 
@@ -927,7 +928,7 @@ logfile_header="/tmp/${tempfilepath}smart_report_header.tmp"
 logfile_temp="/tmp/${tempfilepath}smart_report_temp.tmp"
 boundary="gc0p4Jq0M2Yt08jU534c0p"
 
-CurrentFilename="multi_report_v3.21_2025_09_28.txt"
+CurrentFilename="multi_report_v3.22_2025_09_30.txt"
 valid_config_version_date="2025-09-26"	# Configuration file valid date
 progverdate="$(echo $CurrentFilename | cut -d '_' -f4,5,6 | cut -d '.' -f1 | sed -r 's/[_]+/-/g')"
 progname="Multi-Report "$(echo $CurrentFilename | cut -d '_' -f3)" dtd:"
@@ -2292,8 +2293,8 @@ if [[ $Debug_Steps == "true" ]]; then echo "load_config" | tee -a /tmp/multi_rep
 
 		# Lets test if the config file needs to be updated first.
 		config_version_date="$(cat "$Config_File_Name" | grep "dtd" | cut -d ':' -f 2 | cut -d ' ' -f 1 )"
-echo "Current:"$config_version_date
-echo "Valid:"$valid_config_version_date
+#echo "Current:"$config_version_date
+#echo "Valid:"$valid_config_version_date
 		if [[ $config_version_date < $valid_config_version_date ]]; then echo "Found Old Configuration File"; echo "Automatically updating configuration file..."; update_config_file; echo "Continuing to run script"; fi
 		. "$Config_File_Name"
 	else
