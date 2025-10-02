@@ -89,6 +89,7 @@ fi
 # - Fixed the hard-coding of the fonts, not hard coded now.
 # - Fixed Capacity line in code (missing a semicolon).
 # - Added Test Type in progress.
+# - Fixed Text Section for Sendemail Message if forced to use Sendemail in Core.
 #
 
 
@@ -5812,7 +5813,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "detailed_report" | tee -a /tmp/multi
 			fi
 		fi
 
-		if [[ $softver == "Linux" ]]; then
+		if [[ $truenas_sendmail_support == "No" ]]; then
 			echo "3) Sendemail (v"$VersionSendemailFilename")" >> "$logfile"
 		else
 			echo "3) Sendemail (Not Required)" >> "$logfile"
