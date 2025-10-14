@@ -855,37 +855,37 @@ Maximum_Catchup_Drive_Count=1				# This value defines the maximum number of driv
 											# A value of "0" (zero) disables this catchup feature.
 
 ### SHORT SETTINGS - INSTRUCTIONS ### ------------------------------------------------------
-# IF Short_Test_Mode is = 1, The settings in Group 1 and Group 2 are used.
-# IF Short_Test_Mode is = 2, The settings in Group 1 are used, Group 2 are ignored.
-# IF Short_Test_Mode is = 3, The settings in Group 1 and Group 2 are ignored, no Short Testing will be performed.
+# IF Short_Test_Mode = 1, The settings in Group 1 and Group 2 are used.
+# IF Short_Test_Mode = 2, The settings in Group 1 are used, Group 2 are ignored.
+# IF Short_Test_Mode = 3, The settings in Group 1 and Group 2 are ignored, no Short Testing will be performed.
 
 # Set Test Mode - ALWAYS Required
 Short_Test_Mode=2                           # 1 = Use Short_Drives_to_Test_Per_Day value, 2 = All Drives Tested (Ignores most other options), 3 = No Drives Tested.
 
-# Group 1 - ONLY Matters if Test Mode is = 1 or 2.
+# Group 1 - ONLY Matters if Test Mode = 1 or 2.
 Short_Time_Delay_Between_Drives=1           # Tests will have a XX second delay between the drives starting testing. If drives are always spinning, this can be "0".
 Short_Drives_Test_Delay=130                 # How long to delay when running Short tests, before exiting to controlling procedure.  Default is 130 second should allow.
                                             # Short tests to complete before continuing.  If using without Multi-Report, set this value to 1.
-# Group 2 - ONLY Matters if Test Mode is = 1.
+# Group 2 - ONLY Matters if Test Mode = 1.
 Short_SMART_Testing_Order="DriveID"         # Test order is for Test Mode 1 ONLY, select "Serial" or "DriveID" for sort order.  Default = "Serial"
-Short_Drives_to_Test_Per_Day=1              # For Test_Mode 1) How many drives to run each day minimum?
+Short_Drives_to_Test_Per_Day=1              # For Test_Mode "1" How many drives to run each day minimum?
 Short_Drives_Test_Period="Week"             # "Week" (7 days) or "Month" (28 days)
 Short_Drives_Tested_Days_of_the_Week="1,2,3,4,5,6,7"    # Days of the week to run, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat, 7=Sun.  # This takes over for number of days variable.
 
 ### LONG SETTINGS - INSTRUCTIONS ### ------------------------------------------------------
-# IF Long_Test_Mode is = 1, The settings in Group 1 and Group 2 are used.
-# IF Long_Test_Mode is = 2, The settings in Group 1 are used, Group 2 are ignored.
-# IF Long_Test_Mode is = 3, The settings in Group 1 and Group 2 are ignored, no Long Testing will be performed.
+# IF Long_Test_Mode = 1, The settings in Group 1 and Group 2 are used.
+# IF Long_Test_Mode = 2, The settings in Group 1 are used, Group 2 are ignored.
+# IF Long_Test_Mode = 3, The settings in Group 1 and Group 2 are ignored, no Long Testing will be performed.
 
 # Set Test Mode - ALWAYS Required
 Long_Test_Mode=1                            # 1 = Use Long_Drives_to_Test_Per_Day value, 2 = All Drives Tested (Ignores most other options), 3 = No Drives Tested.
 
-# Group 1 - ONLY Matters if Test Mode is = 1 or 2.
+# Group 1 - ONLY Matters if Test Mode = 1 or 2.
 Long_Time_Delay_Between_Drives=1            # Tests will have a XX second delay between the drives starting the next test.
 
-# Group 2 - ONLY Matters if Test Mode is = 1.
+# Group 2 - ONLY Matters if Test Mode = 1.
 Long_SMART_Testing_Order="Serial"           # Test order is either "Serial" or "DriveID".  Default = 'Serial'
-Long_Drives_to_Test_Per_Day=1               # For Test_Mode 1) How many drives to run each day minimum?
+Long_Drives_to_Test_Per_Day=1               # For Test_Mode "1" How many drives to run each day minimum?
 Long_Drives_Test_Period="Week"              # "Week" (7 days) or "Month" (28 days)
 Long_Drives_Tested_Days_of_the_Week="1,2,3,4,5,6,7"     # Days of the week to run, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat, 7=Sun. # This takes over for number of days variable.
 #### END OF TEST MODE SETTINGS #### ------------------------------------------------------
@@ -8220,35 +8220,35 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_config_file" | tee -a /tmp/mu
 		echo '										# With all that said, a value of "1" (default) is likely the best setting.'
 		echo " "
 		echo '### SHORT SETTINGS - INSTRUCTIONS ### ------------------------------------------------------'
-		echo '# IF Short_Test_Mode is = 1, The settings in Group 1 and Group 2 are used.'
-		echo '# IF Short_Test_Mode is = 2, The settings in Group 1 are used, Group 2 are ignored.'
-		echo '# IF Short_Test_Mode is = 3, The settings in Group 1 and Group 2 are ignored, no Short Testing will be performed.'
+		echo '# IF Short_Test_Mode = 1, The settings in Group 1 and Group 2 are used.'
+		echo '# IF Short_Test_Mode = 2, The settings in Group 1 are used, Group 2 are ignored.'
+		echo '# IF Short_Test_Mode = 3, The settings in Group 1 and Group 2 are ignored, no Short Testing will be performed.'
 		echo " "
 		echo '# Set Test Mode - ALWAYS Required'
 		echo 'Short_Test_Mode='$Short_Test_Mode'                          				# 1 = Use Short_Drives_to_Test_Per_Day value, 2 = All Drives Tested (Ignores most other options), 3 = No Drives Tested.'
 		echo " "
-		echo '# Group 1 - ONLY Matters if Test Mode is = 1 or 2.'
+		echo '# Group 1 - ONLY Matters if Test Mode = 1 or 2.'
 		echo 'Short_Time_Delay_Between_Drives='$Short_Time_Delay_Between_Drives'						# Tests will have a XX second delay between the drives starting testing. If drives are always spinning, this can be "0".'
 		echo 'Short_Drives_Test_Delay='$Short_Drives_Test_Delay'                 			# How long to delay when running Short tests, before exiting to controlling procedure.  Default is 130 second should allow.'
 		echo '														# Short tests to complete before continuing.  If using without Multi-Report, set this value to 1.'
-		echo '# Group 2 - ONLY Matters if Test Mode is = 1.'
+		echo '# Group 2 - ONLY Matters if Test Mode = 1.'
 		echo 'Short_SMART_Testing_Order="'$Short_SMART_Testing_Order'"  	      			# Test order is for Test Mode 1 ONLY, select "Serial" or "DriveID" for sort order.  Default = "DriveID"'
 		echo 'Short_Drives_to_Test_Per_Day='$Short_Drives_to_Test_Per_Day'							# For Test_Mode 1) How many drives to run each day minimum?'
 		echo 'Short_Drives_Test_Period="'$Short_Drives_Test_Period'"							# "Week" (7 days) or "Month" (28 days)'
 		echo 'Short_Drives_Tested_Days_of_the_Week="'$Short_Drives_Tested_Days_of_the_Week'"	# Days of the week to run, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat, 7=Sun.  # This takes over for number of days variable.'
 		echo " "
 		echo '### LONG SETTINGS - INSTRUCTIONS ### ------------------------------------------------------'
-		echo '# IF Long_Test_Mode is = 1, The settings in Group 1 and Group 2 are used.'
-		echo '# IF Long_Test_Mode is = 2, The settings in Group 1 are used, Group 2 are ignored.'
-		echo '# IF Long_Test_Mode is = 3, The settings in Group 1 and Group 2 are ignored, no Long Testing will be performed.'
+		echo '# IF Long_Test_Mode = 1, The settings in Group 1 and Group 2 are used.'
+		echo '# IF Long_Test_Mode = 2, The settings in Group 1 are used, Group 2 are ignored.'
+		echo '# IF Long_Test_Mode = 3, The settings in Group 1 and Group 2 are ignored, no Long Testing will be performed.'
 		echo " "
 		echo '# Set Test Mode - ALWAYS Required'
 		echo 'Long_Test_Mode='$Long_Test_Mode'                            			# 1 = Use Long_Drives_to_Test_Per_Day value, 2 = All Drives Tested (Ignores most other options), 3 = No Drives Tested.'
 		echo " "
-		echo '# Group 1 - ONLY Matters if Test Mode is = 1 or 2.'
+		echo '# Group 1 - ONLY Matters if Test Mode = 1 or 2.'
 		echo 'Long_Time_Delay_Between_Drives='$Long_Time_Delay_Between_Drives'						# Tests will have a XX second delay between the drives starting the next test.'
 		echo " "
-		echo '# Group 2 - ONLY Matters if Test Mode is = 1.'
+		echo '# Group 2 - ONLY Matters if Test Mode = 1.'
 		echo 'Long_SMART_Testing_Order="'$Long_SMART_Testing_Order'"           			# Test order is either "Serial" or "DriveID".  Default = "Serial"'
 		echo 'Long_Drives_to_Test_Per_Day='$Long_Drives_to_Test_Per_Day'							# For Test_Mode 1) How many drives to run each day minimum?'
 		echo 'Long_Drives_Test_Period="'$Long_Drives_Test_Period'"							# "Week" (7 days) or "Month" (28 days)'
