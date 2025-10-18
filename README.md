@@ -1,4 +1,4 @@
-# Multi-Report and Drive-Selftest for FreeNAS/TrueNAS Core/Scale
+# Multi-Report and Drive-Selftest for TrueNAS 13+ Core/Scale
 
 Bug-Fix Multi-Report Version 3.21 and Drive-Selftest Version 1.07
   Yes, a few bugs of course.  Here is what changed for MR:
