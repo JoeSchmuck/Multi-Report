@@ -2,7 +2,7 @@
 # shellcheck disable=SC1075,SC2027,SC2034,SC2128,SC2002,SC2004,SC2086,SC2162
 LANG="en_US.UTF-8"
 
-##### Version 3.22
+##### Version 3.23
 
 ###### Get Config File Name and Location
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
@@ -83,13 +83,24 @@ fi
 # Version
 ### Changelog:
 
-# V3.22 (02 Oct 2025)
+# V3.23 (20 Oct 2025)
+#
+# - Consolidation of multiple v3.22 small changes.
+# - Fixed SMR-Check Version Number and removal of temporary smr file.
+
+
+
+# V3.22 (15 Oct 2025)
 #
 # - Updated to allow proper use of the truenas_sendmail_support="No" in the config file.
 # - Fixed the hard-coding of the fonts, not hard coded now.
 # - Fixed Capacity line in code (missing a semicolon).
 # - Added Test Type in progress.
 # - Fixed Text Section for Sendemail Message if forced to use Sendemail in Core.
+# - Fixed the usage of TDR/TDW Column Titles
+# - Ignore fdisk partition errors (Zvols) - Thanks to `toomuchdata`
+# - Added another NVMe Self-test parameter check.
+# - Cleaned up some descriptive verbiage.
 #
 
 
@@ -445,9 +456,9 @@ NVMtempWarn=55		# NVM Drive Warning Temp (in C) when a WARNING message will be u
 NVMtempCrit=65		# NVM Drive Critical Temp (in C) when a CRITICAL message will be used.  Default = 65
 
 ### Current Power Cycle Maximum Temperature Override
-HDD_Cur_Pwr_Max_Temp_Ovrd="enable"	# HDD Max Drive Temp Override. This value when "enable" will NOT alarm on any Current Power Cycle Max Temperature Limit.
-SSD_Cur_Pwr_Max_Temp_Ovrd="enable"	# SSD Max Drive Temp Override. This value when "enable" will NOT alarm on any Current Power Cycle Max Temperature Limit.
-NVM_Cur_Pwr_Max_Temp_Ovrd="enable"	# NVM Max Drive Temp Override. This value when "enable" will NOT alarm on any Current Power Cycle Max Temperature Limit.
+HDD_Cur_Pwr_Max_Temp_Ovrd="disable"	# HDD Max Drive Temp Override. This value when "enable" will NOT alarm on any Current Power Cycle Max Temperature Limit.
+SSD_Cur_Pwr_Max_Temp_Ovrd="disable"	# SSD Max Drive Temp Override. This value when "enable" will NOT alarm on any Current Power Cycle Max Temperature Limit.
+NVM_Cur_Pwr_Max_Temp_Ovrd="disable"	# NVM Max Drive Temp Override. This value when "enable" will NOT alarm on any Current Power Cycle Max Temperature Limit.
 
 ### Media Alarms
 SectorsWarn=0			# Number of sectors per drive when a WARNING message will be used, this value should be less than SectorsCrit.
@@ -496,8 +507,8 @@ lastTestTypeHoursIdent="hrs"	# Test to follow power on hours numbers.  Default =
  
 ### Ignore or Activate Alarms
 IgnoreUDMA="disable"		# Set to "enable" to ignore all UltraDMA CRC Errors for the summary alarm (Email Header) only, errors will appear in the graphical chart. Default is "disable".
-IgnoreSeekError="enable"	# Set to "enable" to ignore all Seek Error Rate/Health errors.  Default is "enable".
-IgnoreReadError="enable"	# Set to "enable" to ignore all Seek Error Rate/Health errors.  Default is "enable".
+IgnoreSeekError="disable"	# Set to "enable" to ignore all Seek Error Rate/Health errors.  Default is "disable".
+IgnoreReadError="disable"	# Set to "enable" to ignore all Seek Error Rate/Health errors.  Default is "disable".
 IgnoreMultiZone="disable"	# Set to "enable" to ignore all MultiZone Errors. Default is "disable".
 DisableWarranty="enable"	# Set to "enable" to disable Email Subject line alerts for any expired warranty alert. The Email body will still report the alert. Default is "enable".
 
@@ -631,7 +642,8 @@ HDD_Last_Test_Type_Title="Last Test Type (time conducted)"
 HDD_Total_Data_Written="true"
 HDD_Total_Data_Written_Title="Lifetime Data Read<br>/ Written"
 HDD_Total_Data_Written_Month="true"
-HDD_Total_Data_Written_Month_Title="Total Data Written 30 Days"
+HDD_Total_Data_Written_Month_Title="Current Month Read<br>/ Written"
+HDD_Total_Data_Written_30day_Title="Total Data Written 30 Days"
  
 ###### For Solid State Drive Section
 SSD_Device_ID="true"
@@ -673,7 +685,8 @@ SSD_Last_Test_Type_Title="Last Test Type (time conducted)"
 SSD_Total_Data_Written="true"
 SSD_Total_Data_Written_Title="Lifetime Data Read<br>/ Written"
 SSD_Total_Data_Written_Month="true"
-SSD_Total_Data_Written_Month_Title="Total Data Written 30 Days"
+SSD_Total_Data_Written_Month_Title="Current Month Read<br>/ Written"
+SSD_Total_Data_Written_30day_Title="Total Data Written 30 Days"
  
 ###### For NVMe Drive Section
 NVM_Device_ID="true"
@@ -711,7 +724,8 @@ NVM_Last_Test_Type_Title="Last Test Type (time conducted)"
 NVM_Total_Data_Written="true"
 NVM_Total_Data_Written_Title="Lifetime Data Read<br>/ Written"
 NVM_Total_Data_Written_Month="true"
-NVM_Total_Data_Written_Month_Title="Total Data Written 30 Days"
+NVM_Total_Data_Written_Month_Title="Current Month Read<br>/ Written"
+NVM_Total_Data_Written_30day_Title="Total Data Written 30 Days"
 
 ###### Drive Ignore List
 ### What does it do:
@@ -835,10 +849,11 @@ Test_ONLY_NVMe_Drives="disable"             # This option when set to "enable" w
 
 Track_Drive_Testing_Dates="enable"			# This will allow you to not skip a SMART Long test due to your system not running the script every day as proposed.
 
-SCRUB_Minutes_Remaining=60                  # This option when set between 1 and 9999 (in minutes) will not run a SMART LONG test if a SCRUB has longer than xx minutes
-                                            #  remaining, and a SMART SHORT test will be run instead to provide minimal impact to the SCRUB operation.
-                                            #  A value of 0 (zero) will disable all SMART test(s) on the affected pool during a SCRUB operation.  Default=0 (Disabled).
-                                            #  NOTE: Any RESILVER operation automatically cancels SMART Long testing to put priority on rebuilding the pool.
+SCRUB_Minutes_Remaining=60                  # This option when set between 1 and 9999 (in minutes) will not run a SMART LONG test  on a pool if a SCRUB has longer
+                                            # than xx minutes remaining, and a SMART SHORT test will be run instead to provide minimal impact to the SCRUB operation.
+                                            #  A value of 0 (zero) will disable all SMART test(s) on the affected pool during a SCRUB operation.  Default=60
+                                            #  NOTE: A RESILVER operation on a pool automatically cancels SMART Long testing for that pool to put priority on rebuilding the pool.
+                                            #  -- Long Tests are allowed for pools in which a SCRUB is not active on.
 
 SCRUB_RESILVER_OVERRIDE="disable"           # This option will allow all SCRUB actions to occur regardless of the SCRUB_Minutes_Remaining variable
                                             # meaning that if a SCRUB or a RESILVER is in progress, any given SMART testing will be performed.
@@ -855,35 +870,35 @@ Maximum_Catchup_Drive_Count=1				# This value defines the maximum number of driv
 											# A value of "0" (zero) disables this catchup feature.
 
 ### SHORT SETTINGS - INSTRUCTIONS ### ------------------------------------------------------
-# IF Short_Test_Mode is = 1, The settings in Group 1 and Group 2 are used.
-# IF Short_Test_Mode is = 2, The settings in Group 1 are used, Group 2 are ignored.
-# IF Short_Test_Mode is = 3, The settings in Group 1 and Group 2 are ignored, no Short Testing will be performed.
+# IF Short_Test_Mode 1, The settings in Group 1 and Group 2 are used.
+# IF Short_Test_Mode 2, The settings in Group 1 are used, Group 2 are ignored.
+# IF Short_Test_Mode 3, The settings in Group 1 and Group 2 are ignored, no Short Testing will be performed.
 
 # Set Test Mode - ALWAYS Required
 Short_Test_Mode=2                           # 1 = Use Short_Drives_to_Test_Per_Day value, 2 = All Drives Tested (Ignores most other options), 3 = No Drives Tested.
 
-# Group 1 - ONLY Matters if Test Mode is = 1 or 2.
+# Group 1 - ONLY Matters if Test Mode 1 or 2.
 Short_Time_Delay_Between_Drives=1           # Tests will have a XX second delay between the drives starting testing. If drives are always spinning, this can be "0".
 Short_Drives_Test_Delay=130                 # How long to delay when running Short tests, before exiting to controlling procedure.  Default is 130 second should allow.
                                             # Short tests to complete before continuing.  If using without Multi-Report, set this value to 1.
-# Group 2 - ONLY Matters if Test Mode is = 1.
+# Group 2 - ONLY Matters if Test Mode 1.
 Short_SMART_Testing_Order="DriveID"         # Test order is for Test Mode 1 ONLY, select "Serial" or "DriveID" for sort order.  Default = "Serial"
 Short_Drives_to_Test_Per_Day=1              # For Test_Mode 1) How many drives to run each day minimum?
 Short_Drives_Test_Period="Week"             # "Week" (7 days) or "Month" (28 days)
 Short_Drives_Tested_Days_of_the_Week="1,2,3,4,5,6,7"    # Days of the week to run, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat, 7=Sun.  # This takes over for number of days variable.
 
 ### LONG SETTINGS - INSTRUCTIONS ### ------------------------------------------------------
-# IF Long_Test_Mode is = 1, The settings in Group 1 and Group 2 are used.
-# IF Long_Test_Mode is = 2, The settings in Group 1 are used, Group 2 are ignored.
-# IF Long_Test_Mode is = 3, The settings in Group 1 and Group 2 are ignored, no Long Testing will be performed.
+# IF Long_Test_Mode 1, The settings in Group 1 and Group 2 are used.
+# IF Long_Test_Mode 2, The settings in Group 1 are used, Group 2 are ignored.
+# IF Long_Test_Mode 3, The settings in Group 1 and Group 2 are ignored, no Long Testing will be performed.
 
 # Set Test Mode - ALWAYS Required
 Long_Test_Mode=1                            # 1 = Use Long_Drives_to_Test_Per_Day value, 2 = All Drives Tested (Ignores most other options), 3 = No Drives Tested.
 
-# Group 1 - ONLY Matters if Test Mode is = 1 or 2.
+# Group 1 - ONLY Matters if Test Mode 1 or 2.
 Long_Time_Delay_Between_Drives=1            # Tests will have a XX second delay between the drives starting the next test.
 
-# Group 2 - ONLY Matters if Test Mode is = 1.
+# Group 2 - ONLY Matters if Test Mode 1.
 Long_SMART_Testing_Order="Serial"           # Test order is either "Serial" or "DriveID".  Default = 'Serial'
 Long_Drives_to_Test_Per_Day=1               # For Test_Mode 1) How many drives to run each day minimum?
 Long_Drives_Test_Period="Week"              # "Week" (7 days) or "Month" (28 days)
@@ -895,9 +910,9 @@ Long_Drives_Tested_Days_of_the_Week="1,2,3,4,5,6,7"     # Days of the week to ru
 
 ### REPORT & Misc
 Drive_List_Length=10                        # This is how many drive IDs to list per line.  Default is 10.
-Enable_Logging="disable"                    # This will create a text file named "drive_test_xx.txt". Run -clearlog
+Enable_Logging="enable"                    # This will create a text file named "drive_test_xx.txt". Run -clearlog
 LOG_DIR=$SCRIPT_DIR"/DS_Logs"               # The default log directory is the script directory.
-Silent="disable"                            # When "enable" only error messages will be output to the stdout.
+Silent="enable"                            # When "enable" only error messages will be output to the stdout. Set to "disable" if troubleshooting a testing problem.
 selftest_data_file=$SCRIPT_DIR"/drive_selftest_tracking.csv"	# This is the location and file name for the tracking of the selftest drive dates.
 
 
@@ -930,8 +945,8 @@ logfile_header="/tmp/${tempfilepath}smart_report_header.tmp"
 logfile_temp="/tmp/${tempfilepath}smart_report_temp.tmp"
 boundary="gc0p4Jq0M2Yt08jU534c0p"
 
-CurrentFilename="multi_report_v3.22_2025_10_02.txt"
-valid_config_version_date="2025-09-26"	# Configuration file valid date
+CurrentFilename="multi_report_v3.23_2025_10_20.txt"
+valid_config_version_date="2025-10-14"	# Configuration file valid date
 progverdate="$(echo $CurrentFilename | cut -d '_' -f4,5,6 | cut -d '.' -f1 | sed -r 's/[_]+/-/g')"
 progname="Multi-Report "$(echo $CurrentFilename | cut -d '_' -f3)" dtd:"
 
@@ -1160,7 +1175,7 @@ SMART_check_status ()
     if [[ $softver != "Linux" ]]; then
 		smart_act=$(sysctl -n kern.disks)
 	else
-		smart_act=$(fdisk -l | grep "Disk /dev/sd" | cut -c 11-15 | cut -d ":" -f1 | tr '\n' ' ')
+		smart_act=$(fdisk -l 2>/dev/null | grep "Disk /dev/sd" | cut -c 11-15 | cut -d ":" -f1 | tr '\n' ' ') > /dev/null 2<&1
 	fi
 	smart_act=$(echo "$smart_act" | sed 's/nvd/nvme/g')
 	smart_act="${smart_act//cd0/}"
@@ -1206,7 +1221,7 @@ SMART_activate ()
     if [[ $softver != "Linux" ]]; then
 		smart_act=$(sysctl -n kern.disks)
 	else
-		smart_act=$(fdisk -l | grep "Disk /dev/sd" | cut -c 11-15 | cut -d ":" -f1 | tr '\n' ' ')
+		smart_act=$(fdisk -l 2>/dev/null | grep "Disk /dev/sd" | cut -c 11-15 | cut -d ":" -f1 | tr '\n' ' ') > /dev/null 2<&1
 	fi
 	smart_act=$(echo "$smart_act" | sed 's/nvd/nvme/g')
 	smart_act="${smart_act//cd0/}" 
@@ -1608,11 +1623,21 @@ create_attachment_file () {
 		fi
 	
 		# I need to read the file back, remove the last 2 lines, add line ' },', then add new header.
-		updating_attachment=$(head -n -2 /tmp/attachment.json)  # This removes the last lines.
+#		updating_attachment=$(head -n -2 /tmp/attachment.json)  # This removes the last lines.
+
+# Updated section for possible BSD issues
+		total=$(wc -l < /tmp/attachment.json)
+		keep=$((total - 2))
+		if [ "$keep" -gt 0 ]; then
+			updating_attachment=$(head -n "$keep" /tmp/attachment.json)
+		else
+			updating_attachment=""
+		fi
+########################################
 		(
 		echo "${updating_attachment}"
 		echo ' },'
-		) > /tmp/attachment.json	
+		) > /tmp/attachment.json
 	else
 		(
 		echo '['
@@ -2230,6 +2255,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "checkforupdate" | tee -a /tmp/multi_
 		
 			if test -e $SCRIPT_DIR"/smr-check.sh"; then
 				VersionSMRFilename="$(cat $SCRIPT_DIR"/smr-check.sh" | grep "##### Version" | cut -d 'n' -f2 | tr -d ' ' | head -1)"
+				if [[ $VersionSMRFilename == "" ]]; then VersionSMRFilename=0; fi
 				MajorSMRVersionFilename="$(echo $VersionSMRFilename | cut -d '.' -f1)"
 				MinorSMRVersionFilename="$(echo $VersionSMRFilename | cut -d '.' -f2)"
 				convert_to_decimal $MajorSMRVersionFilename
@@ -2854,6 +2880,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "cleanup_files" | tee -a /tmp/multi_r
 	if test -e "/tmp/ds_logs.tar"; then rm "/tmp/ds_logs.tar"; fi
 	if test -e "/tmp/sendemail_error.txt"; then rm /tmp/sendemail_error.txt; fi
 	if test -e "/tmp/USER.txt"; then rm /tmp/USER.txt; fi
+	if test -e "/tmp/smr-check.sh"; then rm "/tmp/smr-check.sh"; fi
 
 	### Clean up Spencer File
 	if test -e "/tmp/spencer_report.txt"; then rm "/tmp/spencer_report.txt"; fi
@@ -3120,8 +3147,8 @@ if ! test -e "/tmp/attachment.json"; then touch "/tmp/attachment.json"; touch "/
 		if [[ $? -ne 0 ]]; then
 			echo "Sendemail had a problem.  Check the file log at "$SCRIPT_DIR"/sendemail_log"
 			cat /tmp/sendemail_error.txt
-		else
-			echo "Email Sent"
+#		else
+#			echo "Email Sent"
 		fi
 	fi
 
@@ -3721,6 +3748,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "zpool_report" | tee -a /tmp/multi_re
 			else
 				#No scrub previously performed
 				scrubAge="Never Scrubbed"
+				scrubRepBytes="$Non_Exist_Value"
 			fi
 		fi
 
@@ -4190,7 +4218,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "get_smartHDD_listings" | tee -a /tmp
 			if [ "$(smartctl -i /dev/"${drive}" | grep "SMART support is:.\s*Enabled")" ] && ! [ "$(smartctl -i /dev/"${drive}" | grep "Solid State Device")" ]; then process_ignore_drives; fi
 		done | awk '{for (i=NF; i!=0 ; i--) print $i }' | tr ' ' '\n' | sort | tr '\n' ' ')
 	else
-		smartdrives=$(for drive in $(fdisk -l | grep "Disk /dev/sd" | cut -c 11-15 | cut -d ":" -f1 | tr '\n' ' '); do
+		smartdrives=$(for drive in $(fdisk -l 2>/dev/null | grep "Disk /dev/sd" | cut -c 11-15 | cut -d ":" -f1 | tr '\n' ' '); do
 			if [ "$(smartctl -i /dev/"${drive}" | grep "SMART support is:.\s*Enabled")" ] && ! [ "$(smartctl -i /dev/"${drive}" | grep "Solid State Device")" ]; then process_ignore_drives; fi
 		done | awk '{for (i=NF; i!=0 ; i--) print $i }' | tr ' ' '\n' | sort | tr '\n' ' ')
 	fi > /dev/null 2<&1
@@ -4226,7 +4254,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "get_smartSSD_listings" | tee -a /tmp
 			if [ "$(smartctl -i /dev/"${drive}" | grep "SMART support is:.\s*Enabled")" ] && [ "$(smartctl -i /dev/"${drive}" | grep "Solid State Device")" ]; then process_ignore_drives; fi
 		done | awk '{for (i=NF; i!=0 ; i--) print $i }' | tr ' ' '\n' | sort | tr '\n' ' ')
 	else
-		smartdrivesSSD=$(for drive in $(fdisk -l | grep "Disk /dev/sd" | cut -c 11-15 | cut -d ":" -f1 | tr '\n' ' '); do
+		smartdrivesSSD=$(for drive in $(fdisk -l 2>/dev/null | grep "Disk /dev/sd" | cut -c 11-15 | cut -d ":" -f1 | tr '\n' ' '); do
 			if [ "$(smartctl -i /dev/"${drive}" | grep "SMART support is:.\s*Enabled")" ] && [ "$(smartctl -i /dev/"${drive}" | grep "Solid State Device")" ]; then process_ignore_drives; fi
 		done | awk '{for (i=NF; i!=0 ; i--) print $i }' | tr ' ' '\n' | sort | tr '\n' ' ')
 	fi > /dev/null 2<&1
@@ -4265,7 +4293,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "get_smartNVM_listings" | tee -a /tmp
 		done | awk '{for (i=NF; i!=0 ; i--) print $i }' | tr ' ' '\n' | sort | tr '\n' ' ')
 		### Convert nvdx to nvmexx in smartdrivesNVM ###
 	else
-		smartdrivesNVM=$(fdisk -l | grep "Disk /dev/nvm" | cut -d ':' -f 1 | cut -d '/' -f 3 | tr '\n' ' ')
+		smartdrivesNVM=$(fdisk -l 2>/dev/null | grep "Disk /dev/nvm" | cut -d ':' -f 1 | cut -d '/' -f 3 | tr '\n' ' ')
 		for drive in $smartdrivesNVM; do
 			if [ "$(smartctl -i /dev/"${drive}" | grep "NVM")" ]; then process_ignore_drives; fi
 		done | awk '{for (i=NF; i!=0 ; i--) print $i }' | tr ' ' '\n' | sort | tr '\n' ' '
@@ -4315,7 +4343,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "get_smartOther_listings" | tee -a /t
 			if [ ! "$(smartctl -i /dev/"${drive}" | grep "SMART support is:.\s*Enabled")" ] && [ ! "$(smartctl -i /dev/"${drive}" | grep "NVM")" ]; then process_ignore_drives; fi
 		done | awk '{for (i=NF; i!=0 ; i--) print $i }' | tr ' ' '\n' | sort | tr '\n' ' ')
 	else
-		nonsmartdrives=$(for drive in $(fdisk -l | grep "Disk /dev/sd" | cut -c 11-13 | tr '\n' ' '); do
+		nonsmartdrives=$(for drive in $(fdisk -l 2>/dev/null | grep "Disk /dev/sd" | cut -c 11-13 | tr '\n' ' '); do
 			if [ ! "$(smartctl -i /dev/"${drive}" | grep "SMART support is: Enabled")" ]; then process_ignore_drives; fi
 		done | awk '{for (i=NF; i!=0 ; i--) print $i }' | tr ' ' '\n' | sort | tr '\n' ' ')
 	fi > /dev/null 2<&1
@@ -4993,7 +5021,7 @@ ID241=""
 			lastTestStatusPass="$(echo "${smartdata5}" | jq -Mre '.ata_smart_self_test_log.extended.table[1].status.passed | values')"
 #			echo "Checking Previous Test Pass"
 		fi
-		
+	
 	elif [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_self_test_log.standard.table | values')" ]]; then
 		lastTestHours="$(echo "${smartdata5}" | jq -Mre '.ata_smart_self_test_log.standard.table[0].lifetime_hours | values')"
 		lastTestType="$(echo "${smartdata5}" | jq -Mre '.ata_smart_self_test_log.standard.table[0].type.string | values')"
@@ -5726,8 +5754,8 @@ if [[ "$Monitor" == "true" ]]; then return; fi
 		if [[ "$1" == "NVM" ]] && [[ "$NVM_Last_Test_Age" == "true" ]]; then printf "<td style=\"text-align:center; background-color:%s; height:25px; border:1px solid black; border-collapse:collapse;\">%s</td>\n" "$testAgeColor" "$testAge"; fi
 
 # LAST TEST TYPE - CHART
-#echo "lastTestStatus:"$lastTestStatus > /tmp/lastteststatus.txt
-		if [[ $lastTestTypeColor == $bgColor ]] && [[ "$(echo $lastTestStatus | grep -i "progress" )" ]]; then lastTestTypeColor=$blueColor; fi
+#echo "lastTestStatus:"$lastTestStatus > lastteststatus.txt
+		if [[ $lastTestTypeColor == $bgColor ]] && [[ "$(echo $lastTestStatus | grep -i "progress" )" || "$(echo $lastTestType | grep -i "progress" )" ]]; then lastTestTypeColor=$blueColor; fi
 		if [[ $Last_Test_Type_poh == "enable" ]] && [[ $Last_Test_Type_poh2 == "disable" ]]; then
 			lastTestTypeColor=$yellowColor
 			lastTestType=$lastTestType" (*)"
@@ -5831,7 +5859,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "detailed_report" | tee -a /tmp/multi
 		echo " " >> "$logfile"
 		echo "Checks/Tests:" >> "$logfile"
 		if [[ $SMR_Enable == "enable" ]]; then
-			if echo "$logfile_warning" | grep -qi "SMR"; then echo "1) SMR Checking - (Enabled) - WARNING" >> "$logfile"; else echo "1) SMR Checking - (Enabled) - No Errors Detected" >> "$logfile"; fi
+			if echo "$logfile_warning" | grep -qi "SMR"; then echo "1) SMR Checking (v$VersionSMRFilename) - (Enabled) - WARNING" >> "$logfile"; else echo "1) SMR Checking (v$VersionSMRFilename) - (Enabled) - No Errors Detected" >> "$logfile"; fi
 		else
 			echo "1) SMR Checking - (Disabled)" >> "$logfile"
 		fi
@@ -7990,6 +8018,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_config_file" | tee -a /tmp/mu
 		echo 'HDD_Total_Data_Written_Title="'$HDD_Total_Data_Written_Title'"'
 		echo 'HDD_Total_Data_Written_Month="'$HDD_Total_Data_Written_Month'"'
 		echo 'HDD_Total_Data_Written_Month_Title="'$HDD_Total_Data_Written_Month_Title'"'
+		echo 'HDD_Total_Data_Written_30day_Title="'$HDD_Total_Data_Written_30day_Title'"'
 		echo " "
 		echo "# For Solid State Drive Section"
 		echo 'SSD_Device_ID="'$SSD_Device_ID'"'
@@ -8032,6 +8061,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_config_file" | tee -a /tmp/mu
 		echo 'SSD_Total_Data_Written_Title="'$SSD_Total_Data_Written_Title'"'
 		echo 'SSD_Total_Data_Written_Month="'$SSD_Total_Data_Written_Month'"'
 		echo 'SSD_Total_Data_Written_Month_Title="'$SSD_Total_Data_Written_Month_Title'"'
+		echo 'SSD_Total_Data_Written_30day_Title="'$SSD_Total_Data_Written_30day_Title'"'
 		echo " "
 		echo "# For NVMe Drive Section"
 		echo 'NVM_Device_ID="'$NVM_Device_ID'"'
@@ -8070,6 +8100,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_config_file" | tee -a /tmp/mu
 		echo 'NVM_Total_Data_Written_Title="'$NVM_Total_Data_Written_Title'"'
 		echo 'NVM_Total_Data_Written_Month="'$NVM_Total_Data_Written_Month'"'
 		echo 'NVM_Total_Data_Written_Month_Title="'$NVM_Total_Data_Written_Month_Title'"'
+		echo 'NVM_Total_Data_Written_30day_Title="'$NVM_Total_Data_Written_30day_Title'"'
 		echo " "
 		echo "###### Drive Ignore List"
 		echo "# What does it do:"
@@ -8123,8 +8154,8 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_config_file" | tee -a /tmp/mu
 		echo '#'
 		echo '# THE BREAKDOWN OF THIS LINE FORMAT (entire list broken to two lines for viewing, separated using a comma)'
 		echo '# serial:tempwarn:tempcrit:sectorswarn:sectorscrit:reallocwarn:multizonewarn:multizonecrit:rawreadwarn:'
-		echo '# rawreadcrit:seekerrorswarn:seekerrorscrit:testage:testAgeOvrd:heliummin:wearleveladj:farmoffset'
-		echo '# (testAgeOvrd '0'=Default, '1'=Ignore, wearleveladj 'd'=Default 'r'=Reverse value 'n'=Normalized 'i'=Ignore, farmoffset 'd' or 'i')'
+		echo '# rawreadcrit:seekerrorswarn:seekerrorscrit:testage:testAgeOvrd:heliummin:wearleveladj:farmoffset:testTypeOvrd'
+		echo '# (testAgeOvrd/testTypeOvrd '0'=Default, '1'=Ignore, wearleveladj 'd'=Default 'r'=Reverse value 'n'=Normalized 'i'=Ignore, farmoffset 'd' or 'i')'
 		echo " "
 		echo 'Custom_Drives_List="'$Custom_Drives_List'"'
 		echo " "
@@ -8200,10 +8231,10 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_config_file" | tee -a /tmp/mu
 		echo " "
 		echo 'Track_Drive_Testing_Dates="'$Track_Drive_Testing_Dates'"		# This will allow you to not skip a SMART Long test due to your system not running the script every day as proposed.'
 		echo " "
-		echo 'SCRUB_Minutes_Remaining='$SCRUB_Minutes_Remaining'				# This option when set between 1 and 9999 (in minutes) will not run a SMART LONG test on a pool if a SCRUB has longer'
+		echo 'SCRUB_Minutes_Remaining='$SCRUB_Minutes_Remaining'				# This option when set between 1 and 9999 (in minutes) will not run a SMART LONG test  on a pool if a SCRUB has longer'
         echo '                  	            	    #  than xx minutes remaining, and a SMART SHORT test will be run instead to provide minimal impact to the SCRUB operation.'
-        echo '              	                	    #  A value of 0 (zero) will disable all SMART test(s) on the affected pool during a SCRUB operation.  Default=0 (Disabled).'
-        echo '          	                     	    #  NOTE: Any RESILVER operation automatically cancels SMART Long testing to put priority on rebuilding the pool.'
+        echo '              	                	    #  A value of 0 (zero) will disable all SMART test(s) on the affected pool during a SCRUB operation.  Default=60'
+        echo '          	                     	    #  NOTE: A RESILVER operation on a pool automatically cancels SMART Long testing for that pool to put priority on rebuilding the pool.'
 		echo '                                          #  -- Long Tests are allowed for pools in which a SCRUB is not active on.'
 		echo " "
 		echo 'SCRUB_RESILVER_OVERRIDE="'$SCRUB_RESILVER_OVERRIDE'"		# This option will allow all SCRUB actions to occur regardless of the SCRUB_Minutes_Remaining variable'
@@ -8220,35 +8251,35 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_config_file" | tee -a /tmp/mu
 		echo '										# With all that said, a value of "1" (default) is likely the best setting.'
 		echo " "
 		echo '### SHORT SETTINGS - INSTRUCTIONS ### ------------------------------------------------------'
-		echo '# IF Short_Test_Mode is = 1, The settings in Group 1 and Group 2 are used.'
-		echo '# IF Short_Test_Mode is = 2, The settings in Group 1 are used, Group 2 are ignored.'
-		echo '# IF Short_Test_Mode is = 3, The settings in Group 1 and Group 2 are ignored, no Short Testing will be performed.'
+		echo '# IF Short_Test_Mode 1, The settings in Group 1 and Group 2 are used.'
+		echo '# IF Short_Test_Mode 2, The settings in Group 1 are used, Group 2 are ignored.'
+		echo '# IF Short_Test_Mode 3, The settings in Group 1 and Group 2 are ignored, no Short Testing will be performed.'
 		echo " "
 		echo '# Set Test Mode - ALWAYS Required'
 		echo 'Short_Test_Mode='$Short_Test_Mode'                          				# 1 = Use Short_Drives_to_Test_Per_Day value, 2 = All Drives Tested (Ignores most other options), 3 = No Drives Tested.'
 		echo " "
-		echo '# Group 1 - ONLY Matters if Test Mode is = 1 or 2.'
+		echo '# Group 1 - ONLY Matters if Test Mode 1 or 2.'
 		echo 'Short_Time_Delay_Between_Drives='$Short_Time_Delay_Between_Drives'						# Tests will have a XX second delay between the drives starting testing. If drives are always spinning, this can be "0".'
 		echo 'Short_Drives_Test_Delay='$Short_Drives_Test_Delay'                 			# How long to delay when running Short tests, before exiting to controlling procedure.  Default is 130 second should allow.'
 		echo '														# Short tests to complete before continuing.  If using without Multi-Report, set this value to 1.'
-		echo '# Group 2 - ONLY Matters if Test Mode is = 1.'
+		echo '# Group 2 - ONLY Matters if Test Mode 1.'
 		echo 'Short_SMART_Testing_Order="'$Short_SMART_Testing_Order'"  	      			# Test order is for Test Mode 1 ONLY, select "Serial" or "DriveID" for sort order.  Default = "DriveID"'
 		echo 'Short_Drives_to_Test_Per_Day='$Short_Drives_to_Test_Per_Day'							# For Test_Mode 1) How many drives to run each day minimum?'
 		echo 'Short_Drives_Test_Period="'$Short_Drives_Test_Period'"							# "Week" (7 days) or "Month" (28 days)'
 		echo 'Short_Drives_Tested_Days_of_the_Week="'$Short_Drives_Tested_Days_of_the_Week'"	# Days of the week to run, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat, 7=Sun.  # This takes over for number of days variable.'
 		echo " "
 		echo '### LONG SETTINGS - INSTRUCTIONS ### ------------------------------------------------------'
-		echo '# IF Long_Test_Mode is = 1, The settings in Group 1 and Group 2 are used.'
-		echo '# IF Long_Test_Mode is = 2, The settings in Group 1 are used, Group 2 are ignored.'
-		echo '# IF Long_Test_Mode is = 3, The settings in Group 1 and Group 2 are ignored, no Long Testing will be performed.'
+		echo '# IF Long_Test_Mode 1, The settings in Group 1 and Group 2 are used.'
+		echo '# IF Long_Test_Mode 2, The settings in Group 1 are used, Group 2 are ignored.'
+		echo '# IF Long_Test_Mode 3, The settings in Group 1 and Group 2 are ignored, no Long Testing will be performed.'
 		echo " "
 		echo '# Set Test Mode - ALWAYS Required'
 		echo 'Long_Test_Mode='$Long_Test_Mode'                            			# 1 = Use Long_Drives_to_Test_Per_Day value, 2 = All Drives Tested (Ignores most other options), 3 = No Drives Tested.'
 		echo " "
-		echo '# Group 1 - ONLY Matters if Test Mode is = 1 or 2.'
+		echo '# Group 1 - ONLY Matters if Test Mode 1 or 2.'
 		echo 'Long_Time_Delay_Between_Drives='$Long_Time_Delay_Between_Drives'						# Tests will have a XX second delay between the drives starting the next test.'
 		echo " "
-		echo '# Group 2 - ONLY Matters if Test Mode is = 1.'
+		echo '# Group 2 - ONLY Matters if Test Mode 1.'
 		echo 'Long_SMART_Testing_Order="'$Long_SMART_Testing_Order'"           			# Test order is either "Serial" or "DriveID".  Default = "Serial"'
 		echo 'Long_Drives_to_Test_Per_Day='$Long_Drives_to_Test_Per_Day'							# For Test_Mode 1) How many drives to run each day minimum?'
 		echo 'Long_Drives_Test_Period="'$Long_Drives_Test_Period'"							# "Week" (7 days) or "Month" (28 days)'
@@ -13234,9 +13265,9 @@ if [[ $Total_Data_Written_Month == "month" ]]; then
 	SSD_Total_Data_Written_Month_Title="Current Month Read<br>/ Written"
 	NVM_Total_Data_Written_Month_Title="Current Month Read<br>/ Written"
 else
-	HDD_Total_Data_Written_Month_Title="30-Day Read<br>/ Written"
-	SSD_Total_Data_Written_Month_Title="30-Day Read<br>/ Written"
-	NVM_Total_Data_Written_Month_Title="30-Day Read<br>/ Written"
+	HDD_Total_Data_Written_Month_Title=$HDD_Total_Data_Written_30day_Title
+	SSD_Total_Data_Written_Month_Title=$SSD_Total_Data_Written_30day_Title
+	NVM_Total_Data_Written_Month_Title=$NVM_Total_Data_Written_30day_Title
 fi
 
 # Cleanup previous run files if anything is left (there shouldn't be).
@@ -13604,24 +13635,29 @@ if [[ $Override_SMART_Disabled == "enable" ]]; then
 	fi
 fi
 
-
 Email_Sent="false"
 if [[ "$1" != "-s" && "$2" != "-s" ]] && [[ $Monitor == "false" ]]; then
 	if [[ "$Email_On_Alarm_Only" == "disable" ]] || [[ "$Send_On_Alarm" == "true" ]]; then
 		if [[ $Develop == "true" ]]; then echo "Create Normal Email" | tee -a /tmp/multi_report_debug.txt; fi
 		create_Email
 		Email_Sent="true"
+		echo "Email Sent"
+		echo "Email sent to "$Email
 	fi
 elif [[ $Monitor_Send_Email == "true" ]]; then
 	if [[ $Develop == "true" ]]; then echo "Create Monitor Email" | tee -a /tmp/multi_report_debug.txt; fi
 	if [[ $Email_On_Alarm_Only == "disable" ]] || [[ $Send_On_Alarm="true" ]]; then
 		create_Email
 		Email_Sent="true"
+		echo "Email Sent"
+		echo "Email sent to "$Email
 	fi
 fi
 
 if [[ $Email_On_Alarm_Only_And_Attachments == "enable" ]] && [[ $Attach_Files1 == "true" ]] && [[ $Email_Sent == "false" ]]; then
 		create_Email
+		echo "Email Sent"
+		echo "Email sent to "$Email
 fi
 
 #smart_selftest Long 	# Run Long HDD/SSD SMART Tests
