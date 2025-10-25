@@ -1,10 +1,25 @@
 # Multi-Report and Drive-Selftest for TrueNAS 13+ Core/Scale
 
-Bug-Fix Multi-Report Version 3.21 and Drive-Selftest Version 1.07
+Bug-Fix Multi-Report Versions 3.21 to 3.24 and Drive-Selftest Version 1.07
   Yes, a few bugs of course.  Here is what changed for MR:
-  - Fixed "Test_ONLY_NVMe_Drives" in the multi_report_config.txt file.
-  - Fixed corrupt statistical data file and added routine to purge the corrupt data.
-  - Added recognition of `nvme_total_capacity` SMART value.
+ - Added SMR Update to the -update_all switch.
+ - Added -Check_For_Updates switch.
+ - Added Check_For_Updates_Day_of_Week to minimize the number of times a software check occurs.
+ - Fixed ReAllocEvent setting, now it works again.
+ - Consolidation of multiple v3.22 small changes.
+ - Fixed SMR-Check Version Number and removal of temporary smr file.
+ - Updated to allow proper use of the truenas_sendmail_support="No" in the config file.
+ - Fixed the hard-coding of the fonts, not hard coded now.
+ - Fixed Capacity line in code (missing a semicolon).
+ - Added Test Type in progress.
+ - Fixed Text Section for Sendemail Message if forced to use Sendemail in Core.
+ - Fixed the usage of TDR/TDW Column Titles
+ - Ignore fdisk partition errors (Zvols) - Thanks to `toomuchdata`
+ - Added another NVMe Self-test parameter check.
+ - Cleaned up some descriptive verbiage.
+ - Fixed "Test_ONLY_NVMe_Drives" in the multi_report_config.txt file.
+ - Fixed corrupt statistical data file and added routine to purge the corrupt data.
+ - Added recognition of `nvme_total_capacity` SMART value.
 
   Here is what changed in DS:
   - Optimized the API function.  The function was taking a long time for people with a large number of drives.  Optimizing improved performance by 1987.58% (8 minutes reduced to 24.15 seconds).
