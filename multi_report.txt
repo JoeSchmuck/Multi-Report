@@ -2,7 +2,7 @@
 # shellcheck disable=SC1075,SC2027,SC2034,SC2128,SC2002,SC2004,SC2086,SC2162
 LANG="en_US.UTF-8"
 
-##### Version 3.23
+##### Version 3.24
 
 ###### Get Config File Name and Location
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
@@ -83,11 +83,17 @@ fi
 # Version
 ### Changelog:
 
+# V3.24 (25 Oct 2025)
+#
+# - Added SMR Update to the -update_all switch.
+# - Added -Check_For_Updates switch.
+# - Added Check_For_Updates_Day_of_Week to minimize the number of times a software check occurs.
+# - Fixed ReAllocEvent setting, now it works again.
+
 # V3.23 (20 Oct 2025)
 #
 # - Consolidation of multiple v3.22 small changes.
 # - Fixed SMR-Check Version Number and removal of temporary smr file.
-
 
 
 # V3.22 (15 Oct 2025)
@@ -406,11 +412,12 @@ Ignore_Lock="disable"				# Ignore_Lock when set to "enable" will ignore checking
 ###### SCRIPT UPDATE ######
 ###### Script Update
 ### Ensure you understand these options.  The Default values will only check for updates and not automatically update.
+Check_For_Updates_Day_of_Week="All"		# Will only check for an update on this day of the week.  Default = "All" ("Mon","Tue","Wed","Thu","Fri","Sat","Sun","All","Month")
 Check_For_Updates="enable"				# Will check GitHub for updates and include message in next email.  Default = "enable"
 Automatic_MR_Update="disable"			# WARNING !!!  This option will automatically update the Multi-Report script if a newer version exists on GitHub with no user interaction. Default = "disable"
 Automatic_Selftest_Update="disable"		# WARNING !!!  This option will automatically update the Drive_Selftest script if a newer version exists on GitHub with no user interaction. Default = "disable"
 Automatic_Sendemail_Update="disable"	# WARNING !!!  This option will automatically update the Sendermail.py script if a newer version exists on GitHub with no user interaction. Default = "disable"
-
+Automatic_SMR_Update="disable"
 
 ###### SCRIPT ADD-ONS ######
 SMR_Enable="enable"			# Will enable SMR operations if set to "enable".  Default = "enable"
@@ -463,7 +470,7 @@ NVM_Cur_Pwr_Max_Temp_Ovrd="disable"	# NVM Max Drive Temp Override. This value wh
 ### Media Alarms
 SectorsWarn=0			# Number of sectors per drive when a WARNING message will be used, this value should be less than SectorsCrit.
 SectorsCrit=9			# Number of sectors per drive when a CRITICAL message will be used.
-ReAllocWarn=0			# Number of Reallocated sector events allowed.
+ReAllocEvent=0			# Number of Reallocated sector events allowed.
 MultiZoneWarn=0			# Number of MultiZone Errors to allow when a Warning message will be used.  Default is 0.
 MultiZoneCrit=5			# Number of MultiZone Errors to allow when a Warning message will be used.  Default is 5.
 DeviceRedFlag="enable"	# Set to "enable" to have the Device Column indicate RED for ANY alarm condition.  Default is enable.
@@ -596,7 +603,7 @@ HDD_Serial_Number_Title="Serial Number"
 HDD_Model_Number="true"
 HDD_Model_Number_Title="Model Number"
 HDD_Capacity="true"
-HDD_Capacity_Title="HDD Capacity"
+HDD_Capacity_Title="Capacity"
 HDD_Rotational_Rate="true"
 HDD_Rotational_Rate_Title="RPM"
 HDD_SMART_Status="true"
@@ -653,7 +660,7 @@ SSD_Serial_Number_Title="Serial Number"
 SSD_Model_Number="true"
 SSD_Model_Number_Title="Model Number"
 SSD_Capacity="true"
-SSD_Capacity_Title="SSD Capacity"
+SSD_Capacity_Title="Capacity"
 SSD_SMART_Status="true"
 SSD_SMART_Status_Title="SMART Status"
 SSD_Warranty_Title="Warr- anty"
@@ -696,7 +703,7 @@ NVM_Serial_Number_Title="Serial Number"
 NVM_Model_Number="true"
 NVM_Model_Number_Title="Model Number"
 NVM_Capacity="true"
-NVM_Capacity_Title="NVMe Capacity"
+NVM_Capacity_Title="Capacity"
 NVM_SMART_Status="true"
 NVM_SMART_Status_Title="SMART Status"
 NVM_Warranty_Title="Warr- anty"
@@ -781,7 +788,7 @@ Media_Errors_List=""
 ### Use -config to set these values.
 ###
 ### THE BREAKDOWN OF THIS LINE FORMAT (entire list broken to two lines for viewing, separated using a comma)
-### serial:tempwarn:tempcrit:sectorswarn:sectorscrit:reallocwarn:multizonewarn:multizonecrit:rawreadwarn:
+### serial:tempwarn:tempcrit:sectorswarn:sectorscrit:reallocevent:multizonewarn:multizonecrit:rawreadwarn:
 ### rawreadcrit:seekerrorswarn:seekerrorscrit:testage:testAgeOvrd:heliummin:wearleveladj:farmoffset:testTypeOvrd
 ### (testAgeOvrd '0'=Default, '1'=Ignore, wearleveladj 'd'=Default 'r'=Reverse value 'n'=Normalized 'i'=Ignore, farmoffset 'd' or 'i')
 
@@ -945,8 +952,8 @@ logfile_header="/tmp/${tempfilepath}smart_report_header.tmp"
 logfile_temp="/tmp/${tempfilepath}smart_report_temp.tmp"
 boundary="gc0p4Jq0M2Yt08jU534c0p"
 
-CurrentFilename="multi_report_v3.23_2025_10_20.txt"
-valid_config_version_date="2025-10-14"	# Configuration file valid date
+CurrentFilename="multi_report_v3.24_2025_10_25.txt"
+valid_config_version_date="2025-10-24"	# Configuration file valid date
 progverdate="$(echo $CurrentFilename | cut -d '_' -f4,5,6 | cut -d '.' -f1 | sed -r 's/[_]+/-/g')"
 progname="Multi-Report "$(echo $CurrentFilename | cut -d '_' -f3)" dtd:"
 
@@ -1806,21 +1813,59 @@ if [[ $Debug_Steps == "true" ]]; then echo "nvm_power: $drive" | tee -a /tmp/mul
 
 update_smr () {
 if [[ $Debug_Steps == "true" ]]; then echo "update_smr" | tee -a /tmp/multi_report_debug.txt; fi
-#	echo "Downloading SMR-CHECK Script for GitHub"
-#	echo "Removing Old Script if it exists"
-	if test -e "/tmp/truenas-smr-check"; then rm -R "/tmp/truenas-smr-check"; echo "Directory Removed";fi  # Failed, possible loop
-	if test -e "smr-check.sh"; then rm "smr-check.sh"; echo "File Removed"; fi
-#	echo "Downloading new script files"
+	echo "      - Update Script Routine"
+	echo "      - Removing Old Script Source if it exists"
+	if test -e "/tmp/Multi-Report"; then rm -R "/tmp/Multi-Report"; fi
+	if test -e "/tmp/multi_report_update.txt"; then rm "/tmp/multi_report_update.txt"; fi
+	echo "      - Downloading new script file"
 	if [[ "$(curl -is https://github.com | head -n 1)" ]]; then
 		# Go git the file
-		
-		(
-			cd /tmp || exit 3
-			curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/truenas-smr-check_2025/refs/heads/main/smr-check.sh
+		( mkdir /tmp/Multi-Report
+		cd /tmp/Multi-Report || exit 3
+		curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/truenas-smr-check_2025/refs/heads/main/smr-check.sh
 		)
-		cp /tmp/smr-check.sh $SCRIPT_DIR"/."
+		GitSMRVersion=$(cat "/tmp/Multi-Report/smr-check.sh" | grep "##### Version" | cut -d 'n' -f2 | tr -d ' ' | head -1)
+		if test -e $SCRIPT_DIR"/smr-check.sh"; then
+			VersionSMRFilename=$(cat $SCRIPT_DIR"/smr-check.sh" | grep "##### Version" | cut -d 'n' -f2 | tr -d ' ' | head -1)
+		else
+			VersionSMRFilename=0
+		fi
+		echo " "
+		echo "      - SMR-Check current version is: "$VersionSMRFilename
+		echo "      - The GitHub version is: "$GitSMRVersion 
+		echo " "
+		VersionSMRFilename=$GitSMRVersion
+		if [[ $Automatic_SMR_Update != "enable" ]]; then
+			echo "Enter 'y' to commit or any other key to abort."
+			read Keyboard_yn
+		else
+			Keyboard_yn="y"
+		fi
+		if [[ $Keyboard_yn == "y" ]] || [[ $Keyboard_yn == "Y" ]]; then
+			echo "      - Updating Script..."
+
+			# Copy the new multi_report.sh file and set permissions
+			cp /tmp/Multi-Report/smr-check.sh $SCRIPT_DIR"/smr-check.sh"
+			chmod 755 $SCRIPT_DIR"/smr-check.sh" > /dev/null 2<&1
+			echo " "
+			echo "      - Script updated"
+			echo " "
+			SMR_Updated="UPDATED: V"$VersionSMRFilename
+			UpdateSMRAvailable="update"
+			sleep 1
+		else
+			echo "Aborted"
+			SMR_Updated="ABORTED: V"$VersionSMRFilename
+			if test -e "/tmp/Multi-Report"; then rm -R "/tmp/Multi-Report"; fi
+		fi
+	else
+		echo "GitHub is Not Available"
 	fi
-#	echo "File downloaded...  Continuing with Multi-Report script..."
+	# Exit if not an automatic update
+	if [[ $Automatic_SMR_Update == "disable" ]] && [[ $update_all == "" ]]; then 
+		echo "Exiting..."
+		exit 0
+	fi
 
 	}
 
@@ -1883,7 +1928,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_MR_script" | tee -a /tmp/mult
 		VersionFilename="$(cat "$SCRIPT_DIR/multi_report.sh" | grep "##### Version" | cut -d 'n' -f2 | cut -d '_' -f 1 | head -1)"
 		echo " "
 		echo "      - Multi-Report current version is: "$VersionFilename
-		echo "      - The new version is: "$GitVersion 
+		echo "      - The GitHub version is: "$GitVersion 
 		echo " "
 		VersionFilename=$GitVersion
 		if [[ $Automatic_MR_Update != "enable" ]]; then
@@ -1953,7 +1998,6 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_Drive_script" | tee -a /tmp/m
 		( mkdir /tmp/Multi-Report
 		cd /tmp/Multi-Report || exit 3
 		curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/drive_selftest.txt
-	#	curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report/refs/heads/main/Drive_Selftest_User_Guide.pdf
 		)
 		GitDriveVersion=$(cat "/tmp/Multi-Report/drive_selftest.txt" | grep "##### Version" | cut -d 'n' -f2 | tr -d ' ' | head -1)
 		if test -e $SCRIPT_DIR"/drive_selftest.sh"; then
@@ -1963,7 +2007,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_Drive_script" | tee -a /tmp/m
 		fi
 		echo " "
 		echo "      - Drive_Selftest current version is: "$VersionDriveFilename
-		echo "      - The new version is: "$GitDriveVersion 
+		echo "      - The GitHub version is: "$GitDriveVersion 
 		echo " "
 		VersionDriveFilename=$GitDriveVersion
 		if [[ $Automatic_Selftest_Update != "enable" ]]; then
@@ -2030,7 +2074,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_Sendemail_script" | tee -a /t
 		fi
 		echo " "
 		echo "      - Sendemail.py current version is: "$VersionSendemailFilename
-		echo "      - The new version is: "$GitSendemailVersion 
+		echo "      - The GitHub version is: "$GitSendemailVersion 
 		echo " "
 		VersionSendemailFilename=$GitSendemailVersion
 
@@ -2411,6 +2455,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "clear_variables" | tee -a /tmp/multi
 	SMR_Note=""
 	capacity1=""
 	capacity2=""
+	run_check=""
 
 	# And Reset bgColors
 	if [[ "$bgColor" == "$altColor" ]]; then bgColor="#ffffff"; else bgColor="$altColor"; fi
@@ -5262,12 +5307,12 @@ ID241=""
 		#temp_max=50
 		#temp=44
 		#spinRetry=0
-		reAlloc=1
+		#reAlloc=0
 		reAllocEvent=1
-		pending=1
+		#pending=0
 		#offlineUnc=10
-		crcErrors=1
-		multiZone=1
+		#crcErrors=0
+		#multiZone=0
 		#Helium=91
 		#wearLevel=16
 		#mediaErrors=0
@@ -6714,7 +6759,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "crunch_numbers: $1" | tee -a /tmp/mu
 	# Do this for all the pertinent variables and add a section to scan the Custom_Drives_List variable
 	# and if a serial number matches, then use the variables there vs the defaults.
 
-	### Order of data -- $serial":"$tempwarn":"$tempcrit":"$sectorswarn":"$sectorscrit":"$reallocwarn":"$multizonewarn":"$multizonecrit":"$rawreadwarn":"$rawreadcrit":"$seekerrorswarn":"$seekerrorscrit":"$testage":"$testAgeOvrd":"$heliummin":"$wearleveladj:farmoffset:testTypeOvrd"
+	### Order of data -- $serial":"$tempwarn":"$tempcrit":"$sectorswarn":"$sectorscrit":"$reallocevent":"$multizonewarn":"$multizonecrit":"$rawreadwarn":"$rawreadcrit":"$seekerrorswarn":"$seekerrorscrit":"$testage":"$testAgeOvrd":"$heliummin":"$wearleveladj:farmoffset:testTypeOvrd"
 
 	# Predefine default variables
 	if [[ $Custom_Drives_ListDrive == "HDD" ]]; then
@@ -6729,7 +6774,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "crunch_numbers: $1" | tee -a /tmp/mu
 
 	SectorsWarnx=$SectorsWarn
 	SectorsCritx=$SectorsCrit
-	ReAllocWarnx=$ReAllocWarn
+	ReAllocEventx=$ReAllocEvent
 	MultiZoneWarnx=$MultiZoneWarn
 	MultiZoneCritx=$MultiZoneCrit
 	RawReadWarnx=$RawReadWarn
@@ -6774,7 +6819,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "crunch_numbers: $1" | tee -a /tmp/mu
 
 			if [[ "$(echo $i | cut -d':' -f 4)" != "d" ]]; then SectorsWarnx="$(echo $i | cut -d':' -f 4)"; fi
 			if [[ "$(echo $i | cut -d':' -f 5)" != "d" ]]; then SectorsCritx="$(echo $i | cut -d':' -f 5)"; fi
-			if [[ "$(echo $i | cut -d':' -f 6)" != "d" ]]; then ReAllocWarnx="$(echo $i | cut -d':' -f 6)"; fi
+			if [[ "$(echo $i | cut -d':' -f 6)" != "d" ]]; then ReAllocEventx="$(echo $i | cut -d':' -f 6)"; fi
 			if [[ "$(echo $i | cut -d':' -f 7)" != "d" ]]; then MultiZoneWarnx="$(echo $i | cut -d':' -f 7)"; fi
 			if [[ "$(echo $i | cut -d':' -f 8)" != "d" ]]; then MultiZoneCritx="$(echo $i | cut -d':' -f 8)"; fi
 			if [[ "$(echo $i | cut -d':' -f 9)" != "d" ]]; then RawReadWarnx="$(echo $i | cut -d':' -f 9)"; fi
@@ -7787,6 +7832,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_config_file" | tee -a /tmp/mu
 		echo 'Override_SMART_Disabled="'$Override_SMART_Disabled'"				# This will enable S.M.A.R.T. for any drive which supports S.M.A.R.T. but was Disabled.  It will return that drive to the previous state.'
 		echo " "
 		echo "###### SCRIPT UPDATE -- Ensure you understand these options."
+		echo 'Check_For_Updates_Day_of_Week="'$Check_For_Updates_Day_of_Week'"		# Will only check for an update on this day of the week.  Default = "Mon" ("Tue","Wed","Thu","Fri","Sat","Sun","All","Month")'
 		echo 'Check_For_Updates="'$Check_For_Updates'"				# Will check GitHub for updates and include message in next email.'
 		echo 'Automatic_MR_Update="'$Automatic_MR_Update'"			# WARNING !!!  This option will automatically update the Multi-Report script if a newer version exists on GitHub.'
 		echo 'Automatic_Sendemail_Update="'$Automatic_Sendemail_Update'"	# WARNING !!!  This option will automatically update the Sendermail.py script if a newer version exists on GitHub with no user interaction. Default = "disable"'
@@ -7841,7 +7887,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_config_file" | tee -a /tmp/mu
 		echo "### Media Alarms"
 		echo "SectorsWarn=$SectorsWarn		# Number of sectors per drive to allow with errors before WARNING color/message will be used, this value should be less than SectorsCrit."
 		echo "SectorsCrit=$SectorsCrit		# Number of sectors per drive with errors before CRITICAL color/message will be used."
-		echo "ReAllocWarn=$ReAllocWarn		# Number of Reallocated sector events allowed.  Over this amount is an alarm condition."
+		echo "ReAllocEvent=$ReAllocEvent		# Number of Reallocated sector events allowed.  Over this amount is an alarm condition."
 		echo "MultiZoneWarn=$MultiZoneWarn		# Number of MultiZone Errors to allow before a Warning color/message will be used.  Default is 0."
 		echo "MultiZoneCrit=$MultiZoneCrit		# Number of MultiZone Errors to allow before a Warning color/message will be used.  Default is 5."
 		echo 'DeviceRedFlag="'$DeviceRedFlag'"	# Set to "enable" to have the Device Column indicate RED for ANY alarm condition.  Default is enable.'
@@ -8153,7 +8199,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_config_file" | tee -a /tmp/mu
 		echo '# Use -config to set these values.'
 		echo '#'
 		echo '# THE BREAKDOWN OF THIS LINE FORMAT (entire list broken to two lines for viewing, separated using a comma)'
-		echo '# serial:tempwarn:tempcrit:sectorswarn:sectorscrit:reallocwarn:multizonewarn:multizonecrit:rawreadwarn:'
+		echo '# serial:tempwarn:tempcrit:sectorswarn:sectorscrit:reallocevent:multizonewarn:multizonecrit:rawreadwarn:'
 		echo '# rawreadcrit:seekerrorswarn:seekerrorscrit:testage:testAgeOvrd:heliummin:wearleveladj:farmoffset:testTypeOvrd'
 		echo '# (testAgeOvrd/testTypeOvrd '0'=Default, '1'=Ignore, wearleveladj 'd'=Default 'r'=Reverse value 'n'=Normalized 'i'=Ignore, farmoffset 'd' or 'i')'
 		echo " "
@@ -8575,12 +8621,12 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file" | tee -a /tmp/
 									echo "Set Value: ("$SectorsCrit")"
 									echo " "
 									echo " "									
-									echo "-- Reallocated Sectors Warning ("$ReAllocWarn") "
+									echo "-- Reallocated Sectors Warning ("$ReAllocEvent") "
 									echo "Enter a new value or press Enter/Return to keep current value."
 									echo -n "(1-10000) "
 									read Keyboard_yn
-									if [[ ! $Keyboard_yn == "" ]]; then ReAllocWarn=$Keyboard_yn; fi
-									echo "Set Value: ("$ReAllocWarn")"
+									if [[ ! $Keyboard_yn == "" ]]; then ReAllocEvent=$Keyboard_yn; fi
+									echo "Set Value: ("$ReAllocEvent")"
 									echo " "
 									echo " "
 									echo "-- Raw Read Errors Warning ("$RawReadWarn") "
@@ -10706,7 +10752,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file" | tee -a /tmp/
 											tempCritx="$(echo $i | cut -d':' -f 3)"
 											SectorsWarnx="$(echo $i | cut -d':' -f 4)"
 											SectorsCritx="$(echo $i | cut -d':' -f 5)"
-											ReAllocWarnx="$(echo $i | cut -d':' -f 6)"
+											ReAllocEventx="$(echo $i | cut -d':' -f 6)"
 											MultiZoneWarnx="$(echo $i | cut -d':' -f 7)"
 											MultiZoneCritx="$(echo $i | cut -d':' -f 8)"
 											RawReadWarnx="$(echo $i | cut -d':' -f 9)"
@@ -10724,7 +10770,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file" | tee -a /tmp/
 									echo " "
 									echo "The current alarm setpoints are:"
 									echo "Temperature Warning=("$tempWarnx")  Temperature Critical=("$tempCritx")"
-									echo "Sectors Warning=("$SectorsWarnx")  Sectors Critical=("$SectorsCritx")  ReAllocated Sectors Warning=("$ReAllocWarnx")"
+									echo "Sectors Warning=("$SectorsWarnx")  Sectors Critical=("$SectorsCritx")  ReAllocated Sectors Warning=("$ReAllocEventx")"
 									echo "MultiZone Warning=("$MultiZoneWarnx")  MultiZone Critical=("$MultiZoneCritx")"
 									echo "Raw Read Error Rate Warning=("$RawReadWarnx")  Raw Read Error Rate Critical=("$RawReadCritx")"
 									echo "Seek Error Rate Warning=("$SeekErrorsWarnx")  Seek Error Rate Critical=("$SeekErrorsCritx")"
@@ -10768,7 +10814,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file" | tee -a /tmp/
 
 								sectorswarn=$SectorsWarn
 								sectorscrit=$SectorsCrit
-								reallocwarn=$ReAllocWarn
+								reallocevent=$ReAllocEvent
 								multizonewarn=$MultiZoneWarn
 								multizonecrit=$MultiZoneCrit
 								rawreadwarn=$RawReadWarn
@@ -10800,7 +10846,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file" | tee -a /tmp/
 									echo " "
 									echo "The current alarm setpoints are:"
 									echo "Temperature Warning=("$tempwarn")  Temperature Critical=("$tempcrit")"
-									echo "Sectors Warning=("$sectorswarn")  Sectors Critical=("$sectorscrit")  ReAllocated Sectors Warning=("$reallocwarn")"
+									echo "Sectors Warning=("$sectorswarn")  Sectors Critical=("$sectorscrit")  ReAllocated Sectors Warning=("$reallocevent")"
 									echo "MultiZone Warning=("$multizonewarn")  MultiZone Critical=("$multizonecrit")"
 									echo "Raw Read Error Rate Warning=("$rawreadwarn")  Raw Read Error Rate Critical=("$rawreadcrit")"
 									echo "Seek Error Rate Warning=("$seekerrorswarn")  Seek Error Rate Critical=("$seekerrorscrit")"
@@ -10878,15 +10924,15 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file" | tee -a /tmp/
 										echo "Value Set: "$sectorscrit
 										echo " "
 										echo " "
-										echo "-- Reallocated Sectors Warning=("$reallocwarn") "
+										echo "-- Reallocated Sectors Warning=("$reallocevent") "
 										echo "Enter a new value or press Enter/Return to keep current value."
 										echo -n "('d' System default or 1-10000) "									
 										read Keyboard_yn
 										if [[ ! $Keyboard_yn == "" ]]; then
-											if [[ $Keyboard_yn == "d" ]]; then reallocwarn="d"; else reallocwarn=$Keyboard_yn; fi
+											if [[ $Keyboard_yn == "d" ]]; then reallocevent="d"; else reallocevent=$Keyboard_yn; fi
 										fi									
 										echo " "
-										echo "Value Set: "$reallocwarn
+										echo "Value Set: "$reallocevent
 										echo " "
 										echo " "
 										echo "Press any key to continue to next section"
@@ -11088,7 +11134,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file" | tee -a /tmp/
 										echo " "
 										echo "The current alarm setpoints are ('d' = system default):"
 										echo "Temperature Warning=("$tempwarn")  Temperature Critical=("$tempcrit")"
-										echo "Sectors Warning=("$sectorswarn")  Sectors Critical=("$sectorscrit")  ReAllocated Sectors Warning=("$reallocwarn")"
+										echo "Sectors Warning=("$sectorswarn")  Sectors Critical=("$sectorscrit")  ReAllocated Sectors Warning=("$reallocevent")"
 										echo "MultiZone Warning=("$multizonewarn")  MultiZone Critical=("$multizonecrit")"
 										echo "Raw Read Error Rate Warning=("$rawreadwarn")  Raw Read Error Rate Critical=("$rawreadcrit")"
 										echo "Seek Error Rate Warning=("$seekerrorswarn")  Seek Error Rate Critical=("$seekerrorscrit")"
@@ -11103,9 +11149,9 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file" | tee -a /tmp/
 										# Add all the current values for this $serial to the Custom_Drives_List variable.
 		   
 										if [[ $Custom_Drives_List == "" ]]; then
-											Custom_Drives_List=$serial":"$tempwarn":"$tempcrit":"$sectorswarn":"$sectorscrit":"$reallocwarn":"$multizonewarn":"$multizonecrit":"$rawreadwarn":"$rawreadcrit":"$seekerrorswarn":"$seekerrorscrit":"$testage":"$testAgeOvrd":"$heliummin":"$wearleveladj:$farmoffset:$testTypeOvrd
+											Custom_Drives_List=$serial":"$tempwarn":"$tempcrit":"$sectorswarn":"$sectorscrit":"$reallocevent":"$multizonewarn":"$multizonecrit":"$rawreadwarn":"$rawreadcrit":"$seekerrorswarn":"$seekerrorscrit":"$testage":"$testAgeOvrd":"$heliummin":"$wearleveladj:$farmoffset:$testTypeOvrd
 										else
-											Custom_Drives_List=$Custom_Drives_List","$serial":"$tempwarn":"$tempcrit":"$sectorswarn":"$sectorscrit":"$reallocwarn":"$multizonewarn":"$multizonecrit":"$rawreadwarn":"$rawreadcrit":"$seekerrorswarn":"$seekerrorscrit":"$testage":"$testAgeOvrd":"$heliummin":"$wearleveladj:$farmoffset:$testTypeOvrd
+											Custom_Drives_List=$Custom_Drives_List","$serial":"$tempwarn":"$tempcrit":"$sectorswarn":"$sectorscrit":"$reallocevent":"$multizonewarn":"$multizonecrit":"$rawreadwarn":"$rawreadcrit":"$seekerrorswarn":"$seekerrorscrit":"$testage":"$testAgeOvrd":"$heliummin":"$wearleveladj:$farmoffset:$testTypeOvrd
 										fi
 										echo " "
 									else
@@ -12649,6 +12695,9 @@ if [[ $Debug_Steps == "true" ]]; then echo "display_help" | tee -a /tmp/multi_re
 	echo "Press any key to continue COMMAND LINE OPTIONS"
 	read -s -n 1 Keyboard_yn
 	echo " "
+	echo "      -check_for_updates   Manually check for any updates.  This results in"
+	echo "                           a listing of current available versions."
+	echo " "
 	echo "      -update       Manually check GitHub for a Multi-Report update."
 	echo " "
 	echo "      -update_selftest	Manually check GitHub for a Drive_Selftest update."
@@ -12666,15 +12715,15 @@ if [[ $Debug_Steps == "true" ]]; then echo "display_help" | tee -a /tmp/multi_re
 	echo "      -enable_farm   This will modify the multi_report_config.txt file to"
 	echo "                    enable checking for FARM data.  This only needs to be done once."
 	echo " "
+	echo "Page 4 of 12"
+	echo "Press any key to continue COMMAND LINE OPTIONS"
+	read -s -n 1 Keyboard_yn
+	echo " "
 	echo "      -disable_smr  This will modify the multi_report_config.txt file to"
 	echo "                    disable checking for SMR drives.  This only needs to be done once."
 	echo " "
 	echo "      -enable_smr   This will modify the multi_report_config.txt file to"
 	echo "                    enable checking for SMR drives.  This only needs to be done once."
-	echo " "
-	echo "Page 4 of 12"
-	echo "Press any key to continue COMMAND LINE OPTIONS"
-	read -s -n 1 Keyboard_yn
 	echo " "
 	echo "      -check_smr    This will run a single SMR check if SMR checking was disabled."
 	echo " "
@@ -13081,7 +13130,7 @@ for command in "${auxillary_commands[@]}"; do
 	fi
 done
 
-if ! [[ "$1" == "-config" || "$1" == "-help" || "$1" == "-delete" || "$1" == "-s" || "$1" == "" || "$1" == "-dump" || "$1" == "-purge" || "$1" == "-h" || "$1" == "-t" || "$1" == "-m" || "$1" == "-u7zip" || "$1" == "-update" || "$1" == "-update_selftest" || "$1" == "-update_sendemail" || "$1" == "-update_smr" || "$1" == "-update_all" || "$1" == "-ignore_lock" || "$1" == "-cleanup" || "$1" == "-scsismart" || "$1" == "-update_smr" || "$1" == "-check_smr"  || "$1" == "-disable_smr" || "$1" == "-enable_smr" || "$1" == "-disable_smr_alarm" || "$1" == "-enable_smr_alarm" || "$1" == "-disable_farm" || "$1" == "-enable_farm" || "$1" == "-tardrivedata"  || "$1" == "-test_sendemail" ]]; then
+if ! [[ "$1" == "-config" || "$1" == "-help" || "$1" == "-delete" || "$1" == "-s" || "$1" == "" || "$1" == "-dump" || "$1" == "-purge" || "$1" == "-h" || "$1" == "-t" || "$1" == "-m" || "$1" == "-u7zip" || "$1" == "-update" || "$1" == "-update_selftest" || "$1" == "-update_sendemail" || "$1" == "-update_smr" || "$1" == "-update_all" || "$1" == "-ignore_lock" || "$1" == "-cleanup" || "$1" == "-scsismart" || "$1" == "-update_smr" || "$1" == "-check_smr"  || "$1" == "-disable_smr" || "$1" == "-enable_smr" || "$1" == "-disable_smr_alarm" || "$1" == "-enable_smr_alarm" || "$1" == "-disable_farm" || "$1" == "-enable_farm" || "$1" == "-tardrivedata"  || "$1" == "-test_sendemail" || "$1" == "-check_for_updates" ]]; then
 	echo '"'$1'" is not a valid option.'
 	echo "Use -h for help and look under OPTIONS."
 	echo " "
@@ -13179,6 +13228,12 @@ fi
 
 load_config
 
+if [[ "$1" == "-check_for_updates" ]]; then
+	checkforupdate
+	sleep 1
+	exit 0
+fi
+
 if [[ "$1" == "-update" ]]; then
 	update_MR_script
 	echo "The Multi-Report script has been updated.  Exiting." | tee -a /tmp/multi_report_debug.txt
@@ -13212,6 +13267,7 @@ if [[ "$1" == "-update_all" ]]; then
 	update_all="true"
 	update_MR_script
 	update_Drive_script
+	update_smr
 #	if [[ $softver == "Linux" ]]; then		# Sendemail.py is not required in CORE.
 	if [[ $truenas_sendmail_support == "No" ]]; then
 		update_Sendemail_script
@@ -13275,9 +13331,27 @@ cleanup_files
 
 # Let's check for a script update.
 if [[ $Check_For_Updates == "enable" ]] && [[ "$1" != "-t" && "$1" != "-dump" ]]; then
-	checkforupdate
-else
-	VersionDriveFilename="ersion not available while in -dump, checkforupdate not run."
+	Now=$(date +"%a")
+	case $Check_For_Updates_Day_of_Week in
+		All)
+			run_check="true"
+		;;
+
+		Mon|Tue|Wed|Thu|Fri|Sat|Sun|All)
+			if [[ "$Check_For_Updates_Day_of_Week" == "$Now" ]]; then run_check="true"; fi
+		;;
+
+		Month)
+			if [[ $(date +"%d") == "01" ]]; then run_check="true"; fi
+		;;
+
+		*)
+		;;
+
+	esac
+	if [[ "$run_check" == "true" ]]; then
+		checkforupdate
+	fi
 fi
 
 ### Hack for Monitoring to provide an Alert message if there is a software update available.
