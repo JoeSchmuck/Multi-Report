@@ -1,5 +1,7 @@
 # Multi-Report and Drive-Selftest for TrueNAS 13+ Core/Scale
 
+Bug-Fix and (Disk Layout Beta - SCALE ONLY) in Multi-Report version 3.26
+
 Bug-Fix Multi-Report Versions 3.21 to 3.24 and Drive-Selftest Version 1.07
   Yes, a few bugs of course.  Here is what changed for MR:
  - Added SMR Update to the -update_all switch.
