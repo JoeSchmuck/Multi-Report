@@ -2,7 +2,7 @@
 # shellcheck disable=SC1075,SC2027,SC2034,SC2128,SC2002,SC2004,SC2086,SC2162
 LANG="en_US.UTF-8"
 
-##### Version 3.24
+##### Version 3.26
 
 ###### Get Config File Name and Location
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
@@ -83,12 +83,48 @@ fi
 # Version
 ### Changelog:
 
+
+# V3.26 (04 Nov 2025)
+#
+# - Fixed ReAllocEvent setting, now it works again.
+# - Added Drive Mapping. This is disabled during Beta Testing.  You may enable it by adding the
+# -- value `Disklayout="enable"` in your multi_report_config.txt file.
+#
+# - Introducing Disk Layout Beta
+#
+# THINGS TO COMPLETE
+#  DONE - 1. SMR UPDATE CHECKS - Disable if SMR checks are disabled.
+#  DONE - 2. Check for updates for render_case.py
+
+#  3. Incorporate HTML into output, just attach to the end of the CHART section, before the Text Section.
+#     -- Outlook has an issue displaying the grid.  Not a problem for the Beta testing.
+
+#  DONE - 4. Remove the "case" in the json file.
+#  DONE - 5. Hide render_case output.
+#  DONE - 6. Write a correctly formatted json file.
+#  DONE - 7. Add Drive Mapper status (enabled/disabled) to the Text Report
+#  DONE - 8. Include the "render_case" version number if Mapper_Drive="enable"
+#  DONE - 9. Fix no temps on first run when the json file is created.
+#  DONE - 10. Add debug data collection for lsscsi and other commands.
+#  DONE - 11. Test with Disklayout="disable" to ensure Beta testing crap isn't leaking through.
+#  DONE - 12. Fixed growing config.json file.
+#  DONE - 13. Fixed RepBytes Leak --> Added scrubRepBytesfull=""
+#  WAITING CONFIRMATION -- 14.  Fixed Scrub Duration for "with 0" zpool output.
+#  DONE - 15. Fixed iniial json file creation to have `"case": null`.
+#  DONE - 16. Changed configuraiton file name from "config.json" to "disklayout_config.json".
+#  DONE - 17. Updated Cleanup Function, some old files and new files were left behind.
+#  DONE - 18. Incorporated Resending Email Report for a few attempts (up to 60 minutes).
+
+
+# V3.25 (Testing Version)
+
+
 # V3.24 (25 Oct 2025)
 #
 # - Added SMR Update to the -update_all switch.
 # - Added -Check_For_Updates switch.
 # - Added Check_For_Updates_Day_of_Week to minimize the number of times a software check occurs.
-# - Fixed ReAllocEvent setting, now it works again.
+
 
 # V3.23 (20 Oct 2025)
 #
@@ -417,7 +453,9 @@ Check_For_Updates="enable"				# Will check GitHub for updates and include messag
 Automatic_MR_Update="disable"			# WARNING !!!  This option will automatically update the Multi-Report script if a newer version exists on GitHub with no user interaction. Default = "disable"
 Automatic_Selftest_Update="disable"		# WARNING !!!  This option will automatically update the Drive_Selftest script if a newer version exists on GitHub with no user interaction. Default = "disable"
 Automatic_Sendemail_Update="disable"	# WARNING !!!  This option will automatically update the Sendermail.py script if a newer version exists on GitHub with no user interaction. Default = "disable"
-Automatic_SMR_Update="disable"
+Automatic_SMR_Update="disable"			# For SMR
+Automatic_RenderCase_Update="disable"	# This is for the Drive Mapper
+
 
 ###### SCRIPT ADD-ONS ######
 SMR_Enable="enable"			# Will enable SMR operations if set to "enable".  Default = "enable"
@@ -425,6 +463,9 @@ SMR_Update="enable"			# Will automatically download Basil Hendroff's smr-check.s
 SMR_Ignore_Alarm="disable"	# When "enable" will not generate an alarm condition, however the Drive ID will still change the background color.  Default = "disable"
 SMR_New_Drive_Det_Count=14	# The SMR script will check the statistical_data_file for how many times the drive serial number has been listed.  Default = 14
                             # - If it is less than or equal to this value, then run the SMR script.  0=Disable (Run SMR Check every time).
+
+###### Disk Layout ######
+Disklayout="disable"		# BETA TESTING ONLY  Options: "enable" or "disable".
 
 ### PARTITION CHECK AND BACKUP - NOT ON CORE
 Partition_Check="disable"	# Run sgdisk on each drive. Default = "disable".
@@ -470,7 +511,7 @@ NVM_Cur_Pwr_Max_Temp_Ovrd="disable"	# NVM Max Drive Temp Override. This value wh
 ### Media Alarms
 SectorsWarn=0			# Number of sectors per drive when a WARNING message will be used, this value should be less than SectorsCrit.
 SectorsCrit=9			# Number of sectors per drive when a CRITICAL message will be used.
-ReAllocEvent=0			# Number of Reallocated sector events allowed.
+ReAllocWarn=0			# Number of Reallocated sector events allowed.
 MultiZoneWarn=0			# Number of MultiZone Errors to allow when a Warning message will be used.  Default is 0.
 MultiZoneCrit=5			# Number of MultiZone Errors to allow when a Warning message will be used.  Default is 5.
 DeviceRedFlag="enable"	# Set to "enable" to have the Device Column indicate RED for ANY alarm condition.  Default is enable.
@@ -788,7 +829,7 @@ Media_Errors_List=""
 ### Use -config to set these values.
 ###
 ### THE BREAKDOWN OF THIS LINE FORMAT (entire list broken to two lines for viewing, separated using a comma)
-### serial:tempwarn:tempcrit:sectorswarn:sectorscrit:reallocevent:multizonewarn:multizonecrit:rawreadwarn:
+### serial:tempwarn:tempcrit:sectorswarn:sectorscrit:reallocwarn:multizonewarn:multizonecrit:rawreadwarn:
 ### rawreadcrit:seekerrorswarn:seekerrorscrit:testage:testAgeOvrd:heliummin:wearleveladj:farmoffset:testTypeOvrd
 ### (testAgeOvrd '0'=Default, '1'=Ignore, wearleveladj 'd'=Default 'r'=Reverse value 'n'=Normalized 'i'=Ignore, farmoffset 'd' or 'i')
 
@@ -952,8 +993,8 @@ logfile_header="/tmp/${tempfilepath}smart_report_header.tmp"
 logfile_temp="/tmp/${tempfilepath}smart_report_temp.tmp"
 boundary="gc0p4Jq0M2Yt08jU534c0p"
 
-CurrentFilename="multi_report_v3.24_2025_10_25.txt"
-valid_config_version_date="2025-10-24"	# Configuration file valid date
+CurrentFilename="multi_report_v3.26_2025_11_04.txt"
+valid_config_version_date="2025-11-04"	# Configuration file valid date
 progverdate="$(echo $CurrentFilename | cut -d '_' -f4,5,6 | cut -d '.' -f1 | sed -r 's/[_]+/-/g')"
 progname="Multi-Report "$(echo $CurrentFilename | cut -d '_' -f3)" dtd:"
 
@@ -1031,6 +1072,35 @@ fi
 	echo "Up Time"
 	echo $uptime
 	) >> /tmp/memory_free.txt
+
+
+# >>>>>>>>>>>>>>>>>  BETA VARIABLES  <<<<<<<<<<<<<<<<<<<<<<
+
+mapper_version=0.1							# Format Major.Minor
+
+# Assign Variables
+mapper_html_file="$SCRIPT_DIR/case_email_snippet.html"
+mapper_json_file="$SCRIPT_DIR/disklayout_config.json"
+tmpfile="/tmp/mapper.tmp"
+
+# Define arrays
+declare -a mapper_slot						# The Grid Slot number (probably replaces the Bay value)
+declare -a mapper_name						# Drive ID
+declare -a mapper_serial					# Drive Serial Number
+declare -a mapper_model						# Drive Model
+declare -a mapper_capacity					# Drive Capacity
+declare -a mapper_uuid						# Drive UUID (if exist)
+declare -a mapper_addr						# HCTL of the drive data connector
+declare -a mapper_bay						# The drive bay/slot number assigned to the HCTL address
+declare -a mapper_pool						# The drive is part of this pool
+
+# These two need to be set from within Multi-Report data collection section.
+# -- Scroll through all array values looking for the serial number, then apply the two values below.
+declare -a mapper_color						# The drive color will change to indicate a problem
+declare -a mapper_temperature				# The current drive temperature
+
+
+###########################################################
 	
 declare -a testfilenames
 declare -a testfilenamesHDD
@@ -1049,6 +1119,7 @@ UpdateAvailable=""
 UpdateDriveAvailable=""
 UpdateSMRAvailable=""
 UpdateSendemailAvailable=""
+UpdateRenderCaseAvailable=""
 smr_already_tested=0
 No_External_File="false"
 attachment=()
@@ -1151,9 +1222,397 @@ fi
 
 trap 'rm -rf /tmp/multi_report.lock' EXIT 	# Remove the lock directory on exit
 
+# >>>>>>>>>>>>>>>>>>>>>> MAPPER FUNCTIONS <<<<<<<<<<<<<<<<<<<<<<<
+
+
+mapper_join_chart() {
+if [[ $Debug_Steps == "true" ]]; then echo "mapper_join_chart" | tee -a /tmp/multi_report_debug.txt; fi
+output=$logfile
+page1="page1.html"
+page2="Disk_layout.html"
+page3="page3.html"
+
+{
+  echo "<!DOCTYPE html>"
+  echo "<html>"
+  echo "<head>"
+  echo "<meta charset='UTF-8'>"
+#  echo "<title>ZFS + NVMe Combined Report</title>"
+  echo "<style>"
+  # Optional: unify background & fonts and ensure pre-blocks are readable
+  echo "body { background-color:#f8f8f8; font-family:'Times New Roman', serif; margin:20px; }"
+  echo "h2 { text-align:center; }"
+  echo "pre { color: #000; }"   # keep pre text readable without overriding other styling
+  echo "</style>"
+  echo "</head>"
+  echo "<body>"
+
+  cat "$page1"
+
+  echo "<hr style='margin:40px 0;'>"
+  echo "<h2>Drive Layout Visualization</h2>"
+	if [[ ${mapper_slot[0]} == "X" || ${mapper_slot[0]} == "" ]]; then
+		echo "YOUR CONFIG FILE IS NOT COMPLETE."
+		echo "Visit https://joeschmuck.github.io/Multi-Report_Hub/  to assign your drives to a location."
+	fi
+	
+  cat "$page2"
+
+  echo "<hr style='margin:40px 0;'>"
+
+  if [[ -f "$page3" ]]; then
+    start_line=$(grep -n -m1 '<pre style="font-size:21; font-family: courier new"' "$page3" | cut -d: -f1 || true)
+    if [[ -n "$start_line" ]]; then
+      # include the preceding line as well (to get the <br> which you showed)
+      start=$((start_line - 1))
+      if [[ $start -lt 1 ]]; then start=1; fi
+      sed -n "${start},\$p" "$page3"
+    else
+      # marker not found — fallback to whole file
+      cat "$page3"
+    fi
+  else
+    echo "<!-- missing file: $page3 -->"
+  fi
+
+  echo "</body>"
+  echo "</html>"
+} > "$output"
+
+if test -e "page1.html"; then rm "page1.html"; fi
+if test -e "page3.html"; then rm "page3.html"; fi
+
+}
+
+split_html() {
+
+input_file="$1"
+
+# Safety checks
+if [[ -z "$input_file" || ! -f "$input_file" ]]; then
+  echo "Usage: $0 <inputfile>"
+  exit 1
+fi
+
+# Output filenames
+base="${input_file%.*}"
+ext="${input_file##*.}"
+part1="page1.html"
+part2="page3.html"
+
+# Use awk to split at the second </table>
+awk -v out1="$part1" -v out2="$part2" '
+{
+  print > out1
+  if ($0 ~ /<\/table>/) count++
+  if (count == 2) {
+    close(out1)
+    # Start writing to part2 from the *next* line
+    while (getline) print > out2
+    exit
+  }
+}' "$input_file"
+
+mapper_join_chart
+}
+
+mapper_join_html() {
+if [[ $Debug_Steps == "true" ]]; then echo "mapper_join_html"; fi
+# We need to join the html files
+
+# But first, why don't we just add it as an attachment.
+#create_attachment_file Disk_layout.html
+#if test -e Disk_layout.html; then rm Disk_layout.html; fi		# I do not need to delete this file first, I do overwrite it.
+cat $mapper_html_file > Disk_layout.html
+(echo "create_attachment_file Disk_layout.html Disk_layout.html" >> /tmp/attachment_files.txt)
+
+}
+
+
+mapper_set_values() {
+if [[ $Debug_Steps == "true" ]]; then echo "mapper_set_values"; fi
+# This will load the Temp and Color values into the arrays.
+
+if [[ "$deviceStatusColor" == "$whtColor" || "$deviceStatusColor" == "$altColor" ]]; then temp_color="green"
+elif [[ "$deviceStatusColor" == "$critColor" ]]; then temp_color="red"
+elif [[ "$deviceStatusColor" == "$warnColor" ]]; then temp_color="orange"
+elif [[ "$deviceStatusColor" == "$yellowColor" ]]; then temp_color="yellow"
+else
+	temp_color="none"
+fi
+
+# Initialize values
+
+array_index=0  # Tracks the index for the arrays (only increments for valid drives)
+array_size=${#mapper_serial[@]}
+
+# Loop through ALL lines looking for a serial number match
+while [[ $array_index -le $array_size ]]; do
+	# Read each array value and locate a match.
+	if [[ "${mapper_serial[array_index]}" == "$serial" ]]; then
+		mapper_temperature[array_index]=$temp
+		mapper_color[array_index]=$temp_color
+		return
+	fi
+    (( array_index++ ))
+done
+
+}
+
+
+mapper_collect_drive_data() {
+if [[ $Debug_Steps == "true" ]]; then echo "mapper_collect_drive_data"; fi
+# Initialize counters
+lsscsi_line=1  # Tracks the current line number in the unfiltered lsscsi output
+array_index=0  # Tracks the index for the arrays (only increments for valid drives)
+
+# Get the total count of *all* devices from lsscsi (needed for the loop condition)
+# We increment the count because the loop uses -le and starts at 1
+total_lsscsi_count=$(lsscsi | wc -l)
+
+#echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>   Collect the data    <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
+#echo "OUTPUT FROM lsscsi:"
+#echo "Name, Serial, Model, Capacity, UUID, Address, Drive Color"
+
+
+# Loop through ALL lines of the lsscsi output
+while [[ $lsscsi_line -le $total_lsscsi_count ]]; do
+#	echo "Start -----------------------------------------------------------------------" | tee -a debug.txt
+#	echo "lsscsi_line="$lsscsi_line | tee -a debug.txt
+    
+    # Get the device name (e.g., sda)
+    MAPPER_DEVICE_NAME=$(lsscsi | awk '{print $NF}' | cut -d'/' -f3 | head -n ${lsscsi_line} | tail -n 1)
+	MAPPER_DEVICE_DISK=$(lsscsi | awk '{print $2}' | head -n ${lsscsi_line} | tail -n 1)
+	
+    # Check if a device name was actually returned (handles the final empty line)
+    if [[ -z "$MAPPER_DEVICE_NAME" ]] || [[ "$MAPPER_DEVICE_DISK" != "disk" ]]; then
+#		echo "Bypass - Not a Disk" | tee -a debug.txt
+        (( lsscsi_line++ ))
+        continue
+#	else
+#		echo "MAPPER_DEVICE_NAME="$MAPPER_DEVICE_NAME | tee -a debug.txt
+    fi
+
+    # Get the drive model using lsblk on the current device
+    # Use -n (no headers) and -d (disk only) for a clean, single line
+    MAPPER_MODEL_NAME=$(lsblk -n -d -o MODEL "/dev/${MAPPER_DEVICE_NAME}")
+#	echo "MAPPER_MODEL_NAME="$MAPPER_MODEL_NAME | tee -a debug.txt  
+
+    # The grep -q is quiet; the -v means "select non-matching lines"
+    if echo "$MAPPER_MODEL_NAME" | grep -qvi "vmware\|virtual"; then
+        # If the MAPPER_MODEL_NAME is does not contain VMWare or virtual, proceed to collect and store data
+
+        # Save data in the array.
+        mapper_name[array_index]="$MAPPER_DEVICE_NAME"
+        mapper_model[array_index]="$MAPPER_MODEL_NAME"
+        
+        # Get drive serial number
+        mapper_serial[array_index]=$(lsblk -n -d -o SERIAL "/dev/${MAPPER_DEVICE_NAME}")
+#		echo "mapper_serial=${mapper_serial[array_index]}" | tee -a debug.txt
+		
+        # Get the full lsscsi -s line for capacity and address
+        MAPPER_CAP_ADDR_LINE=$(lsscsi -s | head -n ${lsscsi_line} | tail -n 1)
+
+        # Get capacity: removes the device path and takes the last field (the size)
+        mapper_capacity[array_index]=$(echo "$MAPPER_CAP_ADDR_LINE" | sed 's/\( \/dev\/[a-z]\+\)$//' | awk '{print $NF}')
+#        echo "mapper_capacity=${mapper_capacity[array_index]}" | tee -a debug.txt
+		
+        # Get drive UUID (PTUUID for the whole disk is generally better)
+        mapper_uuid[array_index]=$(lsblk -n -o PARTUUID "/dev/${MAPPER_DEVICE_NAME}" | tail -n 1)
+#		if [[ ${mapper_uuid[array_index]} != "" ]]; then
+#			echo "mapper_uuid=${mapper_uuid[array_index]}" | tee -a debug.txt
+#		else
+#			echo "mapper_uuid=${mapper_uuid[array_index]} is not assigned a UUID, may be a spare." | tee -a debug.txt
+#		fi
+		
+        # Get drive address
+        mapper_addr[array_index]=$(echo "$MAPPER_CAP_ADDR_LINE" | cut -d'[' -f2 | cut -d']' -f1)
+#		echo "ADDRESS=${mapper_addr[array_index]}" | tee -a debug.txt
+		
+		# Get pool name
+		if [[ ${mapper_uuid[array_index]} == "" ]]; then
+			mapper_pool[array_index]="Not Assigned"
+		else
+			mapper_pool[array_index]=$(blkid -s PARTUUID -s LABEL | grep -i ${mapper_uuid[array_index]} | cut -d'"' -f2)
+		fi
+#		echo "mapper_pool=${mapper_pool[array_index]}" | tee -a debug.txt
+        
+#		echo "Drive Color=${mapper_color[array_index]}" | tee -a debug.txt
+		
+#		echo "Drive Temp=${mapper_temperature[array_index]}" | tee -a debug.txt
+			
+#		echo "mapper_slot="${mapper_slot[array_index]} | tee -a debug.txt
+        
+        # Only increment the array index if data was collected
+        (( array_index++ ))
+    fi
+	
+    # Always increment the lsscsi line index to move to the next device in the list
+    (( lsscsi_line++ ))
+    
+done
+
+#echo "---" | tee -a debug.txt
+#echo "Processed $(( array_index )) actual drives." | tee -a debug.txt
+
+}
+
+mapper_read_json_file() {
+if [[ $Debug_Steps == "true" ]]; then echo "mapper_read_json_file"; fi
+	# We need to read the json file and save the data locally.
+	# 
+#	echo "READ JSON FILE FUNCTION" | tee -a debug.txt
+
+	# Generate debug data, just in case we need it.
+	lsscsi > /tmp/lsscsi.txt
+	blkid > /tmp/blkid.txt
+	lsblk > /tmp/lsblk.txt
+
+	# Read the Version and Date of the json file.
+	mapper_read_version=$(cat $mapper_json_file | jq -Mre '.version[].version | values')
+	mapper_read_version_date=$(cat $mapper_json_file | jq -Mre '.version[].last_updated | values')
+#	echo "$mapper_json_file file:  Version:$mapper_read_version, Date:$mapper_read_version_date" | tee -a debug.txt
+
+	# Initialize counters
+	lsscsi_line=0  # Tracks the current line number in the unfiltered lsscsi output.
+	total_lsscsi_count=$(grep -o "slot" $mapper_json_file | wc -l)
+
+	# Loop through ALL entries of the json file
+	while [[ $lsscsi_line -lt $total_lsscsi_count ]]; do
+#		echo "--------------------------------------------------------------------------" | tee -a debug.txt
+#		echo "lsscsi_line="$lsscsi_line | tee -a debug.txt
+
+		# Read individual values and place in array.
+		mapper_slot[lsscsi_line]=$(cat $mapper_json_file | jq -Mre '.bays['${lsscsi_line}'].slot | values')
+		mapper_pool[lsscsi_line]=$(cat $mapper_json_file | jq -Mre '.bays['${lsscsi_line}'].pool | values')
+		mapper_name[lsscsi_line]=$(cat $mapper_json_file | jq -Mre '.bays['${lsscsi_line}'].drive_id | values')
+		mapper_serial[lsscsi_line]=$(cat $mapper_json_file | jq -Mre '.bays['${lsscsi_line}'].serial | values')
+		mapper_model[lsscsi_line]=$(cat $mapper_json_file | jq -Mre '.bays['${lsscsi_line}'].model | values')
+		mapper_capacity[lsscsi_line]=$(cat $mapper_json_file | jq -Mre '.bays['${lsscsi_line}'].capacity | values')
+		mapper_uuid[lsscsi_line]=$(cat $mapper_json_file | jq -Mre '.bays['${lsscsi_line}'].uuid | values')
+		mapper_color[lsscsi_line]=$(cat $mapper_json_file | jq -Mre '.bays['${lsscsi_line}'].drive_color | values')
+		mapper_temperature[lsscsi_line]=$(cat $mapper_json_file | jq -Mre '.bays['${lsscsi_line}'].drive_temp | values')
+		
+#		echo "mapper_slot="${mapper_slot[${lsscsi_line}]} | tee -a debug.txt
+#		echo "Pool:"${mapper_pool[${lsscsi_line}]} | tee -a debug.txt
+#		echo "Drive ID:"${mapper_name[${lsscsi_line}]} | tee -a debug.txt
+#		echo "Serial:"${mapper_serial[${lsscsi_line}]} | tee -a debug.txt
+#		echo "Model:"${mapper_model[${lsscsi_line}]} | tee -a debug.txt
+#		echo "Capacity:"${mapper_capacity[${lsscsi_line}]} | tee -a debug.txt
+#		echo "UUID:"${mapper_uuid[${lsscsi_line}]} | tee -a debug.txt
+#		echo "Drive Color:"${mapper_color[${lsscsi_line}]} | tee -a debug.txt
+#		echo "Drive Temp="${mapper_temperature[${lsscsi_line}]} | tee -a debug.txt
+		
+		# Always increment the lsscsi line index to move to the next device in the list.
+		(( lsscsi_line++ ))
+	done
+	# This should only be active on the second run of MR.
+	if [[ ${mapper_slot[0]} == "" ]]; then mapper_slot[0]="X"; fi
+}
+
+mapper_write_json_file() {
+if [[ $Debug_Steps == "true" ]]; then echo "mapper_write_json_file"; fi
+    # Write the entire file, rebuilding version and bays sections.
+	if [[ ${mapper_slot[0]} == "X" ]]; then
+		echo
+		echo
+		echo "<><><><><><><><><><><><><><><><><><><><><><><><><><><><><><>"	
+		echo "<>         YOUR CONFIG FILE IS NOT COMPLETE.              <>"
+		echo "<>  Visit https://joeschmuck.github.io/Multi-Report_Hub/  <>"
+		echo "<>       to assign your drives to a location.             <>"
+		echo "<><><><><><><><><><><><><><><><><><><><><><><><><><><><><><>"
+		echo
+		echo
+	fi
+    mapper_name_count=${#mapper_name[@]} # Get the drive count
+    mapper_read_version=$mapper_version
+    mapper_read_version_update="$(date)"
+
+    {
+        echo '{'
+        echo '  "version": ['
+        echo '    {'
+        echo "      \"version\": \"${mapper_read_version}\","
+        echo "      \"last_updated\": \"${mapper_read_version_update}\""
+        echo '    }'
+        echo '  ],'
+        echo '  "bays": ['
+
+        first_entry=true
+        for ((count=0; count<mapper_name_count; count++)); do
+		    if [[ -z "${mapper_name[count]}" ]]; then
+                continue
+            fi
+            # Add commas between objects
+            if [[ $first_entry == false ]]; then
+                echo ','
+            else
+                first_entry=false
+            fi
+
+            cat <<EOF
+    {
+      "slot": "${mapper_slot[count]}",
+      "address": "${mapper_addr[count]}",
+      "pool": "${mapper_pool[count]}",
+      "drive_id": "${mapper_name[count]}",
+      "serial": "${mapper_serial[count]}",
+      "model": "${mapper_model[count]}",
+      "capacity": "${mapper_capacity[count]}",
+      "uuid": "${mapper_uuid[count]}",
+      "drive_color": "${mapper_color[count]}",
+      "drive_temp": "${mapper_temperature[count]}"
+    }
+EOF
+        done
+        echo
+        echo '  ]'
+        echo '}'
+    } > "$tmpfile"
+
+   if test -e "$mapper_json_file"; then
+
+        # Merge the new version/bays with the existing "case" section
+        if jq --slurp '.[0] * { case: .[1].case }' "$tmpfile" "$mapper_json_file" > "${tmpfile}.merged"; then
+            cat "${tmpfile}.merged" > "$mapper_json_file"
+            rm -f "$tmpfile" "${tmpfile}.merged"
+        else
+            echo "Error: JSON merge failed. Keeping original file." >&2
+            rm -f "$tmpfile" "${tmpfile}.merged"
+            return 1
+        fi
+    else
+		echo "Creating Initial Drive Mapper $mapper_json_file File"
+		if jq --argjson default_case '
+			{
+			  "case": null
+			}' '. + $default_case' "$tmpfile" > "$mapper_json_file"; then
+			
+            if [[ -s "$mapper_json_file" ]]; then
+                rm -f "$tmpfile"
+                return 0
+            else
+#                echo "Error: JSON creation succeeded (exit status 0) but file is empty." >&2
+                rm -f "$mapper_json_file" "$tmpfile"
+                return 1
+            fi
+		else
+#			echo "Error: JSON creation with 'case' failed (jq error)." >&2
+			rm -f "$tmpfile"
+            # Remove a zero-length or incomplete file if it exists
+			test -s "$mapper_json_file" || rm -f "$mapper_json_file" 
+			return 1
+		fi
+	fi
+cat "$mapper_json_file" > /tmp/disklayout_config.json
+}
+
+#<<<<<<<<<<<<<<<<<<<<< END OF MAPPER FUNCTIONS >>>>>>>>>>>>>>>>>>>
+
 #################### FUNCTIONS ####################
 
 get_location () {
+if [[ $Debug_Steps == "true" ]]; then echo "get_location"; fi
 # This function will obtain the drive location using the drive serial number and $Drive_Locations variable in the config file.
 # Format: drive_sn:"text",drive_sn:"text", ...
 # Function is called with $1=serial_number, Return=$drive_location
@@ -1177,6 +1636,7 @@ drive_location="No Location Data"
 	
 SMART_check_status ()
 	{
+	if [[ $Debug_Steps == "true" ]]; then echo "SMART_check_status"; fi
 	# This will check if a drive has SMART disabled.
 	shopt -s nocasematch 
     if [[ $softver != "Linux" ]]; then
@@ -1222,7 +1682,7 @@ SMART_activate ()
 	# This will check if a drive has SMART disabled, is so it will turn it on or turn it off.
 	# Input $1=Enable or Disable
 	# Variable: $smart_activation
-
+if [[ $Debug_Steps == "true" ]]; then echo "SMART_activate"; fi
 	# Enable SMART
 	shopt -s nocasematch 
     if [[ $softver != "Linux" ]]; then
@@ -1288,7 +1748,7 @@ run_smart_data_command () {
 # This routine will collect SMART data and place into global variables:
 # Call Routine $1=drive_Ident (sda,ada0,da0), $2=smartctl command (-x --json=u) --- "Not Functional, if ever."
 # Return: smartdata5 (-x), smartdata (-a), driveConnectionType
-
+if [[ $Debug_Steps == "true" ]]; then echo "run_smart_data_command"; fi
 	# Define the different drive_connection_types
 	drive_connection_types=$driveConnectionType",auto,sat,atacam,scsi,nvme"    # First try the --scan results, then if that fails, try the others listed.
     IFS_RESTORE=$IFS
@@ -1334,7 +1794,7 @@ run_smart_data_command () {
 ########## GET DRIVE LISTINGS
 # CALLED FROM ONE LOCATION
 get_API_Drives_and_tar () {
-
+if [[ $Debug_Steps == "true" ]]; then echo "get_API_Drives_and_tar"; fi
 #
 #  This procedure will:
 #    1. Obtain all the Drive IDs using the TrueNAS API.
@@ -2111,6 +2571,63 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_Sendemail_script" | tee -a /t
 	}
 	
 
+	update_RenderCase_script () {
+if [[ $Debug_Steps == "true" ]]; then echo "update_RenderCase_script" | tee -a /tmp/multi_report_debug.txt; fi
+	echo "      - Update Script Routine"
+	echo "      - Removing Old Script Source if it exists"
+	if test -e "/tmp/Multi-Report"; then rm -R "/tmp/Multi-Report"; fi
+	echo "      - Downloading new script file"
+	if [[ "$(curl -is https://github.com | head -n 1)" ]]; then
+		# Go git the file
+		( mkdir /tmp/Multi-Report
+		cd /tmp/Multi-Report || exit 3
+# FOR OXYDE GITHUB
+		curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report_Hub/refs/heads/main/docs/DiskLayout_Editor/render_case.py
+		)
+		GitRenderCaseVersion=$(cat /tmp/Multi-Report/render_case.py | grep "##### V" | cut -d 'V' -f2 | tr -d ' ')
+		if test -e $SCRIPT_DIR"/render_case.py"; then
+			VersionRenderCaseFilename=$(cat $SCRIPT_DIR"/render_case.py" | grep "##### V" | cut -d 'V' -f2 | tr -d ' ')
+		else
+			VersionRenderCaseFilename="Not Installed"
+		fi
+		echo " "
+		echo "      - RenderCase.py current version is: "$VersionRenderCaseFilename
+		echo "      - The GitHub version is: "$GitRenderCaseVersion 
+		echo " "
+		VersionRenderCaseFilename=$GitRenderCaseVersion
+
+		if [[ $Automatic_RenderCase_Update != "enable" ]]; then
+			echo "Enter 'y' to commit or any other key to abort."
+			read Keyboard_yn
+		else
+			Keyboard_yn="y"
+		fi
+		if [[ $Keyboard_yn == "y" ]] || [[ $Keyboard_yn == "Y" ]]; then
+			echo "      - Updating Script..."
+			cp /tmp/Multi-Report/render_case.py $SCRIPT_DIR"/render_case.py"
+			echo " "
+			echo "      - Your script has been updated."
+			echo " "
+			RenderCase_Updated="UPDATED: V"$VersionRenderCaseFilename
+			UpdateRenderCaseAvailable="update"
+			sleep 1
+		else
+			echo "Aborted"
+			RenderCase_Updated="ABORTED: V"$VersionRenderCaseFilename
+			if test -e "/tmp/Multi-Report"; then rm -R "/tmp/Multi-Report"; fi
+		fi
+	else
+		echo "GitHub is Not Available"
+	fi
+	
+	# Exit if not an automatic update
+	if [[ $Automatic_RenderCase_Update == "disable" ]] && [[ $update_all == "" ]]; then 
+		echo "Exiting..."
+		exit 0
+	fi
+	}
+
+
 ########## CHECK FOR NEWER SCRIPT ##########
 # This will check GitHub to find out if the script is newer.
 # If it is newer then it will send a message to the user via email.
@@ -2149,7 +2666,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "checkforupdate" | tee -a /tmp/multi_
 			MinorVersionFilename=$Return_Value
 			MR_Updated="AVAILABLE: V"$VersionFilename
 
-			echo -n "   1. Multi-Report - Installed: "$VersionFilename", GitHub: "$GitVersion
+			echo -n "   Multi-Report - Installed: "$VersionFilename", GitHub: "$GitVersion
 			if [[ $GitMajorVersionNumber -gt $MajorVersionFilename ]] && [[ $VersionFilename != "" ]]; then
 				UpdateAvailable="true"
 				echo " - Major Update"
@@ -2200,7 +2717,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "checkforupdate" | tee -a /tmp/multi_
 				VersionDriveFilename="drive_selftest.sh is not on your system, fixing that now..."
 				Drive_Updated="- NOT INSTALLED: "$VersionDriveFilename
 			fi
-			echo -n "   2. Drive-Selftest - Installed: "$VersionDriveFilename", GitHub: "$GitDriveVersion
+			echo -n "   Drive-Selftest - Installed: "$VersionDriveFilename", GitHub: "$GitDriveVersion
 			if [[ $GitDriveMajorVersionNumber -gt $MajorDriveVersionFilename ]] && [[ $VersionDriveFilename != "" ]]; then
 				echo " - Major Update"
 				UpdateDriveAvailable="true"
@@ -2221,7 +2738,6 @@ if [[ $Debug_Steps == "true" ]]; then echo "checkforupdate" | tee -a /tmp/multi_
 		fi
 
 # Go git the file
-#		if [[ $softver == "Linux" ]]; then
 		if [[ $truenas_sendmail_support == "No" ]]; then
 
 			(
@@ -2256,7 +2772,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "checkforupdate" | tee -a /tmp/multi_
 				
 				Sendemail_Updated="AVAILABLE: V"$VersionSendemailFilename
 
-				echo -n "   3. Sendemail - Installed: "$VersionSendemailFilename", GitHub: "$GitSendemailVersion
+				echo -n "   Sendemail - Installed: "$VersionSendemailFilename", GitHub: "$GitSendemailVersion
 				if [[ $GitSendemailMajorVersionNumber -gt $MajorSendemailVersionFilename ]] && [[ $VersionSendemailFilename != "" ]]; then
 					echo " - Major Update"
 					UpdateSendemailAvailable="true"
@@ -2274,63 +2790,117 @@ if [[ $Debug_Steps == "true" ]]; then echo "checkforupdate" | tee -a /tmp/multi_
 				fi	
 			fi
 		else
-			echo "   3. Sendemail - Not Required on CORE"
+			echo "   Sendemail - Not Required on CORE"
 		fi
 
-
 # Go git the file "smr-check.sh"
+		if [[ $SMR_Enable == "enable" ]]; then
+			(
+				cd /tmp || exit 3
+				if ! test -e "Multi-Report"; then
+					mkdir Multi-Report
+				fi
+				cd Multi-Report || exit 3
+				curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/truenas-smr-check_2025/refs/heads/main/smr-check.sh			
+			)	
+			
+			if test -e "/tmp/Multi-Report/smr-check.sh"; then
+				GitSMRVersion=$(cat "/tmp/Multi-Report/smr-check.sh" | grep "##### Version" | cut -d 'n' -f2 | tr -d ' ' | head -1)
+				GitSMRMajorVersionNumber="$(echo $GitSMRVersion | cut -d '.' -f1)"
+				GitSMRMinorVersionNumber="$(echo $GitSMRVersion | cut -d '.' -f2)"
+				convert_to_decimal $GitSMRMajorVersionNumber
+				GitSMRMajorVersionNumber=$Return_Value
+				convert_to_decimal $GitSMRMinorVersionNumber
+				GitSMRMinorVersionNumber=$Return_Value
+			
+				if test -e $SCRIPT_DIR"/smr-check.sh"; then
+					VersionSMRFilename="$(cat $SCRIPT_DIR"/smr-check.sh" | grep "##### Version" | cut -d 'n' -f2 | tr -d ' ' | head -1)"
+					if [[ $VersionSMRFilename == "" ]]; then VersionSMRFilename=0; fi
+					MajorSMRVersionFilename="$(echo $VersionSMRFilename | cut -d '.' -f1)"
+					MinorSMRVersionFilename="$(echo $VersionSMRFilename | cut -d '.' -f2)"
+					convert_to_decimal $MajorSMRVersionFilename
+					MajorSMRVersionFilename=$Return_Value
+					convert_to_decimal $MinorSMRVersionFilename
+					MinorSMRVersionFilename=$Return_Value
+					SMR_Updated="AVAILABLE: V"$VersionSMRFilename
+				else
+					VersionSMRFilename="smr-check.sh is not on your system, fixing that now..."
+					SMR_Updated="- NOT INSTALLED: "$VersionSMRFilename
+				fi
+				echo -n "   SMR-Check - Installed: "$VersionSMRFilename", GitHub: "$GitSMRVersion
+				if [[ $GitSMRMajorVersionNumber -gt $MajorSMRVersionFilename ]] && [[ $VersionSMRFilename != "" ]]; then
+					echo " - Major Update"
+					UpdateSMRAvailable="true"
+					rm /tmp/Multi-Report/smr-check.sh
+				elif [[ $GitSMRMajorVersionNumber -eq $MajorSMRVersionFilename ]] && [[ $GitSMRMinorVersionNumber -gt $MinorSMRVersionFilename ]]; then
+					UpdateSMRAvailable="true"
+					echo " - Minor Update"
+					rm /tmp/Multi-Report/smr-check.sh
+				else
+					echo " - No Update Available"
+				fi		
+				if [[ $Automatic_SMR_Update == "enable" ]] && [[ $UpdateSMRAvailable == "true" ]] && [[ $SMR_Enable == "enable" ]]; then
+					echo "      Automatic Update Enabled"
+					update_smr
+				fi					
+			else
+				echo "No GitHub Version File Available"
+			fi
+		fi
+
+# Go git the file "render_case.py"
+	if [[ $Disklayout == "enable" ]]; then
+	# Do we have the file `render_case.py` ?
 		(
 			cd /tmp || exit 3
 			if ! test -e "Multi-Report"; then
 				mkdir Multi-Report
 			fi
 			cd Multi-Report || exit 3
-			curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/truenas-smr-check_2025/refs/heads/main/smr-check.sh			
-		)	
+			curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report_Hub/refs/heads/main/docs/DiskLayout_Editor/render_case.py
+		)
+		if test -e "/tmp/Multi-Report/render_case.py"; then
+			GitRenderCaseVersion=$(cat "/tmp/Multi-Report/render_case.py" | grep "##### V" | cut -d 'V' -f2 | tr -d ' ' | head -1)
+			GitRenderCaseMajorVersionNumber="$(echo $GitRenderCaseVersion | cut -d '.' -f1)"		
+			GitRenderCaseMinorVersionNumber="$(echo $GitRenderCaseVersion | cut -d '.' -f2)"
+			convert_to_decimal $GitRenderCaseMajorVersionNumber
+			GitRenderCaseMajorVersionNumber=$Return_Value
+			convert_to_decimal $GitRenderCaseMinorVersionNumber
+			GitRenderCaseMinorVersionNumber=$Return_Value		
 		
-		if test -e "/tmp/Multi-Report/smr-check.sh"; then
-			GitSMRVersion=$(cat "/tmp/Multi-Report/smr-check.sh" | grep "##### Version" | cut -d 'n' -f2 | tr -d ' ' | head -1)
-			GitSMRMajorVersionNumber="$(echo $GitSMRVersion | cut -d '.' -f1)"
-			GitSMRMinorVersionNumber="$(echo $GitSMRVersion | cut -d '.' -f2)"
-			convert_to_decimal $GitSMRMajorVersionNumber
-			GitSMRMajorVersionNumber=$Return_Value
-			convert_to_decimal $GitSMRMinorVersionNumber
-			GitSMRMinorVersionNumber=$Return_Value
-		
-			if test -e $SCRIPT_DIR"/smr-check.sh"; then
-				VersionSMRFilename="$(cat $SCRIPT_DIR"/smr-check.sh" | grep "##### Version" | cut -d 'n' -f2 | tr -d ' ' | head -1)"
-				if [[ $VersionSMRFilename == "" ]]; then VersionSMRFilename=0; fi
-				MajorSMRVersionFilename="$(echo $VersionSMRFilename | cut -d '.' -f1)"
-				MinorSMRVersionFilename="$(echo $VersionSMRFilename | cut -d '.' -f2)"
-				convert_to_decimal $MajorSMRVersionFilename
-				MajorSMRVersionFilename=$Return_Value
-				convert_to_decimal $MinorSMRVersionFilename
-				MinorSMRVersionFilename=$Return_Value
-				SMR_Updated="AVAILABLE: V"$VersionSMRFilename
+			if test -e $SCRIPT_DIR"/render_case.py"; then
+				VersionRenderCaseFilename="$(cat $SCRIPT_DIR"/render_case.py" | grep "##### V" | cut -d 'V' -f2 | tr -d ' ' | head -1)"
+				MajorRenderCaseVersionFilename="$(echo $VersionRenderCaseFilename | cut -d '.' -f1)"
+				MinorRenderCaseVersionFilename="$(echo $VersionRenderCaseFilename | cut -d '.' -f2)"
+				convert_to_decimal $MajorRenderCaseVersionFilename
+				MajorRenderCaseVersionFilename=$Return_Value
+				convert_to_decimal $MinorRenderCaseVersionFilename
+				MinorRenderCaseVersionFilename=$Return_Value
 			else
-				VersionSMRFilename="smr-check.sh is not on your system, fixing that now..."
-				SMR_Updated="- NOT INSTALLED: "$VersionSMRFilename
+				VersionRenderCaseFilename="Nothing At All, Fetching..."
+				Automatic_RenderCase_Update="enable"
 			fi
-			echo -n "   4. SMR-Check - Installed: "$VersionSMRFilename", GitHub: "$GitSMRVersion
-			if [[ $GitSMRMajorVersionNumber -gt $MajorSMRVersionFilename ]] && [[ $VersionSMRFilename != "" ]]; then
+			
+			RenderCase_Updated="AVAILABLE: V"$VersionRenderCaseFilename
+
+			echo -n "   Drive Mapper (render_case) - Installed: "$VersionRenderCaseFilename", GitHub: "$GitRenderCaseVersion
+			if [[ $GitRenderCaseMajorVersionNumber -gt $MajorRenderCaseVersionFilename ]] && [[ $VersionRenderCaseFilename != "" ]]; then
 				echo " - Major Update"
-				UpdateSMRAvailable="true"
-				rm /tmp/Multi-Report/smr-check.sh
-			elif [[ $GitSMRMajorVersionNumber -eq $MajorSMRVersionFilename ]] && [[ $GitSMRMinorVersionNumber -gt $MinorSMRVersionFilename ]]; then
-				UpdateSMRAvailable="true"
+				UpdateRenderCaseAvailable="true"
+				rm /tmp/Multi-Report/render_case.py
+			elif [[ $GitRenderCaseMajorVersionNumber -eq $MajorRenderCaseVersionFilename ]] && [[ $GitRenderCaseMinorVersionNumber -gt $MinorRenderCaseVersionFilename ]]; then
 				echo " - Minor Update"
-				rm /tmp/Multi-Report/smr-check.sh
+				UpdateRenderCaseAvailable="true"
+				rm /tmp/Multi-Report/render_case.py
 			else
 				echo " - No Update Available"
 			fi		
-			if [[ $Automatic_SMR_Update == "enable" ]] && [[ $UpdateSMRAvailable == "true" ]]; then
+			if [[ $Automatic_RenderCase_Update == "enable" ]] && [[ $UpdateRenderCaseAvailable == "true" ]] && [[ $Disklayout == "enable" ]]; then
 				echo "      Automatic Update Enabled"
-				update_smr
-			fi					
-		else
-			echo "No GitHub Version File Available"
+				update_RenderCase_script
+			fi	
 		fi
-
+	fi
 
 # Go git the file
 		(
@@ -2346,9 +2916,9 @@ if [[ $Debug_Steps == "true" ]]; then echo "checkforupdate" | tee -a /tmp/multi_
 			if [[ $Messages != "" ]]; then echo "Message from Joe"; fi
 		fi
 		echo " "
-		if [[ $UpdateAvailable == "true" ]] || [[ $UpdateDriveAvailable == "true" ]] || [[ $UpdateSendemailAvailable == "true" ]]; then
+		if [[ $UpdateAvailable == "true" ]] || [[ $UpdateDriveAvailable == "true" ]] || [[ $UpdateSendemailAvailable == "true" ]] || [[ $UpdateRenderCaseAvailable == "true" && $Disklayout == "enable" ]]; then
 			echo "UPDATE(s) AVAILABLE"
-		elif [[ $UpdateAvailable == "update" ]] || [[ $UpdateDriveAvailable == "update" ]] || [[ $UpdateSendemailAvailable == "update" ]]; then
+		elif [[ $UpdateAvailable == "update" ]] || [[ $UpdateDriveAvailable == "update" ]] || [[ $UpdateSendemailAvailable == "update" ]] || [[ $UpdateRenderCaseAvailable == "update" && $Disklayout == "enable" ]]; then
 			echo "UPDATES MADE"
 		fi
 		echo " "
@@ -2894,6 +3464,8 @@ if [[ $Debug_Steps == "true" ]]; then echo "cleanup_files" | tee -a /tmp/multi_r
 	if [[ -f "${f[0]}" ]]; then rm -R /tmp/truenas-smr-check; fi
 	f=(/tmp/*.farm)
 	if [[ -f "${f[0]}" ]]; then rm /tmp/*.farm; fi
+	f=(/tmp/*error_log.txt)
+	if [[ -f "${f[0]}" ]]; then rm /tmp/*error_log.txt; fi	
 	
 	if [[ -d "/tmp/Multi-Report" ]]; then rm -R "/tmp/Multi-Report"; fi
 
@@ -2926,6 +3498,12 @@ if [[ $Debug_Steps == "true" ]]; then echo "cleanup_files" | tee -a /tmp/multi_r
 	if test -e "/tmp/sendemail_error.txt"; then rm /tmp/sendemail_error.txt; fi
 	if test -e "/tmp/USER.txt"; then rm /tmp/USER.txt; fi
 	if test -e "/tmp/smr-check.sh"; then rm "/tmp/smr-check.sh"; fi
+	if test -e "/tmp/blkid.txt"; then rm "/tmp/blkid.txt"; fi
+	if test -e "/tmp/lsblk.txt"; then rm "/tmp/lsblk.txt"; fi
+	if test -e "/tmp/lsscsi.txt"; then rm "/tmp/lsscsi.txt"; fi
+	if test -e "case_email_snippet.html"; then rm "case_email_snippet.html"; fi
+	if test -e "case_email_render.html"; then rm "case_render.html"; fi
+#	if test -e "Disk_layout.html"; then rm "Disk_layout.html"; fi
 
 	### Clean up Spencer File
 	if test -e "/tmp/spencer_report.txt"; then rm "/tmp/spencer_report.txt"; fi
@@ -3084,6 +3662,9 @@ if [[ $Debug_Steps == "true" ]]; then echo "create_Email" | tee -a /tmp/multi_re
 			if [[ $UpdateDriveAvailable == "true" ]] || [[ $UpdateDriveAvailable == "update" ]]; then echo "<br>DRIVE_SELFTEST UPDATE "$Drive_Updated" --> V"$GitDriveVersion; fi
 			if [[ $UpdateSMRAvailable == "true" ]] || [[ $UpdateSMRAvailable == "update" ]]; then echo "<br>SMR-CHECK UPDATE "$SMR_Updated" --> V"$GitSMRVersion; fi
 			if [[ $UpdateSendemailAvailable == "true" ]] || [[ $UpdateSendemailAvailable == "update" ]]; then echo "<br>SENDEMAIL.PY UPDATE "$Sendemail_Updated" --> V"$GitSendemailVersion; fi
+			
+			if [[ $UpdateRenderCaseAvailable == "true" || $UpdateRenderCaseAvailable == "update" ]] && [[ $Disklayout == "enable" ]]; then echo "<br>RENDER_CASE.PY UPDATE "$RendeerCase_Updated" --> V"$GitRenderCaseVersion" (Disk Layout)"; fi
+			
 			if [[ $Messages != "" ]]; then echo "<br>Message from Joe: "$Messages"<br>"; fi
 			if [[ "$(echo $programver | grep -i "beta")" ]] || [[ $UpdateAvailable == "true" ]] || [[ $UpdateDriveAvailable == "true" ]] || [[ $UpdateSendemailAvailable == "true" ]]; then echo "</span></b>"; fi
 #			if [[ $TrueNASConfigEmailEncryption != "" ]] && [[ $Config_Encrypted == "true" ]]; then echo "<br>Attached zip file is encrypted."; fi
@@ -3095,7 +3676,12 @@ if [[ $Debug_Steps == "true" ]]; then echo "create_Email" | tee -a /tmp/multi_re
 		fi
 		) >> ${logfile_header}
 
+if [[ $Disklayout == "enable" ]]; then
+	split_html $logfile
+fi
 	cat $logfile >> $logfile_header
+#	cat $logfile > page0.html
+#	cat $logfile_header > page00.html
 	### Send report
 #	sendmail -t -oi < "$logfile_header"
 
@@ -3171,29 +3757,53 @@ if ! test -e "/tmp/attachment.json"; then touch "/tmp/attachment.json"; touch "/
 	
 		# Sendemail Courtesy of @oxyde
 
+# These settings will attampt to resend a failed message 5 times, once every 2 minutes,
+#   then after 10 minutes it will resend once every 5 minutes for up to an hour.
+sendemail_retry_count=11
+sendemail_retry_delay=120
+#cat $logfile_header > page000.html
 		if [[ $dump_all -ne 0 ]]; then
 
-			python3 $SCRIPT_DIR/sendemail.py \
-				--subject "$subject" \
-				--to_address "$Email" \
-				--mail_body_html "$logfile_header" \
-				--attachment_files "${attachment[@]}" \
-				--debug_enabled > /tmp/sendemail_error.txt
-				
-		else
-			python3 $SCRIPT_DIR/sendemail.py \
-				--subject "$subject" \
-				--to_address "$Email" \
-				--mail_body_html "$logfile_header" \
-				--attachment_files "${attachment[@]}" > /tmp/sendemail_error.txt
-		fi
+			for ((sendemail_retry_loop=1; sendemail_retry_loop<30; sendemail_retry_loop++)); do	# are the retrys below the max count?
 
-		# Check Exit Code
-		if [[ $? -ne 0 ]]; then
-			echo "Sendemail had a problem.  Check the file log at "$SCRIPT_DIR"/sendemail_log"
-			cat /tmp/sendemail_error.txt
-#		else
-#			echo "Email Sent"
+				python3 $SCRIPT_DIR/sendemail.py \
+					--subject "$subject" \
+					--to_address "$Email" \
+					--mail_body_html "$logfile_header" \
+					--attachment_files "${attachment[@]}" \
+					--debug_enabled > /tmp/sendemail_error.txt
+				
+				if [[ $? -eq 0 ]] || [[ sendemail_retry_loop -gt sendemail_retry_count ]]; then	break; fi
+				if [[ sendemail_retry_loop -eq 6 ]]; then sendemail_retry_delay=300; fi				
+				echo "Send Failed"
+				echo "Retrying in $sendemail_retry_delay seconds..."
+				sleep $sendemail_retry_delay
+				echo "Retry Count: "$sendemail_retry_loop
+			done
+
+		else
+
+			for ((sendemail_retry_loop=1; sendemail_retry_loop<30; sendemail_retry_loop++)); do
+
+				python3 $SCRIPT_DIR/sendemail.py \
+					--subject "$subject" \
+					--to_address "$Email" \
+					--mail_body_html "$logfile_header" \
+					--attachment_files "${attachment[@]}" > /tmp/sendemail_error.txt
+						
+				if [[ $? -eq 0 ]] || [[ sendemail_retry_loop -gt sendemail_retry_count ]]; then	break; fi
+				if [[ sendemail_retry_loop -eq 6 ]]; then sendemail_retry_delay=300; fi
+				echo "Send Failed"
+				echo "Retrying in $sendemail_retry_delay seconds..."
+				sleep $sendemail_retry_delay
+				echo "Retry Count: "$sendemail_retry_loop
+			done
+		fi
+		
+		if [[ sendemail_retry_loop -eq sendemail_retry_count ]]; then
+				echo " "
+				echo "Sendemail had a problem.  Check the file log at "$SCRIPT_DIR"/sendemail_log"
+				cat /tmp/sendemail_error.txt
 		fi
 	fi
 
@@ -3528,7 +4138,6 @@ if [[ $Debug_Steps == "true" ]]; then echo "dump_drive_data $drive" | tee -a /tm
 				) >> "$logfile"
 			fi
 		fi
-
 	fi
 
 	}
@@ -3733,7 +4342,12 @@ if [[ $Debug_Steps == "true" ]]; then echo "zpool_report" | tee -a /tmp/multi_re
 				fi
 				currentTS="$(date "+%s")"
 				scrubAge=$((((currentTS - scrubTS) + 43200) / 86400))
-				scrubTime="$(echo "$statusOutput" | grep "scan" | awk '{print $5" "$6" "$7}')"
+				if [[ "$(echo "$statusOutput" | grep "scan" | awk '{print $6}')" == "with" ]]; then
+					# Yet another odd NVMe zpool oddity
+					scrubTime="$(echo "$statusOutput" | grep "scan" | awk '{print $5}')"
+				else
+					scrubTime="$(echo "$statusOutput" | grep "scan" | awk '{print $5" "$6" "$7}')"
+				fi
 			else
 				#No scrub previously performed
 				scrubAge="Never Scrubbed"
@@ -3794,6 +4408,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "zpool_report" | tee -a /tmp/multi_re
 				#No scrub previously performed
 				scrubAge="Never Scrubbed"
 				scrubRepBytes="$Non_Exist_Value"
+				scrubRepBytesfull="$Non_Exist_Value"
 			fi
 		fi
 
@@ -5308,7 +5923,7 @@ ID241=""
 		#temp=44
 		#spinRetry=0
 		#reAlloc=0
-		reAllocEvent=1
+		#reAllocEvent=1
 		#pending=0
 		#offlineUnc=10
 		#crcErrors=0
@@ -5656,7 +6271,10 @@ if [[ "$Monitor" == "true" ]]; then return; fi
 write_table () {
 if [[ $Debug_Steps == "true" ]]; then echo "write_table: $1" | tee -a /tmp/multi_report_debug.txt; fi
 if [[ "$Monitor" == "true" ]]; then return; fi
-
+# Set temp and color for Drive Mapper
+if [[ "$Disklayout" == "enable" ]]; then
+	mapper_set_values
+fi
 	(
 		printf "<tr style=\"background-color:%s;\">\n" $bgColor;
 
@@ -5849,7 +6467,10 @@ if [[ "$Monitor" == "true" ]]; then return; fi
 		echo "<br>"
 	) >> "$logfile"
 
+#cat "$logfile" > page1_to_join.html
+
 	}
+	
 
 ########## COMPILE DETAILED REPORT ##########
 # Detailed Report Section (monospace text)
@@ -5860,8 +6481,9 @@ if [[ $Debug_Steps == "true" ]]; then echo "detailed_report" | tee -a /tmp/multi
 	if [[ $Monitor == "false" ]]; then
 		H_font_size=$(( font_size + 5 ))
 	 	(
-			echo "<pre style=\"font-size:$H_font_size\">"
-			echo "<b>Multi-Report Text Section</b>"
+			echo "<pre style=\"font-size:$H_font_size; font-family: $font\">"
+			 echo "<div style='font-weight:bold; font-size:22px;'><b>Multi-Report Text Section</b></div>"
+#			echo "<b>Multi-Report Text Section</b>"
 			echo "<pre style=\"font-size:$font_size; font-family: $font\">"
 		) >> "$logfile"
 
@@ -5886,12 +6508,21 @@ if [[ $Debug_Steps == "true" ]]; then echo "detailed_report" | tee -a /tmp/multi
 			fi
 		fi
 
+		
 		if [[ $truenas_sendmail_support == "No" ]]; then
 			echo "3) Sendemail (v"$VersionSendemailFilename")" >> "$logfile"
 		else
 			echo "3) Sendemail (Not Required)" >> "$logfile"
 		fi		
-		echo " "  >> "$logfile"
+		
+		
+		if [[ $Disklayout == "enable" ]]; then
+			echo "4) Disk Layout - Beta (v"$VersionRenderCaseFilename")" >> "$logfile"
+		else
+			echo "4) Disk Layout - Beta (Disabled)" >> "$logfile"
+		fi		
+		echo " "  >> "$logfile"		
+			
 		
 		echo "Attachments:" >> "$logfile"
 		if [[ $TrueNASConfigEmailEnable == "enable" ]]; then echo "1) TrueNAS Configuration File ($TrueNASConfigEmailDay) - (Enabled)" >> "$logfile"; else echo "1) TrueNAS Configuration File ($TrueNASConfigEmailDay) - (Disabled)" >> "$logfile"; fi
@@ -6394,6 +7025,12 @@ while IFS= read -r line; do
 	if [[ "$(echo $src_file | grep -i "error_log")" ]]; then new_directory="ERROR_LOG"; fi
 	if [[ "$(echo $src_file | grep -i ".json")" ]]; then new_directory="JSON"; fi
 	if [[ "$(echo $src_file | grep -i "config.txt")" ]]; then new_directory="CONFIG"; fi
+	if [[ "$(echo $src_file | grep -i ".html")" ]]; then new_directory="DISK_LAYOUT"; fi
+	if [[ "$(echo $src_file | grep -i "disklayout_config.json")" ]]; then new_directory="DISK_LAYOUT"; fi
+	if [[ "$(echo $src_file | grep -i "lsscsi.txt")" ]]; then new_directory="DISK_LAYOUT"; fi
+	if [[ "$(echo $src_file | grep -i "blkid.txt")" ]]; then new_directory="DISK_LAYOUT"; fi
+	if [[ "$(echo $src_file | grep -i "lsblk.txt")" ]]; then new_directory="DISK_LAYOUT"; fi
+
 	
     # This is optional — to rename the file in the tar archive
     # tar_file_rename=$(echo "$line" | awk '{print $3}')
@@ -6435,6 +7072,8 @@ if [[ $Debug_Steps == "true" ]]; then echo "attach_files" | tee -a /tmp/multi_re
 			if [[ $UpdateAvailable == "true" ]]; then echo "<br>UPDATE AVAILABLE --> "$GitVersion; fi
 			if [[ $UpdateDriveAvailable == "true" ]]; then echo "<br>DRIVE_SELFTEST UPDATE AVAILABLE --> "$GitDriveVersion; fi
 			if [[ $UpdateSendemailAvailable == "true" ]]; then echo "<br>SENDEMAIL.PY UPDATE AVAILABLE --> "$GitSendemailVersion; fi
+			if [[ $UpdateRenderCaseAvailable == "true" ]] && [[ $Disklayout == "enable" ]]; then echo "<br>RENDER_CASE.PY (Disk Layout) UPDATE AVAILABLE --> "$GitSendemailVersion; fi
+			
 			if [[ $Messages != "" ]]; then echo "<br>Message from Joe: "$Messages"<br>"; fi
 		if [[ "$(echo $programver | grep -i "beta")" ]] || [[ $UpdateAvailable == "true" ]] || [[ $UpdateDriveAvailable == "true" ]] || [[ $UpdateSendemailAvailable == "true" ]]; then echo "</span></b>"; fi
 		echo "<br><br>"
@@ -6550,7 +7189,65 @@ if [[ $Debug_Steps == "true" ]]; then echo "attach_files" | tee -a /tmp/multi_re
 					) >> "$logfile"
 				fi
 			fi
+		if test -e "/tmp/lsscsi.txt"; then
+			if [[ "$truenas_sendmail_support" == "No" ]]; then
+				(echo "create_attachment_file /tmp/lsscsi.txt lsscsi.txt" >> /tmp/attachment_files.txt)
+			else
+				(
+				echo "--${boundary}"
+				echo "Content-Type: text/html"
+				echo "Content-Transfer-Encoding: base64"
+				echo "Content-Disposition: attachment; filename=lsscsi.txt"
+				base64 "/tmp/lsscsi.txt"
+				rm "/tmp/lsscsi.txt"
+				) >> "$logfile"
+			fi
+		fi		
 		
+		if test -e "/tmp/blkid.txt"; then
+			if [[ "$truenas_sendmail_support" == "No" ]]; then
+				(echo "create_attachment_file /tmp/blkid.txt blkid.txt" >> /tmp/attachment_files.txt)
+			else
+				(
+				echo "--${boundary}"
+				echo "Content-Type: text/html"
+				echo "Content-Transfer-Encoding: base64"
+				echo "Content-Disposition: attachment; filename=blkid.txt"
+				base64 "/tmp/blkid.txt"
+				rm "/tmp/blkid.txt"
+				) >> "$logfile"
+			fi
+		fi
+		
+		if test -e "/tmp/lsblk.txt"; then
+			if [[ "$truenas_sendmail_support" == "No" ]]; then
+				(echo "create_attachment_file /tmp/lsblk.txt lsblk.txt" >> /tmp/attachment_files.txt)
+			else
+				(
+				echo "--${boundary}"
+				echo "Content-Type: text/html"
+				echo "Content-Transfer-Encoding: base64"
+				echo "Content-Disposition: attachment; filename=lsblk.txt"
+				base64 "/tmp/lsblk.txt"
+				rm "/tmp/lsblk.txt"
+				) >> "$logfile"
+			fi
+		fi	
+
+		if test -e "/tmp/disklayout_config.json"; then
+			if [[ "$truenas_sendmail_support" == "No" ]]; then
+				(echo "create_attachment_file /tmp/disklayout_config.json disklayout_config.json" >> /tmp/attachment_files.txt)
+			else
+				(
+				echo "--${boundary}"
+				echo "Content-Type: text/html"
+				echo "Content-Transfer-Encoding: base64"
+				echo "Content-Disposition: attachment; filename=disklayout_config.json"
+				base64 "/tmp/disklayout_config.json"
+				rm "/tmp/disklayout_config.json"
+				) >> "$logfile"
+			fi
+		fi			
 		
 			$(echo "The script running user is: $USER" > /tmp/USER.txt)
 			if test -e "/tmp/USER.txt"; then
@@ -6774,7 +7471,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "crunch_numbers: $1" | tee -a /tmp/mu
 
 	SectorsWarnx=$SectorsWarn
 	SectorsCritx=$SectorsCrit
-	ReAllocEventx=$ReAllocEvent
+	ReAllocWarnx=$ReAllocWarn
 	MultiZoneWarnx=$MultiZoneWarn
 	MultiZoneCritx=$MultiZoneCrit
 	RawReadWarnx=$RawReadWarn
@@ -6819,7 +7516,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "crunch_numbers: $1" | tee -a /tmp/mu
 
 			if [[ "$(echo $i | cut -d':' -f 4)" != "d" ]]; then SectorsWarnx="$(echo $i | cut -d':' -f 4)"; fi
 			if [[ "$(echo $i | cut -d':' -f 5)" != "d" ]]; then SectorsCritx="$(echo $i | cut -d':' -f 5)"; fi
-			if [[ "$(echo $i | cut -d':' -f 6)" != "d" ]]; then ReAllocEventx="$(echo $i | cut -d':' -f 6)"; fi
+			if [[ "$(echo $i | cut -d':' -f 6)" != "d" ]]; then ReAllocWarnx="$(echo $i | cut -d':' -f 6)"; fi
 			if [[ "$(echo $i | cut -d':' -f 7)" != "d" ]]; then MultiZoneWarnx="$(echo $i | cut -d':' -f 7)"; fi
 			if [[ "$(echo $i | cut -d':' -f 8)" != "d" ]]; then MultiZoneCritx="$(echo $i | cut -d':' -f 8)"; fi
 			if [[ "$(echo $i | cut -d':' -f 9)" != "d" ]]; then RawReadWarnx="$(echo $i | cut -d':' -f 9)"; fi
@@ -7241,9 +7938,9 @@ read_csv $Total_Data_Written_Month
 	else if [[ $(($reAlloc + 0)) -gt $SectorsWarnx ]]; then logfile_warning=$logfile_warning"$(printf "Drive "$serial" Warning Reallocated Sectors "$reAlloc" - Threshold = "$SectorsWarnx"<br>")"; fi; fi; fi
 	if [[ $reAlloc == "" ]]; then reAlloc="$Non_Exist_Value"; fi
 
-	if [[ $reAllocEvent != "" ]]; then if [[ $(($reAllocEvent + 0)) -gt $SectorsCritx ]]; then reAllocEventColor=$critColor; else if [[ $(($reAllocEvent + 0)) -gt $SectorsWarnx ]]; then reAllocEventColor=$warnColor; fi; fi; fi
+	if [[ $reAllocEvent != "" ]]; then if [[ $(($reAllocEvent + 0)) -gt $SectorsCritx ]]; then reAllocEventColor=$critColor; else if [[ $(($reAllocEvent + 0)) -gt $ReAllocWarnx ]]; then reAllocEventColor=$warnColor; fi; fi; fi
 	if [[ $reAllocEvent != "" ]]; then if [[ $(($reAllocEvent + 0)) -gt $SectorsCritx ]]; then logfile_critical=$logfile_critical"$(printf "Drive "$serial" Critical Reallocated Sectors Events "$reAllocEvent" - Threshold = "$SectorsCritx"<br>")";
-	else if [[ $(($reAllocEvent + 0)) -gt $SectorsWarnx ]]; then logfile_warning=$logfile_warning"$(printf "Drive "$serial" Warning Reallocated Sectors Events "$reAllocEvent" - Threshold = "$SectorsWarnx"<br>")"; fi; fi; fi
+	else if [[ $(($reAllocEvent + 0)) -gt $ReAllocWarnx ]]; then logfile_warning=$logfile_warning"$(printf "Drive "$serial" Warning Reallocated Sectors Events "$reAllocEvent" - Threshold = "$ReAllocWarnx"<br>")"; fi; fi; fi
 	if [[ $reAllocEvent == "" ]]; then reAllocEvent="$Non_Exist_Value"; fi
 
 	### PENDING SECTORS
@@ -7455,7 +8152,7 @@ read_csv $Total_Data_Written_Month
 	fi
 
 	if [[ $IgnoreMultiZone != "enable" ]]; then if [[ $multiZone != "$Non_Exist_Value" ]]; then if [[ $multiZone -gt $MultiZoneWarnx ]]; then multiZoneColor=$warnColor; logfile_warning=$logfile_warning"$(printf "Drive: "$serial" - MultiZone Errors = "$multiZone"<br>")"; fi; fi; fi
-	if [[ $IgnoreUDMA != "enable" ]]; then if [[ $crcErrors != "$Non_Exist_Value" ]]; then if [[ $crcErrors != "0" ]]; then logfile_critical=$logfile_critical"$(printf "Drive "$serial" CRC Errors "$crcErrors"<br>")";fi; fi; fi
+	if [[ $IgnoreUDMA != "enable" ]]; then if [[ $crcErrors != "$Non_Exist_Value" ]]; then if [[ $crcErrors != "0" ]]; then logfile_critical=$logfile_critical"$(printf "Drive "$serial" CRC Errors "$crcErrors"<br>")"; deviceStatusColor=$critColor; fi; fi; fi
 
 	if [[ $testAge -ge $TestWarnAgex ]]; then testAgeColor=$warnColor; else testAgeColor=$bgColor; fi
 	if [[ $testAge -ge $TestWarnAgex ]]; then logfile_warning=$logfile_warning"$(printf "Drive: "$serial" - Test Age = "$testAge" Days<br>")"; fi
@@ -7845,6 +8542,9 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_config_file" | tee -a /tmp/mu
 		echo 'SMR_New_Drive_Det_Count='$SMR_New_Drive_Det_Count'	# The SMR script will check the statistical_data_file for how many times the drive serial number has been listed.  Default = 14'
 		echo '							# - If it is less than or equal to this value, then run the SMR script.  0=Disable (Run SMR Check every time).'
 		echo " "
+		echo "###### Disk Layout ######"
+		echo 'Disklayout="'$Disklayout'"			# BETA TESTING ONLY'
+		echo " "
 		echo '### PARTITION CHECK AND BACKUP - SCALE ONLY'
 		echo 'Partition_Check="'$Partition_Check'"		# Run sgdisk on each drive. Default = "disable".'
 		echo 'Partition_Backup="'$Partition_Backup'"		# Set to "enable" to save each partition table with the TrueNAS configuration backup.'
@@ -7887,7 +8587,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_config_file" | tee -a /tmp/mu
 		echo "### Media Alarms"
 		echo "SectorsWarn=$SectorsWarn		# Number of sectors per drive to allow with errors before WARNING color/message will be used, this value should be less than SectorsCrit."
 		echo "SectorsCrit=$SectorsCrit		# Number of sectors per drive with errors before CRITICAL color/message will be used."
-		echo "ReAllocEvent=$ReAllocEvent		# Number of Reallocated sector events allowed.  Over this amount is an alarm condition."
+		echo "ReAllocWarn=$ReAllocWarn		# Number of Reallocated sector events allowed.  Over this amount is an alarm condition."
 		echo "MultiZoneWarn=$MultiZoneWarn		# Number of MultiZone Errors to allow before a Warning color/message will be used.  Default is 0."
 		echo "MultiZoneCrit=$MultiZoneCrit		# Number of MultiZone Errors to allow before a Warning color/message will be used.  Default is 5."
 		echo 'DeviceRedFlag="'$DeviceRedFlag'"	# Set to "enable" to have the Device Column indicate RED for ANY alarm condition.  Default is enable.'
@@ -8199,7 +8899,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_config_file" | tee -a /tmp/mu
 		echo '# Use -config to set these values.'
 		echo '#'
 		echo '# THE BREAKDOWN OF THIS LINE FORMAT (entire list broken to two lines for viewing, separated using a comma)'
-		echo '# serial:tempwarn:tempcrit:sectorswarn:sectorscrit:reallocevent:multizonewarn:multizonecrit:rawreadwarn:'
+		echo '# serial:tempwarn:tempcrit:sectorswarn:sectorscrit:reallocwarn:multizonewarn:multizonecrit:rawreadwarn:'
 		echo '# rawreadcrit:seekerrorswarn:seekerrorscrit:testage:testAgeOvrd:heliummin:wearleveladj:farmoffset:testTypeOvrd'
 		echo '# (testAgeOvrd/testTypeOvrd '0'=Default, '1'=Ignore, wearleveladj 'd'=Default 'r'=Reverse value 'n'=Normalized 'i'=Ignore, farmoffset 'd' or 'i')'
 		echo " "
@@ -8621,12 +9321,12 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file" | tee -a /tmp/
 									echo "Set Value: ("$SectorsCrit")"
 									echo " "
 									echo " "									
-									echo "-- Reallocated Sectors Warning ("$ReAllocEvent") "
+									echo "-- Reallocated Sectors Warning ("$ReAllocWarn") "
 									echo "Enter a new value or press Enter/Return to keep current value."
 									echo -n "(1-10000) "
 									read Keyboard_yn
-									if [[ ! $Keyboard_yn == "" ]]; then ReAllocEvent=$Keyboard_yn; fi
-									echo "Set Value: ("$ReAllocEvent")"
+									if [[ ! $Keyboard_yn == "" ]]; then ReAllocWarn=$Keyboard_yn; fi
+									echo "Set Value: ("$ReAllocWarn")"
 									echo " "
 									echo " "
 									echo "-- Raw Read Errors Warning ("$RawReadWarn") "
@@ -9925,11 +10625,14 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file" | tee -a /tmp/
 							echo " "
 							echo "If you select No, you will be allowed to manually enter each offset."
 							echo " "
-							echo "-- Do you want to skip this section?"
-							echo "Enter 'y' for yes or 'n' for no, or Return to skip this section."
+							echo "Do you want to run:"
+							echo "-- Automatic Compensation"
+							echo "-- Manual Compensation Entries"
+							echo "-- Skip the compensation questions"
+							echo "Enter 'a' for automatic, 'm' for manual, or Return to skip this section."
 							read -s -n 1 Keyboard_yn
 
-							if [[ $Keyboard_yn == "y" ]]; then
+							if [[ $Keyboard_yn == "a" ]]; then
 								autoselect=1
 								echo "Automatic Configuration selected..."
 								echo "This may take a minute while scanning the drives..."
@@ -9961,7 +10664,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file" | tee -a /tmp/
 								echo "Media Errors: "$Media_Errors_List
 								echo " "
 							fi
-							if [[ ! $autoselect == "1" ]] && [[ $Keyboard_yn == "n" ]]; then
+							if [[ ! $autoselect == "1" ]] && [[ $Keyboard_yn == "m" ]]; then
 								echo " "
 								echo " "
 								echo "-- Offset UDMA CRC Errors"
@@ -10752,7 +11455,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file" | tee -a /tmp/
 											tempCritx="$(echo $i | cut -d':' -f 3)"
 											SectorsWarnx="$(echo $i | cut -d':' -f 4)"
 											SectorsCritx="$(echo $i | cut -d':' -f 5)"
-											ReAllocEventx="$(echo $i | cut -d':' -f 6)"
+											ReAllocWarnx="$(echo $i | cut -d':' -f 6)"
 											MultiZoneWarnx="$(echo $i | cut -d':' -f 7)"
 											MultiZoneCritx="$(echo $i | cut -d':' -f 8)"
 											RawReadWarnx="$(echo $i | cut -d':' -f 9)"
@@ -10770,7 +11473,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file" | tee -a /tmp/
 									echo " "
 									echo "The current alarm setpoints are:"
 									echo "Temperature Warning=("$tempWarnx")  Temperature Critical=("$tempCritx")"
-									echo "Sectors Warning=("$SectorsWarnx")  Sectors Critical=("$SectorsCritx")  ReAllocated Sectors Warning=("$ReAllocEventx")"
+									echo "Sectors Warning=("$SectorsWarnx")  Sectors Critical=("$SectorsCritx")  ReAllocated Sectors Warning=("$ReAllocWarnx")"
 									echo "MultiZone Warning=("$MultiZoneWarnx")  MultiZone Critical=("$MultiZoneCritx")"
 									echo "Raw Read Error Rate Warning=("$RawReadWarnx")  Raw Read Error Rate Critical=("$RawReadCritx")"
 									echo "Seek Error Rate Warning=("$SeekErrorsWarnx")  Seek Error Rate Critical=("$SeekErrorsCritx")"
@@ -10814,7 +11517,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file" | tee -a /tmp/
 
 								sectorswarn=$SectorsWarn
 								sectorscrit=$SectorsCrit
-								reallocevent=$ReAllocEvent
+								reallocwarn=$ReAllocWarn
 								multizonewarn=$MultiZoneWarn
 								multizonecrit=$MultiZoneCrit
 								rawreadwarn=$RawReadWarn
@@ -10846,7 +11549,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file" | tee -a /tmp/
 									echo " "
 									echo "The current alarm setpoints are:"
 									echo "Temperature Warning=("$tempwarn")  Temperature Critical=("$tempcrit")"
-									echo "Sectors Warning=("$sectorswarn")  Sectors Critical=("$sectorscrit")  ReAllocated Sectors Warning=("$reallocevent")"
+									echo "Sectors Warning=("$sectorswarn")  Sectors Critical=("$sectorscrit")  ReAllocated Sectors Warning=("$reallocwarn")"
 									echo "MultiZone Warning=("$multizonewarn")  MultiZone Critical=("$multizonecrit")"
 									echo "Raw Read Error Rate Warning=("$rawreadwarn")  Raw Read Error Rate Critical=("$rawreadcrit")"
 									echo "Seek Error Rate Warning=("$seekerrorswarn")  Seek Error Rate Critical=("$seekerrorscrit")"
@@ -10924,15 +11627,15 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file" | tee -a /tmp/
 										echo "Value Set: "$sectorscrit
 										echo " "
 										echo " "
-										echo "-- Reallocated Sectors Warning=("$reallocevent") "
+										echo "-- Reallocated Sectors Warning=("$reallocwarn") "
 										echo "Enter a new value or press Enter/Return to keep current value."
 										echo -n "('d' System default or 1-10000) "									
 										read Keyboard_yn
 										if [[ ! $Keyboard_yn == "" ]]; then
-											if [[ $Keyboard_yn == "d" ]]; then reallocevent="d"; else reallocevent=$Keyboard_yn; fi
+											if [[ $Keyboard_yn == "d" ]]; then reallocwarn="d"; else reallocwarn=$Keyboard_yn; fi
 										fi									
 										echo " "
-										echo "Value Set: "$reallocevent
+										echo "Value Set: "$reallocwarn
 										echo " "
 										echo " "
 										echo "Press any key to continue to next section"
@@ -11134,7 +11837,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file" | tee -a /tmp/
 										echo " "
 										echo "The current alarm setpoints are ('d' = system default):"
 										echo "Temperature Warning=("$tempwarn")  Temperature Critical=("$tempcrit")"
-										echo "Sectors Warning=("$sectorswarn")  Sectors Critical=("$sectorscrit")  ReAllocated Sectors Warning=("$reallocevent")"
+										echo "Sectors Warning=("$sectorswarn")  Sectors Critical=("$sectorscrit")  ReAllocated Sectors Warning=("$reallocwarn")"
 										echo "MultiZone Warning=("$multizonewarn")  MultiZone Critical=("$multizonecrit")"
 										echo "Raw Read Error Rate Warning=("$rawreadwarn")  Raw Read Error Rate Critical=("$rawreadcrit")"
 										echo "Seek Error Rate Warning=("$seekerrorswarn")  Seek Error Rate Critical=("$seekerrorscrit")"
@@ -11149,9 +11852,9 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file" | tee -a /tmp/
 										# Add all the current values for this $serial to the Custom_Drives_List variable.
 		   
 										if [[ $Custom_Drives_List == "" ]]; then
-											Custom_Drives_List=$serial":"$tempwarn":"$tempcrit":"$sectorswarn":"$sectorscrit":"$reallocevent":"$multizonewarn":"$multizonecrit":"$rawreadwarn":"$rawreadcrit":"$seekerrorswarn":"$seekerrorscrit":"$testage":"$testAgeOvrd":"$heliummin":"$wearleveladj:$farmoffset:$testTypeOvrd
+											Custom_Drives_List=$serial":"$tempwarn":"$tempcrit":"$sectorswarn":"$sectorscrit":"$reallocwarn":"$multizonewarn":"$multizonecrit":"$rawreadwarn":"$rawreadcrit":"$seekerrorswarn":"$seekerrorscrit":"$testage":"$testAgeOvrd":"$heliummin":"$wearleveladj:$farmoffset:$testTypeOvrd
 										else
-											Custom_Drives_List=$Custom_Drives_List","$serial":"$tempwarn":"$tempcrit":"$sectorswarn":"$sectorscrit":"$reallocevent":"$multizonewarn":"$multizonecrit":"$rawreadwarn":"$rawreadcrit":"$seekerrorswarn":"$seekerrorscrit":"$testage":"$testAgeOvrd":"$heliummin":"$wearleveladj:$farmoffset:$testTypeOvrd
+											Custom_Drives_List=$Custom_Drives_List","$serial":"$tempwarn":"$tempcrit":"$sectorswarn":"$sectorscrit":"$reallocwarn":"$multizonewarn":"$multizonecrit":"$rawreadwarn":"$rawreadcrit":"$seekerrorswarn":"$seekerrorscrit":"$testage":"$testAgeOvrd":"$heliummin":"$wearleveladj:$farmoffset:$testTypeOvrd
 										fi
 										echo " "
 									else
@@ -12698,13 +13401,15 @@ if [[ $Debug_Steps == "true" ]]; then echo "display_help" | tee -a /tmp/multi_re
 	echo "      -check_for_updates   Manually check for any updates.  This results in"
 	echo "                           a listing of current available versions."
 	echo " "
-	echo "      -update       Manually check GitHub for a Multi-Report update."
+	echo "      -update       	Manually check/update GitHub for a Multi-Report update."
 	echo " "
-	echo "      -update_selftest	Manually check GitHub for a Drive_Selftest update."
+	echo "      -update_selftest	Manually check/update GitHub for a Drive_Selftest update."
 	echo " "
-	echo "      -update_sendemail	Manually check GitHub for a Sendemail update."
+	echo "      -update_sendemail	Manually check/update GitHub for a Sendemail update."
 	echo " "
-	echo "      -update_all   Manually check GitHub for ALL files for an update."
+	echo "      -update_render	Manually check/update GitHib for a Render_Case (Disk Layout) update."
+	echo " "
+	echo "      -update_all   Manually check/update GitHub for ALL files for an update."
 	echo " "
 	echo "      -ignore_lock  This will ignore multiple instances running."
 	echo "                    This option should be last on the command line."
@@ -13130,7 +13835,7 @@ for command in "${auxillary_commands[@]}"; do
 	fi
 done
 
-if ! [[ "$1" == "-config" || "$1" == "-help" || "$1" == "-delete" || "$1" == "-s" || "$1" == "" || "$1" == "-dump" || "$1" == "-purge" || "$1" == "-h" || "$1" == "-t" || "$1" == "-m" || "$1" == "-u7zip" || "$1" == "-update" || "$1" == "-update_selftest" || "$1" == "-update_sendemail" || "$1" == "-update_smr" || "$1" == "-update_all" || "$1" == "-ignore_lock" || "$1" == "-cleanup" || "$1" == "-scsismart" || "$1" == "-update_smr" || "$1" == "-check_smr"  || "$1" == "-disable_smr" || "$1" == "-enable_smr" || "$1" == "-disable_smr_alarm" || "$1" == "-enable_smr_alarm" || "$1" == "-disable_farm" || "$1" == "-enable_farm" || "$1" == "-tardrivedata"  || "$1" == "-test_sendemail" || "$1" == "-check_for_updates" ]]; then
+if ! [[ "$1" == "-config" || "$1" == "-help" || "$1" == "-delete" || "$1" == "-s" || "$1" == "" || "$1" == "-dump" || "$1" == "-purge" || "$1" == "-h" || "$1" == "-t" || "$1" == "-m" || "$1" == "-u7zip" || "$1" == "-update" || "$1" == "-update_selftest" || "$1" == "-update_sendemail" || "$1" == "-update_smr" || "$1" == "-update_all" || "$1" == "-ignore_lock" || "$1" == "-cleanup" || "$1" == "-scsismart" || "$1" == "-update_smr" || "$1" == "-check_smr"  || "$1" == "-disable_smr" || "$1" == "-enable_smr" || "$1" == "-disable_smr_alarm" || "$1" == "-enable_smr_alarm" || "$1" == "-disable_farm" || "$1" == "-enable_farm" || "$1" == "-tardrivedata"  || "$1" == "-test_sendemail" || "$1" == "-check_for_updates" || "$1" == "-update_render" ]]; then
 	echo '"'$1'" is not a valid option.'
 	echo "Use -h for help and look under OPTIONS."
 	echo " "
@@ -13262,13 +13967,19 @@ if [[ "$1" == "-update_smr" ]]; then
 	exit 0
 fi
 
+if [[ "$1" == "-update_render" ]]; then
+	update_RenderCase_script
+	echo "The Render_Case (Disk Layout) python script has been updated.  Exiting." | tee -a /tmp/multi_report_debug.txt
+	sleep 1
+	exit 0
+fi
 
 if [[ "$1" == "-update_all" ]]; then
 	update_all="true"
 	update_MR_script
 	update_Drive_script
 	update_smr
-#	if [[ $softver == "Linux" ]]; then		# Sendemail.py is not required in CORE.
+	update_RenderCase_script
 	if [[ $truenas_sendmail_support == "No" ]]; then
 		update_Sendemail_script
 	fi
@@ -13276,6 +13987,7 @@ if [[ "$1" == "-update_all" ]]; then
 	sleep 1
 	exit 0
 fi
+
 # We will activate any drives where SMART is disabled and available
 if [[ $Override_SMART_Disabled == "enable" ]]; then 
 	smart_activation_disabled=""
@@ -13283,8 +13995,6 @@ if [[ $Override_SMART_Disabled == "enable" ]]; then
 else
 	SMART_check_status
 fi
-
-#load_config
 
 if [[ "$1" == "-test_sendemail" ]]; then
 	python3 sendemail.py --test_mode
@@ -13367,6 +14077,10 @@ if [[ "$UpdateSMRAvailable" == "true" ]]; then
 fi
 if [[ "$UpdateSendemailAvailable" == "true" ]]; then
 	logfile_update=$logfile_update"- SendEmail.py Update Is Available. Use '-update_sendemail' switch to update.<br>"
+fi
+
+if [[ "$UpdateRenderCaseAvailable" == "true" ]] && [[ $Disklayout == "enable" ]]; then
+	logfile_update=$logfile_update"- Render_Case.py (Disk Layout) Update Is Available. Use '-update_render' switch to update.<br>"
 fi
 
 # GRAB DRIVE-SELFTEST SCRIPT THIS ONE TIME, ONLY BECASUE IT IS NEW.  IN NEXT VERSION, MAKE THIS AN AUTOMATIC UPDATE IF THE FILE IS MISSING.
@@ -13489,6 +14203,33 @@ if [[ "$3" == "-config" ]] && [[ "$1" == "-t" ]]; then
 	generate_config_file
 	exit 0
 fi
+
+# >>>>>>>>>>>>>>>>>>>>>>>> INSERT MAPPER SCRIPT PART 1 HERE <<<<<<<<<<<<<<<<<<<<<<<<<
+if [[ "$Disklayout" == "enable" ]]; then
+	# Do we have the file `render_case.py` ?
+	if ! test -e "${SCRIPT_DIR}/render_case.py"; then
+		if [[ "$(curl -is https://github.com | head -n 1)" ]]; then
+			# Go git the file
+			( cd ${SCRIPT_DIR} || exit 3
+			curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report_Hub/refs/heads/main/docs/DiskLayout_Editor/render_case.py
+			)
+		fi
+	fi
+
+# Before we go and grab individual drive data, we need to initialize the Mapper Arrays
+
+	# Read the array if it exists, this preserves the slot and cage configuration
+	if test -e "$mapper_json_file"; then
+#		echo $mapper_json_file" exists, reading the file...." | tee -a debug.txt
+		mapper_read_json_file
+	fi
+	
+	# Collect the drive data regardless of if the disklayout_config.json file exists or not.
+	# At a minimum this will gather data for a new file.
+		mapper_collect_drive_data
+fi
+# <<<<<<<<<<<<<<<<<<<<<<< END MAPPER SCRIPT PART 1 >>>>>>>>>>>>>>>>>>>>>>>>
+
 
 # Do not collect real drive data if we are using test data.
 if [[ "$testfilepath" == "" ]]; then
@@ -13674,6 +14415,28 @@ if [[ "$Enable_Text_Section" == "enable" ]]; then
 	fi
 fi
 
+# >>>>>>>>>>>>>>>>>>>>>> MAPPER SCRIPT PART 2 <<<<<<<<<<<<<<<<<<<<
+
+if [[ "$Disklayout" == "enable" ]]; then
+	# Write the arrays to the disklayout_config.json file.  This will create a new file if one didn't previously exist.
+	mapper_write_json_file
+
+	# Generate the HTML file
+	python3 render_case.py --config "$mapper_json_file" > /dev/null 2<&1
+	exit_code=$?
+	if [[ "$exit_code" != 0 ]]; then
+		echo "<><><><><><><><><><><><><><><><><><><><><>"
+		echo "<>          Drive Mapper - Error        <>"
+		echo "<>   render_case had an error code = $exit_code  <>"
+		echo "<><><><><><><><><><><><><><><><><><><><><>"
+	fi
+	# Add HTML to report
+	mapper_join_html
+fi
+# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<  HOW DO WE ATTACH IT ????????????????????????????????????????????????????????????????????
+
+# <<<<<<<<<<<<<<<<<<<<<< END MAPPER PART 2 >>>>>>>>>>>>>>>>>>>>>>>
+
 if [[ $Monitor == "false" ]]; then
 	echo "End of data section" >> "$logfile"
 fi
@@ -13715,7 +14478,7 @@ if [[ "$1" != "-s" && "$2" != "-s" ]] && [[ $Monitor == "false" ]]; then
 		if [[ $Develop == "true" ]]; then echo "Create Normal Email" | tee -a /tmp/multi_report_debug.txt; fi
 		create_Email
 		Email_Sent="true"
-		echo "Email Sent"
+#		echo "Email Sent"
 		echo "Email sent to "$Email
 	fi
 elif [[ $Monitor_Send_Email == "true" ]]; then
