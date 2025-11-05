@@ -83,22 +83,23 @@ fi
 # Version
 ### Changelog:
 
+# 05 Nov 2025 - Beta Update 1 - Added Outlook Email compatability.  case_render.py version 0.03 supports this change.
 
 # V3.26 (04 Nov 2025)
 #
 # - Fixed ReAllocEvent setting, now it works again.
 # - Added Drive Mapping. This is disabled during Beta Testing.  You may enable it by adding the
 # -- value `Disklayout="enable"` in your multi_report_config.txt file.
+# - Added json file creation check to verify the file is created.
 #
+
 # - Introducing Disk Layout Beta
 #
 # THINGS TO COMPLETE
 #  DONE - 1. SMR UPDATE CHECKS - Disable if SMR checks are disabled.
 #  DONE - 2. Check for updates for render_case.py
-
-#  3. Incorporate HTML into output, just attach to the end of the CHART section, before the Text Section.
-#     -- Outlook has an issue displaying the grid.  Not a problem for the Beta testing.
-
+#  DONE - 3. Incorporate HTML into output, just attach to the end of the CHART section, before the Text Section.
+#       -- Outlook has an issue displaying the grid.  Not a problem for the Beta testing.
 #  DONE - 4. Remove the "case" in the json file.
 #  DONE - 5. Hide render_case output.
 #  DONE - 6. Write a correctly formatted json file.
@@ -109,7 +110,9 @@ fi
 #  DONE - 11. Test with Disklayout="disable" to ensure Beta testing crap isn't leaking through.
 #  DONE - 12. Fixed growing config.json file.
 #  DONE - 13. Fixed RepBytes Leak --> Added scrubRepBytesfull=""
+
 #  WAITING CONFIRMATION -- 14.  Fixed Scrub Duration for "with 0" zpool output.
+
 #  DONE - 15. Fixed iniial json file creation to have `"case": null`.
 #  DONE - 16. Changed configuraiton file name from "config.json" to "disklayout_config.json".
 #  DONE - 17. Updated Cleanup Function, some old files and new files were left behind.
@@ -465,7 +468,9 @@ SMR_New_Drive_Det_Count=14	# The SMR script will check the statistical_data_file
                             # - If it is less than or equal to this value, then run the SMR script.  0=Disable (Run SMR Check every time).
 
 ###### Disk Layout ######
-Disklayout="disable"		# BETA TESTING ONLY  Options: "enable" or "disable".
+Disklayout="disable"		# BETA TESTING ONLY and SCALE ONLY.  Options: "enable" or "disable".
+MS_Outlook="enable"			# Set to "enable" to use the OUTLOOK compatable version.  Default="disable".
+
 
 ### PARTITION CHECK AND BACKUP - NOT ON CORE
 Partition_Check="disable"	# Run sgdisk on each drive. Default = "disable".
@@ -993,7 +998,7 @@ logfile_header="/tmp/${tempfilepath}smart_report_header.tmp"
 logfile_temp="/tmp/${tempfilepath}smart_report_temp.tmp"
 boundary="gc0p4Jq0M2Yt08jU534c0p"
 
-CurrentFilename="multi_report_v3.26_2025_11_04.txt"
+CurrentFilename="multi_report_v3.26_2025_11_05.txt"
 valid_config_version_date="2025-11-04"	# Configuration file valid date
 progverdate="$(echo $CurrentFilename | cut -d '_' -f4,5,6 | cut -d '.' -f1 | sed -r 's/[_]+/-/g')"
 progname="Multi-Report "$(echo $CurrentFilename | cut -d '_' -f3)" dtd:"
@@ -1229,8 +1234,13 @@ mapper_join_chart() {
 if [[ $Debug_Steps == "true" ]]; then echo "mapper_join_chart" | tee -a /tmp/multi_report_debug.txt; fi
 output=$logfile
 page1="page1.html"
-page2="Disk_layout.html"
 page3="page3.html"
+
+if [[ $MS_Outlook == "enable" ]]; then
+	page2="case_email_outlook_snippet.html"
+else
+	page2="Disk_layout.html"
+fi
 
 {
   echo "<!DOCTYPE html>"
@@ -1604,7 +1614,12 @@ EOF
 			return 1
 		fi
 	fi
-cat "$mapper_json_file" > /tmp/disklayout_config.json
+	
+	if test -e "$mapper_json_file"; then
+		cat "$mapper_json_file" > /tmp/disklayout_config.json
+	else
+		echo "ERROR - Unable to write $mapper_json_file to your disk.  Check to see if your permissions are correct."
+	fi
 }
 
 #<<<<<<<<<<<<<<<<<<<<< END OF MAPPER FUNCTIONS >>>>>>>>>>>>>>>>>>>
@@ -3502,8 +3517,9 @@ if [[ $Debug_Steps == "true" ]]; then echo "cleanup_files" | tee -a /tmp/multi_r
 	if test -e "/tmp/lsblk.txt"; then rm "/tmp/lsblk.txt"; fi
 	if test -e "/tmp/lsscsi.txt"; then rm "/tmp/lsscsi.txt"; fi
 	if test -e "case_email_snippet.html"; then rm "case_email_snippet.html"; fi
-	if test -e "case_email_render.html"; then rm "case_render.html"; fi
-#	if test -e "Disk_layout.html"; then rm "Disk_layout.html"; fi
+	if test -e "case_render.html"; then rm "case_render.html"; fi
+	if test -e "Disk_layout.html"; then rm "Disk_layout.html"; fi
+	if test -e "case_email_outlook_snippet.html"; then rm "case_email_outlook_snippet.html"; fi
 
 	### Clean up Spencer File
 	if test -e "/tmp/spencer_report.txt"; then rm "/tmp/spencer_report.txt"; fi
@@ -8543,7 +8559,8 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_config_file" | tee -a /tmp/mu
 		echo '							# - If it is less than or equal to this value, then run the SMR script.  0=Disable (Run SMR Check every time).'
 		echo " "
 		echo "###### Disk Layout ######"
-		echo 'Disklayout="'$Disklayout'"			# BETA TESTING ONLY'
+		echo 'Disklayout="'$Disklayout'"			# BETA TESTING ONLY and SCALE ONLY.'
+		echo 'MS_Outlook="'$MS_Outlook'"		# Set to "enable" to use the OUTLOOK compatable version.  Default="disable"'
 		echo " "
 		echo '### PARTITION CHECK AND BACKUP - SCALE ONLY'
 		echo 'Partition_Check="'$Partition_Check'"		# Run sgdisk on each drive. Default = "disable".'
