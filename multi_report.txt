@@ -7577,10 +7577,12 @@ if [[ $Debug_Steps == "true" ]]; then echo "crunch_numbers: $1" | tee -a /tmp/mu
 		let yrs=$((($onHours / 8760)))
 		let mos=$(((($onHours % 8760) / 730)))
 		let dys=$((((($onHours % 8760) % 730) / 24)))
+		let dys_only=$(((($onHours % 8760) / 24)))
 		let hrs=$(((($onHours % 8760) % 730) % 24))
 		if [[ $PowerTimeFormat == "ymdh" ]]; then onTime="${yrs}y ${mos}m ${dys}d ${hrs}h";
 			elif [[ $PowerTimeFormat == "ymd" ]]; then onTime="${yrs}y ${mos}m ${dys}d";
 			elif [[ $PowerTimeFormat == "ym" ]]; then onTime="${yrs}y ${mos}m";
+			elif [[ $PowerTimeFormat == "yd" ]]; then onTime="${yrs}y ${dys_only}d";
 			elif [[ $PowerTimeFormat == "y" ]]; then onTime="${yrs}y";
 			elif [[ $PowerTimeFormat == "h" ]]; then onTime=$onHours;
 			else onTime=$onHours;
@@ -10284,7 +10286,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file" | tee -a /tmp/
 							echo " "
 							echo " "
 							echo "-- Power On Hours Time Format ("$PowerTimeFormat") "
-							echo -n 'valid options are "ymdh", "ymd", "ym", "y", or "h" (year month day hour): '
+							echo -n 'valid options are "ymdh", "ymd", "ym", "yd", "y", or "h" (year month day hour): '
 							read Keyboard_yn
 							if [[ ! $Keyboard_yn == "" ]]; then PowerTimeFormat=$Keyboard_yn; fi
 							echo "Set Value: "$PowerTimeFormat
