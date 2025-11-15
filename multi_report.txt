@@ -2,7 +2,7 @@
 # shellcheck disable=SC1075,SC2027,SC2034,SC2128,SC2002,SC2004,SC2086,SC2162
 LANG="en_US.UTF-8"
 
-##### Version 3.26
+##### Version 3.27
 
 ###### Get Config File Name and Location
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
@@ -11,6 +11,8 @@ Config_File_Name="$SCRIPT_DIR/multi_report_config.txt"
 #if [[ $(whoami) != "root" ]]; then echo "User is not 'root', exiting."; exit 2; fi
 
 set -E -o functrace
+
+declare -i lastTestHours
 
 failure(){
     local -n _lineno="${1:-LINENO}"
@@ -83,7 +85,22 @@ fi
 # Version
 ### Changelog:
 
-# 05 Nov 2025 - Beta Update 1 - Added Outlook Email compatability.  case_render.py version 0.03 supports this change.
+# V3.27 (14 Nov 2025)
+#
+# - Adjusted to take into account invalid absurdly high temperature values.
+# - Removed all references to `mr_sendemail.py` (originally expected to be removed in January 2026).
+# - Partition files are now zipped together.
+# - Fixed duplicate -dump files.
+# - Added new POH value 'Years Days' (yd) per request.
+# - Updated for another SanDisk variant - Wear Level, Test Age, Total Data Read/Written.
+
+# The work in-between
+# 14 Nov 2025 - Disk Layout still in Beta.
+# 11 Nov 2025 - Fixed Disk Layout json file for pool name.
+# 07 Nov 2025 - Fixed Disk Layout Chart placement and inclusion of missing tables.
+# 07 Nov 2025 - Fixed SCSI Last Test Type and Time.
+# 05 Nov 2025 - Fixed Uncorrectable Errors evaluation.
+# 05 Nov 2025 - Beta Update 1 - Added Outlook Email compatibility.  case_render.py version 0.03 supports this change.
 
 # V3.26 (04 Nov 2025)
 #
@@ -103,7 +120,7 @@ fi
 #  DONE - 4. Remove the "case" in the json file.
 #  DONE - 5. Hide render_case output.
 #  DONE - 6. Write a correctly formatted json file.
-#  DONE - 7. Add Drive Mapper status (enabled/disabled) to the Text Report
+#  DONE - 7. Add Disk Layout status (enabled/disabled) to the Text Report
 #  DONE - 8. Include the "render_case" version number if Mapper_Drive="enable"
 #  DONE - 9. Fix no temps on first run when the json file is created.
 #  DONE - 10. Add debug data collection for lsscsi and other commands.
@@ -113,8 +130,8 @@ fi
 
 #  WAITING CONFIRMATION -- 14.  Fixed Scrub Duration for "with 0" zpool output.
 
-#  DONE - 15. Fixed iniial json file creation to have `"case": null`.
-#  DONE - 16. Changed configuraiton file name from "config.json" to "disklayout_config.json".
+#  DONE - 15. Fixed initial json file creation to have `"case": null`.
+#  DONE - 16. Changed configuration file name from "config.json" to "disklayout_config.json".
 #  DONE - 17. Updated Cleanup Function, some old files and new files were left behind.
 #  DONE - 18. Incorporated Resending Email Report for a few attempts (up to 60 minutes).
 
@@ -457,7 +474,7 @@ Automatic_MR_Update="disable"			# WARNING !!!  This option will automatically up
 Automatic_Selftest_Update="disable"		# WARNING !!!  This option will automatically update the Drive_Selftest script if a newer version exists on GitHub with no user interaction. Default = "disable"
 Automatic_Sendemail_Update="disable"	# WARNING !!!  This option will automatically update the Sendermail.py script if a newer version exists on GitHub with no user interaction. Default = "disable"
 Automatic_SMR_Update="disable"			# For SMR
-Automatic_RenderCase_Update="disable"	# This is for the Drive Mapper
+Automatic_RenderCase_Update="disable"	# This is for the Disk Layout
 
 
 ###### SCRIPT ADD-ONS ######
@@ -469,7 +486,7 @@ SMR_New_Drive_Det_Count=14	# The SMR script will check the statistical_data_file
 
 ###### Disk Layout ######
 Disklayout="disable"		# BETA TESTING ONLY and SCALE ONLY.  Options: "enable" or "disable".
-MS_Outlook="enable"			# Set to "enable" to use the OUTLOOK compatable version.  Default="disable".
+MS_Outlook="enable"			# Set to "enable" to use the OUTLOOK compatible version.  Default="disable".
 
 
 ### PARTITION CHECK AND BACKUP - NOT ON CORE
@@ -551,7 +568,7 @@ Run_SMART_No_power_on_time="no"	# Some SCSI drives do not report power_on_time, 
 ### Output Formats
 DriveFARMCheck="enable"			# When "enable" will check all drives with F.A.R.M. data with S.M.A.R.T. data.  Default="enable"
 DriveFARMCheckHours=1000		# This value is the maximum number of days off that FARM can be greater than SMART Power On Hours. Default=1000
-PowerTimeFormat="h"				# Format for power-on hours string, valid options are "ymdh", "ymd", "ym", "y", or "h" (year month day hour).
+PowerTimeFormat="h"				# Format for power-on hours string, valid options are "ymdh", "ymd", "ym", "yd", "y", or "h" (year month day hour).
 TempDisplay="&deg; C"				# The format you desire the temperature to be displayed. Common formats are: "° C", "*C", "^C", or "^c". Choose your own.
 Non_Exist_Value="---"			# How do you desire non-existent data to be displayed.  The Default is "---", popular options are "N/A" or " ".
 Pool_Capacity_Type="zfs"		# Select "zfs" or "zpool" for Zpool Status Report - Pool Size and Free Space capacities. "zfs" is default.
@@ -998,7 +1015,7 @@ logfile_header="/tmp/${tempfilepath}smart_report_header.tmp"
 logfile_temp="/tmp/${tempfilepath}smart_report_temp.tmp"
 boundary="gc0p4Jq0M2Yt08jU534c0p"
 
-CurrentFilename="multi_report_v3.26_2025_11_05.txt"
+CurrentFilename="multi_report_v3.27_2025_11_14.txt"
 valid_config_version_date="2025-11-04"	# Configuration file valid date
 progverdate="$(echo $CurrentFilename | cut -d '_' -f4,5,6 | cut -d '.' -f1 | sed -r 's/[_]+/-/g')"
 progname="Multi-Report "$(echo $CurrentFilename | cut -d '_' -f3)" dtd:"
@@ -1247,20 +1264,17 @@ fi
   echo "<html>"
   echo "<head>"
   echo "<meta charset='UTF-8'>"
-#  echo "<title>ZFS + NVMe Combined Report</title>"
   echo "<style>"
-  # Optional: unify background & fonts and ensure pre-blocks are readable
   echo "body { background-color:#f8f8f8; font-family:'Times New Roman', serif; margin:20px; }"
   echo "h2 { text-align:center; }"
   echo "pre { color: #000; }"   # keep pre text readable without overriding other styling
   echo "</style>"
   echo "</head>"
   echo "<body>"
-
   cat "$page1"
-
   echo "<hr style='margin:40px 0;'>"
   echo "<h2>Drive Layout Visualization</h2>"
+  
 	if [[ ${mapper_slot[0]} == "X" || ${mapper_slot[0]} == "" ]]; then
 		echo "YOUR CONFIG FILE IS NOT COMPLETE."
 		echo "Visit https://joeschmuck.github.io/Multi-Report_Hub/  to assign your drives to a location."
@@ -1289,8 +1303,8 @@ fi
   echo "</html>"
 } > "$output"
 
-if test -e "page1.html"; then rm "page1.html"; fi
-if test -e "page3.html"; then rm "page3.html"; fi
+ if test -e "page1.html"; then rm "page1.html"; fi
+ if test -e "page3.html"; then rm "page3.html"; fi
 
 }
 
@@ -1310,17 +1324,16 @@ ext="${input_file##*.}"
 part1="page1.html"
 part2="page3.html"
 
-# Use awk to split at the second </table>
+# Use awk to split at the "Multi-Report Text Section"
 awk -v out1="$part1" -v out2="$part2" '
 {
-  print > out1
-  if ($0 ~ /<\/table>/) count++
-  if (count == 2) {
+  if ($0 ~ /<b>Multi-Report Text Section/) {
     close(out1)
-    # Start writing to part2 from the *next* line
+    print > out2          # include this line in page3
     while (getline) print > out2
     exit
   }
+  print > out1
 }' "$input_file"
 
 mapper_join_chart
@@ -1384,11 +1397,8 @@ total_lsscsi_count=$(lsscsi | wc -l)
 #echo "OUTPUT FROM lsscsi:"
 #echo "Name, Serial, Model, Capacity, UUID, Address, Drive Color"
 
-
 # Loop through ALL lines of the lsscsi output
 while [[ $lsscsi_line -le $total_lsscsi_count ]]; do
-#	echo "Start -----------------------------------------------------------------------" | tee -a debug.txt
-#	echo "lsscsi_line="$lsscsi_line | tee -a debug.txt
     
     # Get the device name (e.g., sda)
     MAPPER_DEVICE_NAME=$(lsscsi | awk '{print $NF}' | cut -d'/' -f3 | head -n ${lsscsi_line} | tail -n 1)
@@ -1399,14 +1409,11 @@ while [[ $lsscsi_line -le $total_lsscsi_count ]]; do
 #		echo "Bypass - Not a Disk" | tee -a debug.txt
         (( lsscsi_line++ ))
         continue
-#	else
-#		echo "MAPPER_DEVICE_NAME="$MAPPER_DEVICE_NAME | tee -a debug.txt
     fi
 
     # Get the drive model using lsblk on the current device
     # Use -n (no headers) and -d (disk only) for a clean, single line
     MAPPER_MODEL_NAME=$(lsblk -n -d -o MODEL "/dev/${MAPPER_DEVICE_NAME}")
-#	echo "MAPPER_MODEL_NAME="$MAPPER_MODEL_NAME | tee -a debug.txt  
 
     # The grep -q is quiet; the -v means "select non-matching lines"
     if echo "$MAPPER_MODEL_NAME" | grep -qvi "vmware\|virtual"; then
@@ -1418,41 +1425,27 @@ while [[ $lsscsi_line -le $total_lsscsi_count ]]; do
         
         # Get drive serial number
         mapper_serial[array_index]=$(lsblk -n -d -o SERIAL "/dev/${MAPPER_DEVICE_NAME}")
-#		echo "mapper_serial=${mapper_serial[array_index]}" | tee -a debug.txt
 		
         # Get the full lsscsi -s line for capacity and address
         MAPPER_CAP_ADDR_LINE=$(lsscsi -s | head -n ${lsscsi_line} | tail -n 1)
 
         # Get capacity: removes the device path and takes the last field (the size)
         mapper_capacity[array_index]=$(echo "$MAPPER_CAP_ADDR_LINE" | sed 's/\( \/dev\/[a-z]\+\)$//' | awk '{print $NF}')
-#        echo "mapper_capacity=${mapper_capacity[array_index]}" | tee -a debug.txt
 		
         # Get drive UUID (PTUUID for the whole disk is generally better)
         mapper_uuid[array_index]=$(lsblk -n -o PARTUUID "/dev/${MAPPER_DEVICE_NAME}" | tail -n 1)
-#		if [[ ${mapper_uuid[array_index]} != "" ]]; then
-#			echo "mapper_uuid=${mapper_uuid[array_index]}" | tee -a debug.txt
-#		else
-#			echo "mapper_uuid=${mapper_uuid[array_index]} is not assigned a UUID, may be a spare." | tee -a debug.txt
-#		fi
 		
         # Get drive address
         mapper_addr[array_index]=$(echo "$MAPPER_CAP_ADDR_LINE" | cut -d'[' -f2 | cut -d']' -f1)
-#		echo "ADDRESS=${mapper_addr[array_index]}" | tee -a debug.txt
 		
 		# Get pool name
-		if [[ ${mapper_uuid[array_index]} == "" ]]; then
-			mapper_pool[array_index]="Not Assigned"
-		else
+		if [[ ${mapper_pool[array_index]} == "" ]]; then
 			mapper_pool[array_index]=$(blkid -s PARTUUID -s LABEL | grep -i ${mapper_uuid[array_index]} | cut -d'"' -f2)
 		fi
-#		echo "mapper_pool=${mapper_pool[array_index]}" | tee -a debug.txt
-        
-#		echo "Drive Color=${mapper_color[array_index]}" | tee -a debug.txt
-		
-#		echo "Drive Temp=${mapper_temperature[array_index]}" | tee -a debug.txt
-			
-#		echo "mapper_slot="${mapper_slot[array_index]} | tee -a debug.txt
-        
+		if [[ ${mapper_pool[array_index]} == ${mapper_uuid[array_index]} ]]; then
+			mapper_pool[array_index]="Not Assigned"
+		fi
+  
         # Only increment the array index if data was collected
         (( array_index++ ))
     fi
@@ -1462,16 +1455,10 @@ while [[ $lsscsi_line -le $total_lsscsi_count ]]; do
     
 done
 
-#echo "---" | tee -a debug.txt
-#echo "Processed $(( array_index )) actual drives." | tee -a debug.txt
-
 }
 
 mapper_read_json_file() {
 if [[ $Debug_Steps == "true" ]]; then echo "mapper_read_json_file"; fi
-	# We need to read the json file and save the data locally.
-	# 
-#	echo "READ JSON FILE FUNCTION" | tee -a debug.txt
 
 	# Generate debug data, just in case we need it.
 	lsscsi > /tmp/lsscsi.txt
@@ -1481,7 +1468,6 @@ if [[ $Debug_Steps == "true" ]]; then echo "mapper_read_json_file"; fi
 	# Read the Version and Date of the json file.
 	mapper_read_version=$(cat $mapper_json_file | jq -Mre '.version[].version | values')
 	mapper_read_version_date=$(cat $mapper_json_file | jq -Mre '.version[].last_updated | values')
-#	echo "$mapper_json_file file:  Version:$mapper_read_version, Date:$mapper_read_version_date" | tee -a debug.txt
 
 	# Initialize counters
 	lsscsi_line=0  # Tracks the current line number in the unfiltered lsscsi output.
@@ -1489,9 +1475,6 @@ if [[ $Debug_Steps == "true" ]]; then echo "mapper_read_json_file"; fi
 
 	# Loop through ALL entries of the json file
 	while [[ $lsscsi_line -lt $total_lsscsi_count ]]; do
-#		echo "--------------------------------------------------------------------------" | tee -a debug.txt
-#		echo "lsscsi_line="$lsscsi_line | tee -a debug.txt
-
 		# Read individual values and place in array.
 		mapper_slot[lsscsi_line]=$(cat $mapper_json_file | jq -Mre '.bays['${lsscsi_line}'].slot | values')
 		mapper_pool[lsscsi_line]=$(cat $mapper_json_file | jq -Mre '.bays['${lsscsi_line}'].pool | values')
@@ -1502,16 +1485,6 @@ if [[ $Debug_Steps == "true" ]]; then echo "mapper_read_json_file"; fi
 		mapper_uuid[lsscsi_line]=$(cat $mapper_json_file | jq -Mre '.bays['${lsscsi_line}'].uuid | values')
 		mapper_color[lsscsi_line]=$(cat $mapper_json_file | jq -Mre '.bays['${lsscsi_line}'].drive_color | values')
 		mapper_temperature[lsscsi_line]=$(cat $mapper_json_file | jq -Mre '.bays['${lsscsi_line}'].drive_temp | values')
-		
-#		echo "mapper_slot="${mapper_slot[${lsscsi_line}]} | tee -a debug.txt
-#		echo "Pool:"${mapper_pool[${lsscsi_line}]} | tee -a debug.txt
-#		echo "Drive ID:"${mapper_name[${lsscsi_line}]} | tee -a debug.txt
-#		echo "Serial:"${mapper_serial[${lsscsi_line}]} | tee -a debug.txt
-#		echo "Model:"${mapper_model[${lsscsi_line}]} | tee -a debug.txt
-#		echo "Capacity:"${mapper_capacity[${lsscsi_line}]} | tee -a debug.txt
-#		echo "UUID:"${mapper_uuid[${lsscsi_line}]} | tee -a debug.txt
-#		echo "Drive Color:"${mapper_color[${lsscsi_line}]} | tee -a debug.txt
-#		echo "Drive Temp="${mapper_temperature[${lsscsi_line}]} | tee -a debug.txt
 		
 		# Always increment the lsscsi line index to move to the next device in the list.
 		(( lsscsi_line++ ))
@@ -1592,7 +1565,7 @@ EOF
             return 1
         fi
     else
-		echo "Creating Initial Drive Mapper $mapper_json_file File"
+		echo "Creating Initial Disk Layout $mapper_json_file File"
 		if jq --argjson default_case '
 			{
 			  "case": null
@@ -1953,11 +1926,16 @@ if [[ $Debug_Steps == "true" ]]; then echo "check_farm_data: $drive" | tee -a /t
 		farm_data=$(smartctl -l farm /dev/$drive)
 	else
 		# The simulation drive data
+		echo "FARM Simulation Check"
 		echo "Simulated Drive ID="$drive
 		echo "Serial==="$serial
 		farm_data_file_name=$(ls $testfilepath"/" | grep "$serial" | grep ".farm")
-		echo "farm_data_file_name="$farm_data_file_name
-		farm_data=$(cat "$testfilepath/$farm_data_file_name")
+		if [[ $farm_data_file_name != "" ]]; then
+			echo "farm_data_file_name="$farm_data_file_name
+			farm_data=$(cat "$testfilepath/$farm_data_file_name")
+		else
+			echo "No Simulated FARM Data"
+		fi
 	fi	
 #echo "Collected FARM DATA"
 #
@@ -2898,7 +2876,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "checkforupdate" | tee -a /tmp/multi_
 			
 			RenderCase_Updated="AVAILABLE: V"$VersionRenderCaseFilename
 
-			echo -n "   Drive Mapper (render_case) - Installed: "$VersionRenderCaseFilename", GitHub: "$GitRenderCaseVersion
+			echo -n "   Disk Layout (render_case) - Installed: "$VersionRenderCaseFilename", GitHub: "$GitRenderCaseVersion
 			if [[ $GitRenderCaseMajorVersionNumber -gt $MajorRenderCaseVersionFilename ]] && [[ $VersionRenderCaseFilename != "" ]]; then
 				echo " - Major Update"
 				UpdateRenderCaseAvailable="true"
@@ -3528,7 +3506,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "cleanup_files" | tee -a /tmp/multi_r
 	if test -e "/tmp/drive_test_temp.txt"; then rm "/tmp/drive_test_temp.txt"; fi
 	if test -e "/tmp/drive_test_timer_temp.txt"; then rm "/tmp/drive_test_timer_temp.txt"; fi
 	if test -e "/tmp/smartdrive_selftest_text.txt"; then rm "/tmp/smartdrive_selftest_text.txt"; fi
-	
+	if test -e "/tmp/drive_selftest_tracking.csv"; then rm "/tmp/drive_selftest_tracking.csv"; fi
 
 	### Clean up complete!
 	
@@ -3773,7 +3751,7 @@ if ! test -e "/tmp/attachment.json"; then touch "/tmp/attachment.json"; touch "/
 	
 		# Sendemail Courtesy of @oxyde
 
-# These settings will attampt to resend a failed message 5 times, once every 2 minutes,
+# These settings will attempt to resend a failed message 5 times, once every 2 minutes,
 #   then after 10 minutes it will resend once every 5 minutes for up to an hour.
 sendemail_retry_count=11
 sendemail_retry_delay=120
@@ -3933,7 +3911,8 @@ if [[ $Debug_Steps == "true" ]]; then echo "dump_drive_partition: $drive" | tee 
 			if [[ $Partition_Backup == "enable" ]] && [[ $Attach_Files1 == "true" ]]; then
 				if test -e "/tmp/${tempfilepath}_${drive}_${serial1}.partition"; then
 					if [[ "$truenas_sendmail_support" == "No" ]]; then
-						(echo "create_attachment_file /tmp/${tempfilepath}_${drive}_${serial1}.partition ${serial1}_SGDISK_Partition.par" >> /tmp/attachment_files.txt)
+	#					(echo "create_attachment_file /tmp/${tempfilepath}_${drive}_${serial1}.partition ${serial1}_SGDISK_Partition.par" >> /tmp/attachment_files.txt)
+						zip_partition_files="true"
 					else
 						(
 						echo "--${boundary}"
@@ -4079,7 +4058,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "dump_drive_data $drive" | tee -a /tm
 				) >> "$logfile"
 			fi
 		fi
-		if [[ $Partition_Backup == "enable" ]] && [[ $Attach_Files1 == "true" ]]; then
+		if [[ $Partition_Backup == "enable" ]] && [[ $Attach_Files1 == "true" ]] && [[ $zip_partition_files != "true" ]]; then
 			if test -e "/tmp/${tempfilepath}_${drive}_${serial1}.partition"; then
 				if [[ "$truenas_sendmail_support" == "No" ]]; then
 					(echo "create_attachment_file /tmp/${tempfilepath}_${drive}_${serial1}.partition ${serial1}_SGDISK_Partition.par" >> /tmp/attachment_files.txt)
@@ -4358,12 +4337,12 @@ if [[ $Debug_Steps == "true" ]]; then echo "zpool_report" | tee -a /tmp/multi_re
 				fi
 				currentTS="$(date "+%s")"
 				scrubAge=$((((currentTS - scrubTS) + 43200) / 86400))
-				if [[ "$(echo "$statusOutput" | grep "scan" | awk '{print $6}')" == "with" ]]; then
-					# Yet another odd NVMe zpool oddity
-					scrubTime="$(echo "$statusOutput" | grep "scan" | awk '{print $5}')"
-				else
+#				if [[ "$(echo "$statusOutput" | grep "scan" | awk '{print $6}')" == "with" ]]; then
+#					# Yet another odd NVMe zpool oddity
+#					scrubTime="$(echo "$statusOutput" | grep "scan" | awk '{print $5}')"
+#				else
 					scrubTime="$(echo "$statusOutput" | grep "scan" | awk '{print $5" "$6" "$7}')"
-				fi
+#				fi
 			else
 				#No scrub previously performed
 				scrubAge="Never Scrubbed"
@@ -4652,8 +4631,9 @@ if [[ $Debug_Steps == "true" ]]; then echo "get_tdr: $drive_name" | tee -a /tmp/
 # Check for some SSDs (Total_Reads_GiB)
 	elif [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.name == "Total_Reads_GiB") | .raw.value | values')" ]]; then
 		ssdtdr="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.name == "Total_Reads_GiB") | .raw.value | values')"
-		ssdtdr="$((( $ssdtdr * 1074 ) / 1000000 ))"
-
+#echo "ssdtdr="$ssdtdr" before math"
+		ssdtdr="$((( $ssdtdr * 1073741824 ) / 1000000 ))"
+#echo "ssdtdr="$ssdtdr
 #echo "TRGiB="$ssdtdr
 # Check for some SSDs (Total_Reads_32MiB)
 	elif [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.name == "Host_Reads_32MiB") | .raw.value | values')" ]]; then
@@ -4749,7 +4729,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "get_tdw: $drive_name" | tee -a /tmp/
 # Get Total Write GiB (Total_Writes_GiB)
 	elif [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.name == "Total_Writes_GiB") | .raw.value | values')" ]]; then
 		ssdtdw="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.name == "Total_Writes_GiB") | .raw.value | values')"
-		ssdtdw="$((( $ssdtdw * 1074 ) / 1000000 ))"
+		ssdtdw="$((( $ssdtdw * 1073741824 ) / 1000000 ))"
 
 # Check for some SSDs (Total_Writes_32MiB)
 	elif [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.name == "Host_Writes_32MiB") | .raw.value | values')" ]]; then
@@ -5036,7 +5016,8 @@ if [[ $Debug_Steps == "true" ]]; then echo "get_smartOther_listings" | tee -a /t
 	# Call Sort Routine with the drive string.
 ### DUPLICATE DRIVES ARE REMOVED IN DRIVE_SELFTEST SCRIPT AUTOMATICALLY
 	if [[ "$nonsmartdrives" != "" ]]; then
-		if [[ "$Multipath" != "false" ]]; then
+## Changed below line 2025_11_09 to "off" as it should have been
+		if [[ "$Multipath" == "off" ]]; then
 			duplicate_list=$nonsmartdrives
 			remove_duplicate		# Remove duplicate serial numbers
 			nonsmartdrives=$duplicate_list
@@ -5497,11 +5478,14 @@ ID241=""
 		wearLevel="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.name == "Wear_Leveling_Count") | .value | values')"
 		wearLevelThreshold="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.name == "Wear_Leveling_Count") | .thresh | values')"
 #echo "wearlevel 5:"$wearLevel"  Thresh:"$wearLevelThreshold"   Drive:"$drive
-
+	elif [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.name == "Perc_Avail_Resrvd_Space") | .value | values')" ]]; then
+		wearLevel="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.name == "Perc_Avail_Resrvd_Space") | .value | values')"
+		wearLevelThreshold="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.name == "Perc_Avail_Resrvd_Space") | .thresh | values')"
+#echo "wearlevel 6:"$wearLevel"  Thresh:"$wearLevelThreshold"   Drive:"$drive	
 	elif [[ $wearLevel == "" ]] && [[ $1 != "HDD" ]]; then
 		if [[ "$(echo ${smartdata5} | grep -i "wear")" ]] || [[ "$(echo ${smartdata5} | grep -i "life")" ]]; then
 			json_error_log=$json_error_log$'\n'"$(echo $1" "$serial" .id == 231 SSD_Life_Left not properly decoded")";
-#echo "wearlevel 6:"$wearLevel"  Thresh:"$wearLevelThreshold"   Drive:"$drive
+#echo "wearlevel 7:"$wearLevel"  Thresh:"$wearLevelThreshold"   Drive:"$drive
 		fi
 	fi #> /dev/null 2<&1
 
@@ -5516,7 +5500,7 @@ ID241=""
 	if [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.name == "Wear_Leveling_Count") | .value | values')" ]]; then
 		wearLevelNormalized="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.name == "Wear_Leveling_Count") | .value | values')"
 	fi > /dev/null 2<&1
-#echo "wearlevel 7:"$wearLevel"  Thresh:"$wearLevelThreshold"   Drive:"$drive
+#echo "wearlevel 8:"$wearLevel"  Thresh:"$wearLevelThreshold"   Drive:"$drive
 
 # Check SSD/NVMe Wear Level - THIS WORKS for NVMe Where 100 = 100
 
@@ -5529,7 +5513,7 @@ ID241=""
 		wearLevel="$(echo "${smartdata5}" | jq -Mre '.nvme_smart_health_information_log.available_spare | values')"
 	fi > /dev/null 2<&1
 	fi
-#echo "wearlevel 8:"$wearLevel"  Thresh:"$wearLevelThreshold"   Drive:"$drive
+#echo "wearlevel 9:"$wearLevel"  Thresh:"$wearLevelThreshold"   Drive:"$drive
 # WORKS FOR SCSI Where 0 = 100
 	if [[ "$(echo "${smartdata5}" | jq -Mre '.scsi_percentage_used_endurance_indicator | values')" ]]; then
 		wearLevel=$((100 - "$(echo "${smartdata5}" | jq -Mre '.scsi_percentage_used_endurance_indicator | values')"))
@@ -5614,7 +5598,7 @@ ID241=""
 	elif [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.name == "Total_Writes_GiB") | .raw.value | values')" ]]; then
 		tdw="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.name == "Total_Writes_GiB") | .raw.value | values' | cut -d'.' -f1)"
 		echo "Convert Total Write GiB tdw="$tdw
-		ssdtdw="$((( $tdw * 1074 ) / 1000000 ))"  # Convert to bytes, now MB
+		ssdtdw="$((( $tdw * 1073741824 ) / 1000000 ))"  # Convert to bytes, now MB
 
 # Check for some SSDs (Total_Writes_32MiB)
 	elif [[ "$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.name == "Host_Writes_32MiB") | .raw.value | values')" ]]; then
@@ -5811,9 +5795,18 @@ ID241=""
 		fi
 	fi
 
-	if [[ $lastTestHours == "" ]]; then
+## Made changes here 2025_11_07
+	if [[ $lastTestType == "" ]]; then
+		if [[ "$(echo "${smartdata5}" | grep "# 1" | awk '{print $4" "$5}' )" == *"short"* || "$(echo "${smartdata5}" | grep "# 1" | awk '{print $4" "$5}' )" == *"long"* ]]; then
+			lastTestType="$(echo "${smartdata5}" | grep "# 1" | awk '{print $4" "$5}' )"
+		fi
+	fi
+
+
+	if [[ $lastTestHours -eq 0 || $lastTestType == "" ]]; then
+##
 		if [[ "$(echo "${smartdata5}" | grep "NOW")" ]]; then
-			lastTestHours="$(echo "${smartdata5}" | grep "# 2" | awk '{print $8}' )"
+			lastTestHours="$(echo "${smartdata5}" | grep "# 2" | awk '{print $8}' )"			
 			lastTestStatus="$(echo "${smartdata5}" | grep "# 1" | awk '{print $6" "$7" "$8" "$9}' )"
 			smarttesting="$(echo "${smartdata5}" | grep -i "Self-test execution status:" | cut -d ':' -f 3 | tr -d '[a-z]% ,\\"')"
 # Alternate?		smarttesting="$(echo "${smartdata5}" | grep -i "remaining" | cut -d% -f1 | rev | cut -b -2 | rev)"
@@ -6287,7 +6280,7 @@ if [[ "$Monitor" == "true" ]]; then return; fi
 write_table () {
 if [[ $Debug_Steps == "true" ]]; then echo "write_table: $1" | tee -a /tmp/multi_report_debug.txt; fi
 if [[ "$Monitor" == "true" ]]; then return; fi
-# Set temp and color for Drive Mapper
+# Set temp and color for Disk Layout
 if [[ "$Disklayout" == "enable" ]]; then
 	mapper_set_values
 fi
@@ -7046,7 +7039,7 @@ while IFS= read -r line; do
 	if [[ "$(echo $src_file | grep -i "lsscsi.txt")" ]]; then new_directory="DISK_LAYOUT"; fi
 	if [[ "$(echo $src_file | grep -i "blkid.txt")" ]]; then new_directory="DISK_LAYOUT"; fi
 	if [[ "$(echo $src_file | grep -i "lsblk.txt")" ]]; then new_directory="DISK_LAYOUT"; fi
-
+	if [[ "$(echo $src_file | grep -i "drive_selftest_tracking")" ]]; then new_directory="OTHER"; fi
 	
     # This is optional — to rename the file in the tar archive
     # tar_file_rename=$(echo "$line" | awk '{print $3}')
@@ -7191,6 +7184,22 @@ if [[ $Debug_Steps == "true" ]]; then echo "attach_files" | tee -a /tmp/multi_re
 		
 		if [[ $dump_all != "0" ]]; then
 			$(zpool list > /tmp/zpoollist.txt)
+					
+			if test -e "$SCRIPT_DIR/drive_selftest_tracking.csv"; then
+				cp "$SCRIPT_DIR/drive_selftest_tracking.csv" "/tmp/drive_selftest_tracking.csv"
+				if [[ "$truenas_sendmail_support" == "No" ]]; then
+					(echo "create_attachment_file /tmp/drive_selftest_tracking.csv drive_selftest_tracking.csv" >> /tmp/attachment_files.txt)
+				else
+					(
+					echo "--${boundary}"
+					echo "Content-Type: text/html"
+					echo "Content-Transfer-Encoding: base64"
+					echo "Content-Disposition: attachment; filename=drive_selftest_tracking.csv"
+					base64 "/tmp/drive_selftest_tracking.csv"
+					rm "/tmp/drive_selftest_tracking.csv"
+					) >> "$logfile"
+				fi
+			fi
 			if test -e "/tmp/zpoollist.txt"; then
 				if [[ "$truenas_sendmail_support" == "No" ]]; then
 					(echo "create_attachment_file /tmp/zpoollist.txt zpoollist.txt" >> /tmp/attachment_files.txt)
@@ -7298,6 +7307,30 @@ if [[ $Debug_Steps == "true" ]]; then echo "attach_files" | tee -a /tmp/multi_re
 					base64 "/tmp/ds_logs.tar"
 					sleep 1
 					rm /tmp/ds_logs.tar
+					) >> "$logfile"
+				fi
+			fi
+
+			shopt -s nullglob
+			files_part=(/tmp/*.partition)
+			shopt -u nullglob
+			if ((${#files_part[@]} > 0)); then
+				zip_partition_files="true"	
+				tar -cvf /tmp/drive_partition.tar /tmp/*.partition > /dev/null 2<&1
+			fi
+			
+			if test -e "/tmp/drive_partition.tar"; then
+				if [[ "$truenas_sendmail_support" == "No" ]]; then
+					(echo "create_attachment_file /tmp/drive_partition.tar drive_partition.tar" >> /tmp/attachment_files.txt)
+				else
+					(
+					echo "--${boundary}"
+					echo "Content-Type: application/zip"
+					echo "Content-Transfer-Encoding: base64"
+					echo "Content-Disposition: attachment; filename=drive_partition.tar"
+					base64 "/tmp/drive_partition.tar"
+					sleep 1
+					rm /tmp/drive_partition.tar
 					) >> "$logfile"
 				fi
 			fi
@@ -7429,15 +7462,19 @@ if [[ $Debug_Steps == "true" ]]; then echo "attach_files" | tee -a /tmp/multi_re
 		# Attach dump files first
 
 		for drive in $smartdrives; do
+			echo "dump smartdrives" | tee -a /tmp/multi_report_debug.txt
 			dump_drive_data
 		done
 		for drive in $smartdrivesSSD; do
+			echo "dump smartdrivesSSD" | tee -a /tmp/multi_report_debug.txt
 			dump_drive_data
 		done
 		for drive in $smartdrivesNVM; do
+			echo "dump smartdrivesNVM" | tee -a /tmp/multi_report_debug.txt
 			dump_drive_data
 		done
 		for drive in $nonsmartdrives; do
+			echo "dump nonsmartdrives" | tee -a /tmp/multi_report_debug.txt
 			dump_drive_data
 		done
 	else	# If we are just normally running, attach partition files if they exist.
@@ -7455,6 +7492,31 @@ if [[ $Debug_Steps == "true" ]]; then echo "attach_files" | tee -a /tmp/multi_re
 		for drive in $nonsmartdrives; do
 			dump_drive_partition
 		done
+		
+		# Now tar the partition files together
+		
+		shopt -s nullglob
+		files_part=(/tmp/*.partition)
+		shopt -u nullglob
+		if ((${#files_part[@]} > 0)); then
+			tar -cvf /tmp/drive_partition.tar /tmp/*.partition > /dev/null 2<&1
+		fi
+		
+		if test -e "/tmp/drive_partition.tar"; then
+			if [[ "$truenas_sendmail_support" == "No" ]]; then
+				(echo "create_attachment_file /tmp/drive_partition.tar drive_partition.tar" >> /tmp/attachment_files.txt)
+			else
+				(
+				echo "--${boundary}"
+				echo "Content-Type: application/zip"
+				echo "Content-Transfer-Encoding: base64"
+				echo "Content-Disposition: attachment; filename=drive_partition.tar"
+				base64 "/tmp/drive_partition.tar"
+				sleep 1
+				rm /tmp/drive_partition.tar
+				) >> "$logfile"
+			fi
+		fi
 	fi
 
 	}
@@ -7578,9 +7640,11 @@ if [[ $Debug_Steps == "true" ]]; then echo "crunch_numbers: $1" | tee -a /tmp/mu
 		let mos=$(((($onHours % 8760) / 730)))
 		let dys=$((((($onHours % 8760) % 730) / 24)))
 		let hrs=$(((($onHours % 8760) % 730) % 24))
+		let dys_only=$(((($onHours % 8760) / 24)))
 		if [[ $PowerTimeFormat == "ymdh" ]]; then onTime="${yrs}y ${mos}m ${dys}d ${hrs}h";
 			elif [[ $PowerTimeFormat == "ymd" ]]; then onTime="${yrs}y ${mos}m ${dys}d";
 			elif [[ $PowerTimeFormat == "ym" ]]; then onTime="${yrs}y ${mos}m";
+			elif [[ $PowerTimeFormat == "yd" ]]; then onTime="${yrs}y ${dys_only}d";
 			elif [[ $PowerTimeFormat == "y" ]]; then onTime="${yrs}y";
 			elif [[ $PowerTimeFormat == "h" ]]; then onTime=$onHours;
 			else onTime=$onHours;
@@ -7870,11 +7934,15 @@ read_csv $Total_Data_Written_Month
 
 	########## TEMPERATURE SECTION ##########
 	# LETS ZERO OUT BOGUS HIGH TEMPS and LOW TEMPS
+	
 	if [[ $temp != $Non_Exist_Value ]]; then
-		if [[ $temp -gt 150 ]]; then temp="$Non_Exist_Value"; fi
-		if [[ $temp -lt -60 ]]; then temp="$Non_Exist_Value"; fi
+		if [[ $temp -gt 150 ]]; then
+			temp="$Non_Exist_Value"
+		elif [[ $temp -lt -60 ]]; then
+			temp="$Non_Exist_Value"
+		fi
 	fi
-
+	
 	### TEMP for HDD
 	if [[ $detail_level == "HDD" ]]; then
 		if [[ $temp != "$Non_Exist_Value" ]]; then if [[ $temp -ge $HDDtempCritx ]]; then tempColor=$critColor; else if [[ $temp -ge $HDDtempWarnx ]]; then tempColor=$warnColor; fi; fi; fi
@@ -7966,10 +8034,21 @@ read_csv $Total_Data_Written_Month
 	if [[ $pending == "" ]]; then pending="$Non_Exist_Value"; fi
 
 	### OFFLINE UNCORRECTABLE SECTORS
-	if [[ $offlineUnc != "" ]]; then if [[ $(($offlineUnc + 0)) > $SectorsCritx ]]; then offlineUncColor=$critColor; else if [[ $offlineUnc != 0 ]]; then offlineUncColor=$warnColor; fi; fi; fi
-	if [[ $offlineUnc != "" ]]; then if [[ $(($offlineUnc + 0)) > $SectorsCritx ]]; then logfile_critical=$logfile_critical"$(printf "Drive "$serial" Uncorrectable Sector Errors "$offlineUnc"<br>")";
-	else if [[ $(($offlineUnc + 0)) -gt $SectorsWarnx ]]; then logfile_warning=$logfile_warning"$(printf "Drive "$serial" Uncorrectable Sector Errors "$offlineUnc" - Threshold = "$SectorsWarnx"<br>")";fi; fi; fi
-	if [[ $offlineUnc == "" ]]; then offlineUnc="$Non_Exist_Value"; fi
+	if [[ $offlineUnc != "" ]]; then
+		if [[ $(($offlineUnc + 0)) -gt $SectorsCritx ]]; then
+			offlineUncColor=$critColor
+			logfile_critical=$logfile_critical"$(printf "Drive "$serial" Uncorrectable Sector Errors "$offlineUnc"<br>")"
+		elif [[ $(($offlineUnc + 0)) -gt $SectorsWarnx ]]; then
+			offlineUncColor=$warnColor
+			logfile_warning=$logfile_warning"$(printf "Drive "$serial" Uncorrectable Sector Errors "$offlineUnc" - Threshold = "$SectorsWarnx"<br>")"
+		fi
+	else
+		offlineUnc="$Non_Exist_Value"
+	fi
+	
+#	if [[ $offlineUnc != "" ]]; then if [[ $(($offlineUnc + 0)) -gt $SectorsCritx ]]; then logfile_critical=$logfile_critical"$(printf "Drive "$serial" Uncorrectable Sector Errors "$offlineUnc"<br>")";
+#	else if [[ $(($offlineUnc + 0)) -gt $SectorsWarnx ]]; then logfile_warning=$logfile_warning"$(printf "Drive "$serial" Uncorrectable Sector Errors "$offlineUnc" - Threshold = "$SectorsWarnx"<br>")";fi; fi; fi
+#	if [[ $offlineUnc == "" ]]; then offlineUnc="$Non_Exist_Value"; fi
 
 	### CRC ERRORS
 	if [[ $crcErrors != "" ]]; then if [[ $crcErrors != "0" ]]; then crcErrorsColor=$critColor; fi; fi
@@ -8639,7 +8718,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "update_config_file" | tee -a /tmp/mu
 		echo "### Output Formats"
 		echo 'DriveFARMCheck="'$DriveFARMCheck'"		# When "enable" will check all drives with F.A.R.M. data with S.M.A.R.T. data.  Default="enable"'
 		echo "DriveFARMCheckHours=$DriveFARMCheckHours		# This value is the maximum number of days off that FAR can be greater than SMART Power On Hours. Default=6 hours."
-		echo 'PowerTimeFormat="'$PowerTimeFormat'"			# Format for power-on hours string, valid options are "ymdh", "ymd", "ym", "y", or "h" (year month day hour).'
+		echo 'PowerTimeFormat="'$PowerTimeFormat'"			# Format for power-on hours string, valid options are "ymdh", "ymd", "ym", "yd", "y", or "h" (year month day hour).'
 		echo 'TempDisplay="'$TempDisplay'"		# The format you desire the temperature to be displayed in. Common formats are: "*C", "^C", or "^c". Choose your own.'
 		echo 'Non_Exist_Value="'$Non_Exist_Value'"		# How do you desire non-existent data to be displayed.  The Default is "---", popular options are "N/A" or " ".'
 		echo 'Pool_Capacity_Type="'$Pool_Capacity_Type'"	# Select "zfs" or "zpool" for Zpool Status Report - Pool Size and Free Space capacities. "zfs" is default.'
@@ -10284,7 +10363,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file" | tee -a /tmp/
 							echo " "
 							echo " "
 							echo "-- Power On Hours Time Format ("$PowerTimeFormat") "
-							echo -n 'valid options are "ymdh", "ymd", "ym", "y", or "h" (year month day hour): '
+							echo -n 'valid options are "ymdh", "ymd", "ym", "yd", "y", or "h" (year month day hour): '
 							read Keyboard_yn
 							if [[ ! $Keyboard_yn == "" ]]; then PowerTimeFormat=$Keyboard_yn; fi
 							echo "Set Value: "$PowerTimeFormat
@@ -14443,7 +14522,7 @@ if [[ "$Disklayout" == "enable" ]]; then
 	exit_code=$?
 	if [[ "$exit_code" != 0 ]]; then
 		echo "<><><><><><><><><><><><><><><><><><><><><>"
-		echo "<>          Drive Mapper - Error        <>"
+		echo "<>          Disk Layout - Error         <>"
 		echo "<>   render_case had an error code = $exit_code  <>"
 		echo "<><><><><><><><><><><><><><><><><><><><><>"
 	fi
