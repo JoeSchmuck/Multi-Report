@@ -4781,55 +4781,55 @@ tdwbytes=$zpool_TD
 		#	tdwbytes=$((( $tdwbytes / 10000000000000000000000 )))
 		#	tdwbytes1="$((( $tdwbytes / 100 )))"
 		#	tdwbytes2="$(echo $tdwbytes | rev | cut -c 1,2 | rev)"
-		#	tdw=$tdwbytes1"."$tdwbytes2" GpB"
+		#	tdw=$tdwbytes1"."$tdwbytes2"GpB"
 
 		#if [[ $tdwbytes -ge 1000000000000000000000 ]]; then
 		#	tdwbytes=$((( $tdwbytes / 10000000000000000000 )))
 		#	tdwbytes1="$((( $tdwbytes / 100 )))"
 		#	tdwbytes2="$(echo $tdwbytes | rev | cut -c 1,2 | rev)"
-		#	tdw=$tdwbytes1"."$tdwbytes2" BB"
+		#	tdw=$tdwbytes1"."$tdwbytes2"BB"
 
 		if [[ $tdwbytes -ge 1000000000000000000 ]]; then
 			tdwbytes=$((( $tdwbytes / 10000000000000000 )))
 			tdwbytes1="$((( $tdwbytes / 100 )))"
 			tdwbytes2="$(echo $tdwbytes | rev | cut -c 1,2 | rev)"
-			tdw=$tdwbytes1"."$tdwbytes2" YB"
+			tdw=$tdwbytes1"."$tdwbytes2"YB"
 # BASH can't go above 9223372036854775807 = A BIG ASS NUMBER !
 		elif [[ $tdwbytes -ge 1000000000000000 ]]; then
 			tdwbytes=$((( $tdwbytes / 10000000000000 )))
 			tdwbytes1="$((( $tdwbytes / 100 )))"
 			tdwbytes2="$(echo $tdwbytes | rev | cut -c 1,2 | rev)"
-			tdw=$tdwbytes1"."$tdwbytes2" ZB"
+			tdw=$tdwbytes1"."$tdwbytes2"ZB"
 
 		elif [[ $tdwbytes -ge 1000000000000 ]]; then
 			tdwbytes=$((( $tdwbytes / 10000000000 )))
 			tdwbytes1="$((( $tdwbytes / 100 )))"
 			tdwbytes2="$(echo $tdwbytes | rev | cut -c 1,2 | rev)"
-			tdw=$tdwbytes1"."$tdwbytes2" EB"
+			tdw=$tdwbytes1"."$tdwbytes2"EB"
 
 		elif [[ $tdwbytes -ge 1000000000 ]]; then
 			tdwbytes=$((( $tdwbytes / 10000000 )))
 			tdwbytes1="$((( $tdwbytes / 100 )))"
 			tdwbytes2="$(echo $tdwbytes | rev | cut -c 1,2 | rev)"
-			tdw=$tdwbytes1"."$tdwbytes2" PB"
+			tdw=$tdwbytes1"."$tdwbytes2"PB"
 
 		elif [[ $tdwbytes -ge 1000000 ]]; then
 			tdwbytes=$((( $tdwbytes / 100000 )))
 			tdwbytes1="$((( $tdwbytes / 10 )))"
 			tdwbytes2="$(echo $tdwbytes | rev | cut -c 1)"
-			tdw=$tdwbytes1"."$tdwbytes2" TB"
+			tdw=$tdwbytes1"."$tdwbytes2"TB"
 
 		elif [[ $tdwbytes -ge 1000 ]]; then
 			tdwbytes=$((( $tdwbytes / 100 )))
 			tdwbytes1="$((( $tdwbytes / 10 )))"
 			tdwbytes2="$(echo $tdwbytes | rev | cut -c 1)"
-			tdw=$tdwbytes1"."$tdwbytes2" GB"
+			tdw=$tdwbytes1"."$tdwbytes2"GB"
 		elif [[ $tdwbytes -ge 1 ]]; then
 	#		tdwbytes=$((( $tdwbytes / 10 )))
 	#		tdwbytes1="$((( $tdwbytes / 1 )))"
 	#		tdwbytes2="$(echo $tdwbytes | rev | cut -c 1)"
-	#		tdw=$tdwbytes1"."$tdwbytes2" MB"
-			tdw=$tdwbytes" MB"
+	#		tdw=$tdwbytes1"."$tdwbytes2"MB"
+			tdw=$tdwbytes"MB"
 		elif [[ $tdwbytes != 0 ]]; then
 			tdw="<1 MB"
 		else
@@ -7666,41 +7666,41 @@ if [[ $Debug_Steps == "true" ]]; then echo "crunch_numbers: $1" | tee -a /tmp/mu
 			tdwbytes=$((( $tdwbytes / 10000000000000 )))
 			tdwbytes1="$((( $tdwbytes / 100 )))"
 			tdwbytes2="$(echo $tdwbytes | rev | cut -c 1,2 | rev)"
-			tdw=$tdwbytes1"."$tdwbytes2" ZB"
+			tdw=$tdwbytes1"."$tdwbytes2"ZB"
 
 		elif [[ $tdwbytes -ge 1000000000000 ]]; then
 			tdwbytes=$((( $tdwbytes / 10000000000 )))
 			tdwbytes1="$((( $tdwbytes / 100 )))"
 			tdwbytes2="$(echo $tdwbytes | rev | cut -c 1,2 | rev)"
-			tdw=$tdwbytes1"."$tdwbytes2" EB"
+			tdw=$tdwbytes1"."$tdwbytes2"EB"
 
 		elif [[ $tdwbytes -ge 1000000000 ]]; then
 			tdwbytes=$((( $tdwbytes / 10000000 )))
 			tdwbytes1="$((( $tdwbytes / 100 )))"
 			tdwbytes2="$(echo $tdwbytes | rev | cut -c 1,2 | rev)"
-			tdw=$tdwbytes1"."$tdwbytes2" PB"
+			tdw=$tdwbytes1"."$tdwbytes2"PB"
 
 		elif [[ $tdwbytes -ge 1000000 ]]; then
 			tdwbytes=$((( $tdwbytes / 100000 )))
 			tdwbytes1="$((( $tdwbytes / 10 )))"
 			tdwbytes2="$(echo $tdwbytes | rev | cut -c 1)"
-			tdw=$tdwbytes1"."$tdwbytes2" TB"
+			tdw=$tdwbytes1"."$tdwbytes2"TB"
 
 		elif [[ $tdwbytes -ge 1000 ]]; then
 			tdwbytes=$((( $tdwbytes / 100 )))
 			tdwbytes1="$((( $tdwbytes / 10 )))"
 			tdwbytes2="$(echo $tdwbytes | rev | cut -c 1)"
-			tdw=$tdwbytes1"."$tdwbytes2" GB"
+			tdw=$tdwbytes1"."$tdwbytes2"GB"
 
 		elif [[ $tdwbytes -ge 1 ]]; then
 	#		tdwbytes=$((( $tdwbytes / 10 )))
 	#		tdwbytes1="$((( $tdwbytes / 1 )))"
 	#		tdwbytes2="$(echo $tdwbytes | rev | cut -c 1)"
-	#		tdw=$tdwbytes1"."$tdwbytes2" MB"
-			tdw=$tdwbytes" MB"
+	#		tdw=$tdwbytes1"."$tdwbytes2"MB"
+			tdw=$tdwbytes"MB"
 
 		elif [[ $tdwbytes != 0 ]]; then
-			tdw="<1 MB"
+			tdw="<1MB"
 		else
 			tdw=$Non_Exist_Value
 		fi
@@ -7724,40 +7724,40 @@ read_csv $Total_Data_Written_Month
 			tdwbytes=$((( $tdwbytes / 10000000000000 )))
 			tdwbytes1="$((( $tdwbytes / 100 )))"
 			tdwbytes2="$(echo $tdwbytes | rev | cut -c 1,2 | rev)"
-			tdw_num=$tdwbytes1"."$tdwbytes2" ZB"
+			tdw_num=$tdwbytes1"."$tdwbytes2"ZB"
 
 		elif [[ $tdwbytes -ge 1000000000000 ]]; then
 			tdwbytes=$((( $tdwbytes / 10000000000 )))
 			tdwbytes1="$((( $tdwbytes / 100 )))"
 			tdwbytes2="$(echo $tdwbytes | rev | cut -c 1,2 | rev)"
-			tdw_num=$tdwbytes1"."$tdwbytes2" EB"
+			tdw_num=$tdwbytes1"."$tdwbytes2"EB"
 
 		elif [[ $tdwbytes -ge 1000000000 ]]; then
 			tdwbytes=$((( $tdwbytes / 10000000 )))
 			tdwbytes1="$((( $tdwbytes / 100 )))"
 			tdwbytes2="$(echo $tdwbytes | rev | cut -c 1,2 | rev)"
-			tdw_num=$tdwbytes1"."$tdwbytes2" PB"
+			tdw_num=$tdwbytes1"."$tdwbytes2"PB"
 
 		elif [[ $tdwbytes -ge 1000000 ]]; then
 			tdwbytes=$((( $tdwbytes / 100000 )))
 			tdwbytes1="$((( $tdwbytes / 10 )))"
 			tdwbytes2="$(echo $tdwbytes | rev | cut -c 1)"
-			tdw_num=$tdwbytes1"."$tdwbytes2" TB"
+			tdw_num=$tdwbytes1"."$tdwbytes2"TB"
 
 		elif [[ $tdwbytes -ge 1000 ]]; then
 			tdwbytes=$((( $tdwbytes / 100 )))
 			tdwbytes1="$((( $tdwbytes / 10 )))"
 			tdwbytes2="$(echo $tdwbytes | rev | cut -c 1)"
-			tdw_num=$tdwbytes1"."$tdwbytes2" GB"
+			tdw_num=$tdwbytes1"."$tdwbytes2"GB"
 
 		elif [[ $tdwbytes -ge 1 ]]; then
 #			tdwbytes=$((( $tdwbytes / 100 )))
 #			tdwbytes1="$((( $tdwbytes / 10 )))"
 #			tdwbytes2="$(echo $tdwbytes | rev | cut -c 1)"
-			tdw_num=$tdwbytes" MB"
+			tdw_num=$tdwbytes"MB"
 
 		elif [[ $tdwbytes -ge 0 ]]; then
-			tdw_num="<1 MB"
+			tdw_num="<1MB"
 		else
 			tdw_num=$Non_Exist_Value
 		fi
@@ -7774,40 +7774,40 @@ read_csv $Total_Data_Written_Month
 			tdrbytes=$((( $tdrbytes / 10000000000000 )))
 			tdrbytes1="$((( $tdrbytes / 100 )))"
 			tdrbytes2="$(echo $tdrbytes | rev | cut -c 1,2 | rev)"
-			tdr_num=$tdrbytes1"."$tdrbytes2" ZB"
+			tdr_num=$tdrbytes1"."$tdrbytes2"ZB"
 
 		elif [[ $tdrbytes -ge 1000000000000 ]]; then
 			tdrbytes=$((( $tdrbytes / 10000000000 )))
 			tdrbytes1="$((( $tdrbytes / 100 )))"
 			tdrbytes2="$(echo $tdrbytes | rev | cut -c 1,2 | rev)"
-			tdr_num=$tdrbytes1"."$tdrbytes2" EB"
+			tdr_num=$tdrbytes1"."$tdrbytes2"EB"
 
 		elif [[ $tdrbytes -ge 1000000000 ]]; then
 			tdrbytes=$((( $tdrbytes / 10000000 )))
 			tdrbytes1="$((( $tdrbytes / 100 )))"
 			tdrbytes2="$(echo $tdrbytes | rev | cut -c 1,2 | rev)"
-			tdr_num=$tdrbytes1"."$tdrbytes2" PB"
+			tdr_num=$tdrbytes1"."$tdrbytes2"PB"
 
 		elif [[ $tdrbytes -ge 1000000 ]]; then
 			tdrbytes=$((( $tdrbytes / 100000 )))
 			tdrbytes1="$((( $tdrbytes / 10 )))"
 			tdrbytes2="$(echo $tdrbytes | rev | cut -c 1)"
-			tdr_num=$tdrbytes1"."$tdrbytes2" TB"
+			tdr_num=$tdrbytes1"."$tdrbytes2"TB"
 
 		elif [[ $tdrbytes -ge 1000 ]]; then
 			tdrbytes=$((( $tdrbytes / 100 )))
 			tdrbytes1="$((( $tdrbytes / 10 )))"
 			tdrbytes2="$(echo $tdrbytes | rev | cut -c 1)"
-			tdr_num=$tdrbytes1"."$tdrbytes2" GB"
+			tdr_num=$tdrbytes1"."$tdrbytes2"GB"
 
 		elif [[ $tdrbytes -ge 1 ]]; then
 #			tdrbytes=$((( $tdrbytes / 100 )))
 #			tdrbytes1="$((( $tdrbytes / 10 )))"
 #			tdrbytes2="$(echo $tdrbytes | rev | cut -c 1)"
-			tdr_num=$tdrbytes" MB"
+			tdr_num=$tdrbytes"MB"
 
 		elif [[ $tdrbytes -ge 0 ]]; then
-			tdr_num="<1 MB"
+			tdr_num="<1MB"
 		else
 			tdr_num=$Non_Exist_Value
 		fi
