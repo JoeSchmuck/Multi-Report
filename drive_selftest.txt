@@ -913,6 +913,13 @@ run_smart_test () {
                             in_test=1
                             break 1        # Jump out of the FOR loop
                         fi                        
+                    elif [[ $smartresult -eq 255 ]]; then      # Exit code of 255 appears to be undocumented test-already-running
+                        # If the drive is in-test, consider the command received. 
+                        # Check to see if test is running before assuming exit code 255 is a bust.
+                        if echo $smart_test_ok | grep -i -e "without aborting current test" > /dev/null 2<&1; then
+                            in_test=1
+                            break 1        # Jump out of the FOR loop
+                        fi                        
                     else
                         if [[ $Silent != "enable" ]]; then
                             echo "SMART command -d "$driveConnectionType" for drive:"$drive" was not good, returned exit code:"$smartresult | tee -a /tmp/drive_selftest/drive_test_temp.txt
