@@ -1394,8 +1394,9 @@ if [[ $Debug_Steps == "true" ]]; then echo "disk_layout_join_html"; fi
 # We need to join the html files
 
 # But first, why don't we just add it as an attachment.
-#create_attachment_file Disk_layout.html
-#if test -e Disk_layout.html; then rm Disk_layout.html; fi		# I do not need to delete this file first, I do overwrite it.
+# create_attachment_file Disk_layout.html
+# if test -e Disk_layout.html; then rm Disk_layout.html; fi		
+# I do not need to delete this file first, I do overwrite it.
 cat $disk_layout_html_file > Disk_layout.html
 (echo "create_attachment_file Disk_layout.html Disk_layout.html" >> /tmp/attachment_files.txt)
 
