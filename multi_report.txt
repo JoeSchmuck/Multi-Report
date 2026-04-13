@@ -2,7 +2,7 @@
 # shellcheck disable=SC1075,SC2027,SC2034,SC2128,SC2002,SC2004,SC2086,SC2162
 LANG="en_US.UTF-8"
 
-##### Version 3.30
+##### Version 3.31
 
 ###### Get Config File Name and Location
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
@@ -85,6 +85,10 @@ fi
 # Version
 ### Changelog:
 
+# V3.31 (11 April 2026)
+#
+# - Fixed Total Data Read/Written.
+
 # V3.30 (1 April 2026)  April Fools?
 #
 # - Updated `smartctl` interface to test each one, every time.
@@ -107,7 +111,7 @@ fi
 
 # V3.28 (09 Dec 2025)
 #
-# Offical release of the Disk Layout feature.
+# Official release of the Disk Layout feature.
 
 # Beta 7 (08 Dec 2025)
 # - Added High_Contrast variable to aid with difficulties with color.
@@ -536,7 +540,7 @@ SMR_New_Drive_Det_Count=14	# The SMR script will check the statistical_data_file
 Disklayout="enable"		# SCALE ONLY.  Options: "enable" or "disable".
 High_Contrast="false"	# This will produce a high contrast output.  Default="false".
 
-attach_file_name=""		# To attach a user drfined text file, enter the name of the file here. (experimental)
+attach_file_name=""		# To attach a user defined text file, enter the name of the file here. (experimental)
 
 ### PARTITION CHECK AND BACKUP - NOT ON CORE
 Partition_Check="disable"	# Run sgdisk on each drive. Default = "disable".
@@ -593,7 +597,7 @@ RawReadCrit=100			# Number of read errors to allow when a CRITICAL message will 
 SeekErrorsWarn=5		# Number of seek errors to allow when a WARNING message will be used, this value should be less than SeekErrorsCrit.
 SeekErrorsCrit=100		# Number of seek errors to allow when a CRITICAL message will be used.
 NVM_Media_Errors=1		# Number of Media Errors to alarm with a CRITICAL message.
-WearLevelCrit=9			# Wear Level Alarm Setpoint when a WARNING message. 9% is the default.
+WearLevelCrit=9			# Wear Level Alarm Set point when a WARNING message. 9% is the default.
 TestWarnAge=2			# Maximum age (in days) of last SMART test before CRITICAL color/message will be used.
 
 ### NVMe Low Power / Invalid Errors
@@ -1064,7 +1068,7 @@ logfile_header="/tmp/${tempfilepath}smart_report_header.tmp"
 logfile_temp="/tmp/${tempfilepath}smart_report_temp.tmp"
 boundary="gc0p4Jq0M2Yt08jU534c0p"
 
-CurrentFilename="multi_report_v3.30_2026_04_01.txt"
+CurrentFilename="multi_report_v3.31_2026_04_11.txt"
 valid_config_version_date="2026-03-30"	# Configuration file valid date
 progverdate="$(echo $CurrentFilename | cut -d '_' -f4,5,6 | cut -d '.' -f1 | sed -r 's/[_]+/-/g')"
 progname="Multi-Report "$(echo $CurrentFilename | cut -d '_' -f3)" dtd:"
@@ -1885,13 +1889,13 @@ SMART_check_status ()
 	if [[ $smart_act_temp != "" ]]; then smart_act=$smart_act_temp; fi
 	
 	for i in $smart_act; do
-		dev_args=($(smartctl --scan-open | grep "/dev/${i}" | cut -d'#' -f1))
+		dev_args=($(smartctl --scan-open | grep "/dev/${i}" | cut -d'#' -f1 | cut -d' ' -f2,3))
 		# Is a drive Virtual?
-		if smartctl "${dev_args[@]}" -a | grep -q "virtual"; then continue; fi
+		if smartctl -a "${dev_args[@]} /dev/${i}" | grep -q "virtual"; then continue; fi
 		# Roll through all the drives, find out disabled & Available then record it.
-		test_smart="$(smartctl "${dev_args[@]}" -a | grep -i "SMART support")"
+		test_smart="$(smartctl -a "${dev_args[@]}" /dev/${i} | grep -i "SMART support")"
 		# Check for NVMe Support on USB or other interface masking NVMe drive type
-		test_smart_masked_nvme="$(smartctl "${dev_args[@]}" -a | grep -i "power_on_hours")"
+		test_smart_masked_nvme="$(smartctl -a "${dev_args[@]}" /dev/${i} | grep -i "power_on_hours")"
 		if [[ $test_smart_masked_nvme != "" ]];then test_smart="Enable"; fi
 		# Search for "Disabled"
 		if [[ $test_smart == *"Enable"* ]] || [[ $i == *"nvme"* ]]; then
@@ -1910,6 +1914,8 @@ SMART_check_status ()
 				fi
 		fi
 	done
+	
+	
 	}
 
 
@@ -1932,13 +1938,13 @@ if [[ $Debug_Steps == "true" ]]; then echo "SMART_activate"; fi
 	if [[ $1 == "Enable" ]]; then
 	# Record Drives Disabled so we can turn them on and later turn them off, original setup.
 		for i in $smart_act; do
-			dev_args=($(smartctl --scan-open | grep "/dev/${i}" | cut -d'#' -f1))
+			dev_args=($(smartctl --scan-open | grep "/dev/${i}" | cut -d'#' -f1 | cut -d' ' -f2,3))
 			# Roll through all the drives, find out disabled & Available then record it.
-			test_smart=$(smartctl "${dev_args[@]}" -a | grep -i "SMART support")
+			test_smart=$(smartctl "${dev_args[@]}" -a /dev/${i} | grep -i "SMART support")
 			# Search for "Disabled"
 			if [[ $test_smart == *"Disable"* ]] && [[ $test_smart == *"Available"* ]]; then
 				# Activate SMART
-				smart_msg=$(smartctl "${dev_args[@]}" --smart=on | tail -n 2 | cut -d'.' -f1)
+				smart_msg=$(smartctl "${dev_args[@]}" --smart=on /dev/${i} | tail -n 2 | cut -d'.' -f1)
 				# Verify no errors
 				if [[ $? -eq 0 ]]; then
 					# Add message to the array
@@ -1964,9 +1970,9 @@ if [[ $Debug_Steps == "true" ]]; then echo "SMART_activate"; fi
 	if [[ $1 == "Disable" ]]; then
 		echo "List if Drives where S.M.A.R.T. was disabled before Multi-Report was run:"
 		for i in $SMART_Temp_Enable_PASS_List; do
-			dev_args=($(smartctl --scan-open | grep "/dev/${i}" | cut -d'#' -f1))
+			dev_args=($(smartctl --scan-open | grep "/dev/${i}" | cut -d'#' -f1 | cut -d' ' -f2,3))
 			# Roll through all the changed drives
-			smart_msg=$(smartctl "${dev_args[@]}" --smart=off | tail -n 1 | cut -d'.' -f1)
+			smart_msg=$(smartctl "${dev_args[@]}" --smart=off /dev/${i} | tail -n 1 | cut -d'.' -f1)
 			# Verify no errors
 			if [[ $? -eq 0 ]]; then
 				# SMART_Disabled_Ok_Msgs = Not Used Anywhere Yet
@@ -1992,12 +1998,12 @@ if [[ $Debug_Steps == "true" ]]; then echo "run_smart_data_command"; fi
     IFS_RESTORE=$IFS
     IFS=","
     for dr in $drive_connection_types; do
-		dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1))
+		dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
         if [[ $dr == "none" ]]; then
             driveConnectionType=$dr
             # No interface parameter passed
-            smartdata="$(smartctl "${dev_args[@]}" -a --json=u)"
-            smartdata5="$(smartctl "${dev_args[@]}" -x --json=u)"
+            smartdata="$(smartctl "${dev_args[@]}" -a --json=u /dev/${drive})"
+            smartdata5="$(smartctl "${dev_args[@]}" -x --json=u /dev/${drive})"
             smartresult=$?
             if [[ $smartresult -eq 0 ]] || [[ $smartresult -eq 4 ]]; then   # Exit code of 0 is good, 4 is drive in test.  Anything else is not so good.
                 if [[ $Silent != "true" ]]; then
@@ -2107,9 +2113,9 @@ if [[ $Debug_Steps == "true" ]]; then echo "get_API_Drives_and_tar"; fi
     smartdrives=${drives_name[@]}
     index=0
     for i in ${drives_name[@]}; do
-		dev_args=($(smartctl --scan-open | grep "${drives_name[$index]}" | cut -d'#' -f1))
-		smartctl $dev_args "${dev_args[@]}" -x --json=u > /tmp/multi_report_drive_data/JSON/${drives_type[index]}_${drives_name[$index]}_${drives_serial[$index]}.json
-		smartctl $dev_args "${dev_args[@]}" -l farm > /tmp/multi_report_drive_data/FARM/${drives_type[index]}_${drives_name[$index]}_${drives_serial[$index]}.farm
+		dev_args=($(smartctl --scan-open | grep "${drives_name[$index]}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+		smartctl $dev_args "${dev_args[@]}" -x --json=u /dev/${drive} > /tmp/multi_report_drive_data/JSON/${drives_type[index]}_${drives_name[$index]}_${drives_serial[$index]}.json
+		smartctl $dev_args "${dev_args[@]}" -l farm /dev/${drive} > /tmp/multi_report_drive_data/FARM/${drives_type[index]}_${drives_name[$index]}_${drives_serial[$index]}.farm
 		echo "API SUBSYSTEM - "${drives_subsystem[$index]} > /tmp/multi_report_drive_data/SUBSYSTEM/${drives_type[index]}_${drives_name[$index]}_${drives_serial[$index]}.txt
         (( index ++ ))
     done
@@ -2140,13 +2146,13 @@ check_farm_data_original () {
 if [[ $Debug_Steps == "true" ]]; then echo "check_farm_data"; fi
 
 # Check if FARM data is available.
-	dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1))
-	farm_data=$(smartctl "${dev_args[@]}" -l farm)
+	dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+	farm_data=$(smartctl "${dev_args[@]}" -l farm /dev/${drive})
 
 	if $farm_data | grep -i "serial"; then
 		# Collect FARM Data
-		farm_serial=$(smartctl "${dev_args[@]}" -l farm | grep -i "serial")
-		farm_power_on_hours=$(smartctl "${dev_args[@]}" -l farm | grep -i "power on hours" | grep -vi "spindle" | cut -d ':' -f2 | tr -d ' ')
+		farm_serial=$(smartctl "${dev_args[@]}" -l farm /dev/${drive} | grep -i "serial")
+		farm_power_on_hours=$(smartctl "${dev_args[@]}" -l farm /dev/${drive} | grep -i "power on hours" | grep -vi "spindle" | cut -d ':' -f2 | tr -d ' ')
 
 		temp_POH=$(( $onHours + $DriveSCAMCheckHours ))
 		
@@ -2173,10 +2179,10 @@ if [[ $Debug_Steps == "true" ]]; then echo "check_farm_data: $drive" | tee -a /t
 #echo "Start of FARM routine"
 #return
 # Check if FARM data is available.  If it is, a serial number will be available.
-	dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1))	
+	dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))	
 	if [[ $testfilepath == "" ]]; then
 		# The real drive data
-		farm_data=$(smartctl "${dev_args[@]}" -l farm)
+		farm_data=$(smartctl "${dev_args[@]}" -l farm /dev/${drive})
 	else
 		# The simulation drive data
 		echo "FARM Simulation Check"
@@ -3462,14 +3468,14 @@ if [[ $Debug_Steps == "true" ]]; then echo "remove_duplicate" | tee -a /tmp/mult
 
 	# Get drive serial number
 	for i in ${duplicate_list}; do  # Drive ID's
-		dev_args=($(smartctl --scan-open | grep "/dev/${i}" | cut -d'#' -f1))
-		smartdata5="$(smartctl "${dev_args[@]}" -x --json=u)"
+		dev_args=($(smartctl --scan-open | grep "/dev/${i}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+		smartdata5="$(smartctl "${dev_args[@]}" -x --json=u /dev/${drive})"
 
 # Commented out for 22 March
 #		if [[ "$(echo ${smartdata5} | grep -i "SCSI")" ]]; then	# First, is this SCSI interface.
-#			if [[ "$(smartctl -d sat -x --json=u /dev/"$i" | grep -i "serial_number")" ]]; then  # Is this SCSI to ATA Translation
-#				smartdata5="$(smartctl -d sat -x --json=u /dev/"$i")"	# Yes, then reload the newer SMART data
-#				smartdata="$(smartctl -d sat -a --json=u /dev/"$i")"
+#			if [[ "$(smartctl -d sat -x --json=u /dev/"${i}" | grep -i "serial_number")" ]]; then  # Is this SCSI to ATA Translation
+#				smartdata5="$(smartctl -d sat -x --json=u /dev/"${i}")"	# Yes, then reload the newer SMART data
+#				smartdata="$(smartctl -d sat -a --json=u /dev/"${i}")"
 #			fi
 #		fi
 
@@ -4255,8 +4261,8 @@ if [[ $Debug_Steps == "true" ]]; then echo "config_backup" | tee -a /tmp/multi_r
 dump_drive_partition () {
 if [[ $Debug_Steps == "true" ]]; then echo "dump_drive_partition: $drive" | tee -a /tmp/multi_report_debug.txt; fi
 	if [[ "$drive" != "cd0" ]]; then
-		dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1))
-		tempjson="$(smartctl "${dev_args[@]}" -x --json)"
+		dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+		tempjson="$(smartctl "${dev_args[@]}" -x --json=u /dev/${drive})"
 		if [[ $(echo $tempjson) != *"Virtual"* ]]; then		# If the drive is Virtual, then skip it.
 			serial1="$(echo "${tempjson}" | jq -Mre '.serial_number | values' | tr -d ' ')"
 			rpm="$(echo "${tempjson}" | jq -Mre '.rotation_rate | values')"
@@ -4290,9 +4296,9 @@ if [[ $Debug_Steps == "true" ]]; then echo "dump_drive_partition: $drive" | tee 
 
 dump_drive_data () {
 if [[ $Debug_Steps == "true" ]]; then echo "dump_drive_data $drive" | tee -a /tmp/multi_report_debug.txt; fi
-	dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1))
+	dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
 	if [[ "$drive" != "cd0" ]]; then
-		tempjson="$(smartctl "${dev_args[@]}" -x --json)"
+		tempjson="$(smartctl "${dev_args[@]}" -x --json /dev/${drive})"
 		serial1="$(echo "${tempjson}" | jq -Mre '.serial_number | values' | tr -d ' ')"
 		rpm="$(echo "${tempjson}" | jq -Mre '.rotation_rate | values')"
 		if [[ "$rpm" == "0" ]]; then drivetype="SSD"; else drivetype="HDD"; fi
@@ -4843,8 +4849,8 @@ Alt_GPTID="disable"		# Disable this change for now, until testing has been condu
 					zpool_TDW=0
 					drive_name=$(glabel status | tail -n +2 | grep "$longgptid" | awk '{print $3}' | cut -d '/' -f2 | cut -d 'p' -f1)
 					if [[ "$drive_name" == *"nvd"* ]]; then	drive_name="nvme"$(echo ${drive_name} | cut -d'd' -f2); fi
-					dev_args=($(smartctl --scan-open | grep "/dev/${drive_name}" | cut -d'#' -f1))
-					smartdata5="$(smartctl "${dev_args[@]}" -x --json=u)"
+					dev_args=($(smartctl --scan-open | grep "/dev/${drive_name}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+					smartdata5="$(smartctl "${dev_args[@]}" -x --json=u /dev/${drive_name})"
 					get_tdr
 					zpool_tdr_total=$(( $zpool_tdr_total + $zpool_TDR ))
 					get_tdw
@@ -4889,14 +4895,14 @@ Alt_GPTID="disable"		# Disable this change for now, until testing has been condu
 							echo "sgdisk: ARG! - My bananas are not ripe."
 						fi
 					fi > /dev/null 2<&1	# We want to not echo this to the email/screen
-					dev_args=($(smartctl --scan-open | grep "/dev/${drive_name}" | cut -d'#' -f1))
-					smartdata5="$(smartctl "${dev_args[@]}" -x --json=u)"
+					dev_args=($(smartctl --scan-open | grep "/dev/${drive_name}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+					smartdata5="$(smartctl "${dev_args[@]}" -x --json=u /dev/${drive_name})"
 					get_tdr
 					zpool_tdr_total=$(( $zpool_tdr_total + $zpool_TDR ))
 					
 					get_tdw
 					zpool_tdw_total=$(( $zpool_tdw_total + $zpool_TDW ))
-					virtual_drive_test=$(smartctl "${dev_args[@]}" -a | grep -i "virtual")
+					virtual_drive_test=$(smartctl "${dev_args[@]}" -a /dev/${drive_name} | grep -i "virtual")
 					#virtual_drive_test="$(echo ${smartdata5} | grep -i "virtual")"
 				done
 				zpool_TDR=$zpool_tdr_total
@@ -4973,8 +4979,8 @@ if [[ $Debug_Steps == "true" ]]; then echo "get_tdr: $drive_name" | tee -a /tmp/
 	ID242=""
 	
 	if [[ $smartdata5 == "" ]]; then
-		dev_args=($(smartctl --scan-open | grep "/dev/${drive_name}" | cut -d'#' -f1))
-		smartdata5="$(smartctl  "${dev_args[@]}" -x --json=u)"	# The first time it is loaded.
+		dev_args=($(smartctl --scan-open | grep "/dev/${drive_name}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+		smartdata5="$(smartctl "${dev_args[@]}" -x --json=u /dev/${drive_name})"	# The first time it is loaded.
 	fi
 # Check Model Family (For Sandforce or Marvel Controller for ID241/242)
 	if [[ "$(echo "${smartdata5}" | jq -Mre '.model_family | values')" ]]; then
@@ -5077,8 +5083,8 @@ if [[ $Debug_Steps == "true" ]]; then echo "get_tdw: $drive_name" | tee -a /tmp/
 #smartdata5=""
 
 	if [[ $smartdata5 == "" ]]; then
-		dev_args=($(smartctl --scan-open | grep "/dev/${drive_name}" | cut -d'#' -f1))
-		smartdata5="$(smartctl "${dev_args[@]}" -x --json=u)"	# Second time to possibly load if smartdata5 is Null
+		dev_args=($(smartctl --scan-open | grep "/dev/${drive_name}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+		smartdata5="$(smartctl "${dev_args[@]}" -x --json=u /dev/${drive_name})"	# Second time to possibly load if smartdata5 is Null
 	fi
 
 # Check Model Family (For Sandforce or Marvel Controller for ID241/242)
@@ -5147,8 +5153,8 @@ if [[ $Debug_Steps == "true" ]]; then echo "get_tdw: $drive_name" | tee -a /tmp/
 	### RETURN THE DATA
 	zpool_TDW=$(( $zpool_TDW + $ssdtdw ))
 	#virtual_drive_test="$(echo $smartdata5 | grep -i "virtual")"
-	dev_args=($(smartctl --scan-open | grep "/dev/${drive_name}" | cut -d'#' -f1))
-	virtual_drive_test=$(smartctl "${dev_args[@]}" -a | grep -i "virtual")
+	dev_args=($(smartctl --scan-open | grep "/dev/${drive_name}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+	virtual_drive_test=$(smartctl "${dev_args[@]}" -a /dev/${drive_name} | grep -i "virtual")
 
 	}
 #############################################
@@ -5243,8 +5249,8 @@ tdwbytes=$zpool_TD
 process_ignore_drives () {
 #if [[ $Debug_Steps == "true" ]]; then echo "process_ignore_drives" | tee -a /tmp/multi_report_debug.txt; fi
 # This causes the script to fail and introduce a fake drive, why?  if [[ $Debug_Steps == "true" ]]; then echo "process_ignore_drives" | tee -a /tmp/multi_report_debug.txt; fi
-	dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1))
-	targument="$(smartctl "${dev_args[@]}" -i | grep "Serial Number:" | awk '{print $3}')";
+	dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+	targument="$(smartctl "${dev_args[@]}" -i /dev/${drive} | grep "Serial Number:" | awk '{print $3}')";
 	s="0"
 	IFS=',' read -ra ADDR <<< "$Ignore_Drives_List"
 	for i in "${ADDR[@]}"; do
@@ -5263,13 +5269,13 @@ if [[ $Debug_Steps == "true" ]]; then echo "get_smartHDD_listings" | tee -a /tmp
 	
 	if [ $softver != "Linux" ]; then
 		smartdrives=$(for drive in $(sysctl -n kern.disks); do
-			dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1))
-			if [ "$(smartctl "${dev_args[@]}" -i | grep "SMART support is:.\s*Enabled")" ] && ! [ "$(smartctl "${dev_args[@]}" -i | grep "Solid State Device")" ]; then process_ignore_drives; fi
+			dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+			if [ "$(smartctl "${dev_args[@]}" -i /dev/${drive} | grep "SMART support is:.\s*Enabled")" ] && ! [ "$(smartctl "${dev_args[@]}" -i /dev/${drive} | grep "Solid State Device")" ]; then process_ignore_drives; fi
 		done | awk '{for (i=NF; i!=0 ; i--) print $i }' | tr ' ' '\n' | sort | tr '\n' ' ')
 	else
 		smartdrives=$(for drive in $(fdisk -l 2>/dev/null | grep "Disk /dev/sd" | cut -c 11-15 | cut -d ":" -f1 | tr '\n' ' '); do
-			dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1))
-			if [ "$(smartctl "${dev_args[@]}" -i | grep "SMART support is:.\s*Enabled")" ] && ! [ "$(smartctl "${dev_args[@]}" -i | grep "Solid State Device")" ]; then process_ignore_drives; fi
+			dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+			if [ "$(smartctl "${dev_args[@]}" -i /dev/${drive} | grep "SMART support is:.\s*Enabled")" ] && ! [ "$(smartctl "${dev_args[@]}" -i /dev/${drive} | grep "Solid State Device")" ]; then process_ignore_drives; fi
 		done | awk '{for (i=NF; i!=0 ; i--) print $i }' | tr ' ' '\n' | sort | tr '\n' ' ')
 	fi > /dev/null 2<&1
 
@@ -5301,13 +5307,13 @@ get_smartSSD_listings () {
 if [[ $Debug_Steps == "true" ]]; then echo "get_smartSSD_listings" | tee -a /tmp/multi_report_debug.txt; fi
 	if [ $softver != "Linux" ]; then
 		smartdrivesSSD=$(for drive in $(sysctl -n kern.disks); do
-			dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1))
-			if [ "$(smartctl "${dev_args[@]}" -i | grep "SMART support is:.\s*Enabled")" ] && [ "$(smartctl "${dev_args[@]}" -i | grep "Solid State Device")" ]; then process_ignore_drives; fi
+			dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+			if [ "$(smartctl "${dev_args[@]}" -i /dev/${drive} | grep "SMART support is:.\s*Enabled")" ] && [ "$(smartctl "${dev_args[@]}" -i /dev/${drive} | grep "Solid State Device")" ]; then process_ignore_drives; fi
 		done | awk '{for (i=NF; i!=0 ; i--) print $i }' | tr ' ' '\n' | sort | tr '\n' ' ')
 	else
 		smartdrivesSSD=$(for drive in $(fdisk -l 2>/dev/null | grep "Disk /dev/sd" | cut -c 11-15 | cut -d ":" -f1 | tr '\n' ' '); do
-			dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1))
-			if [ "$(smartctl "${dev_args[@]}" -i | grep "SMART support is:.\s*Enabled")" ] && [ "$(smartctl "${dev_args[@]}" -i | grep "Solid State Device")" ]; then process_ignore_drives; fi
+			dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+			if [ "$(smartctl "${dev_args[@]}" -i /dev/${drive} | grep "SMART support is:.\s*Enabled")" ] && [ "$(smartctl "${dev_args[@]}" -i /dev/${drive} | grep "Solid State Device")" ]; then process_ignore_drives; fi
 		done | awk '{for (i=NF; i!=0 ; i--) print $i }' | tr ' ' '\n' | sort | tr '\n' ' ')
 	fi > /dev/null 2<&1
 
@@ -5341,15 +5347,15 @@ nvme_drive=""
 if [[ $Debug_Steps == "true" ]]; then echo "get_smartNVM_listings" | tee -a /tmp/multi_report_debug.txt; fi
 	if [ $softver != "Linux" ]; then
 		smartdrivesNVM=$(for drive in $(sysctl -n kern.disks); do
-			dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1))
-			if [ "$(smartctl "${dev_args[@]}" -i | grep "NVM")" ]; then process_ignore_drives; fi
+			dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+			if [ "$(smartctl "${dev_args[@]}" -i /dev/${drive} | grep "NVM")" ]; then process_ignore_drives; fi
 		done | awk '{for (i=NF; i!=0 ; i--) print $i }' | tr ' ' '\n' | sort | tr '\n' ' ')
 		### Convert nvdx to nvmexx in smartdrivesNVM ###
 	else
 		smartdrivesNVM=$(fdisk -l 2>/dev/null | grep "Disk /dev/nvm" | cut -d ':' -f 1 | cut -d '/' -f 3 | tr '\n' ' ')
 		for drive in $smartdrivesNVM; do
-			dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1))
-			if [ "$(smartctl "${dev_args[@]}" -i | grep "NVM")" ]; then process_ignore_drives; fi
+			dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+			if [ "$(smartctl "${dev_args[@]}" -i /dev/${drive} | grep "NVM")" ]; then process_ignore_drives; fi
 		done | awk '{for (i=NF; i!=0 ; i--) print $i }' | tr ' ' '\n' | sort | tr '\n' ' '
 			### Convert nvdx to nvmexx in smartdrivesNVM ###
 	fi > /dev/null 2<&1
@@ -5382,6 +5388,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "get_smartNVM_listings" | tee -a /tmp
 			smartdrivesNVM=$duplicate_list
 		fi
 	fi
+
 	}
 
 ########## GET OTHER SMART DEVICES ##########
@@ -5394,13 +5401,13 @@ if [[ $Debug_Steps == "true" ]]; then echo "get_smartOther_listings" | tee -a /t
 
 	if [ $softver != "Linux" ]; then
 		nonsmartdrives=$(for drive in $(sysctl -n kern.disks); do
-			dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1))
-			if [ ! "$(smartctl "${dev_args[@]}" -i | grep "SMART support is:.\s*Enabled")" ] && [ ! "$(smartctl "${dev_args[@]}" -i | grep "NVM")" ]; then process_ignore_drives; fi
+			dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+			if [ ! "$(smartctl "${dev_args[@]}" -i /dev/${drive} | grep "SMART support is:.\s*Enabled")" ] && [ ! "$(smartctl "${dev_args[@]}" -i /dev/${drive} | grep "NVM")" ]; then process_ignore_drives; fi
 		done | awk '{for (i=NF; i!=0 ; i--) print $i }' | tr ' ' '\n' | sort | tr '\n' ' ')
 	else
 		nonsmartdrives=$(for drive in $(fdisk -l 2>/dev/null | grep "Disk /dev/sd" | cut -c 11-13 | tr '\n' ' '); do
-			dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1))
-			if [ ! "$(smartctl "${dev_args[@]}" -i | grep "SMART support is: Enabled")" ]; then process_ignore_drives; fi
+			dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+			if [ ! "$(smartctl "${dev_args[@]}" -i /dev/${drive} | grep "SMART support is: Enabled")" ]; then process_ignore_drives; fi
 		done | awk '{for (i=NF; i!=0 ; i--) print $i }' | tr ' ' '\n' | sort | tr '\n' ' ')
 	fi > /dev/null 2<&1
 
@@ -5436,8 +5443,8 @@ if [[ $Debug_Steps == "true" ]]; then echo "get_json_data: $drive" | tee -a /tmp
 	if [[ "$drive" != "cd0" ]]; then
 		if [[ "$dump_all" != "0" ]]; then	# Routine -dump
 			# Pull a fresh JSON listing
-			dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1))
-			tempjson="$(smartctl "${dev_args[@]}" -x --json=u)"
+			dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+			tempjson="$(smartctl "${dev_args[@]}" -x --json=u /dev/${drive})"
 			serial1="$(echo "${tempjson}" | jq -Mre '.serial_number | values' | tr -d ' ')"
 			rpm="$(echo "${tempjson}" | jq -Mre '.rotation_rate | values')"
 			if [[ "$rpm" == "0" ]]; then drivetype="SSD"; else drivetype="HDD"; fi
@@ -5458,7 +5465,8 @@ if [[ $Debug_Steps == "true" ]]; then echo "get_drive_data: $drive" | tee -a /tm
 # File /tmp/json_errors.txt is used to write what data did not come from a json file.
 
 # Should only need this the one time here.
-dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1))
+
+dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
 
 	if [[ $Develop == "true" ]]; then
 		echo " "
@@ -5539,10 +5547,10 @@ dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1))
 
 		if [[ $Develop == "true" ]]; then echo "Looking at Real Drive Data, Not Simulated"; fi
 		# Get drive data for json processing
-#		dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1))
-		smartdata5="$(smartctl "${dev_args[@]}" -x --json=u)"
+		dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+		smartdata5="$(smartctl "${dev_args[@]}" -x --json=u /dev/${drive})"
 		# Get drive data old school for what isn't in json yet
-		smartdata="$(smartctl "${dev_args[@]}" -a)"
+		smartdata="$(smartctl "${dev_args[@]}" -a /dev/${drive})"
 		# Get drive data for ATA drive using SCSI translation in json format
 # Commented out 22 March
 #		if [[ "$(echo ${smartdata5} | grep -i "SCSI")" ]]; then	# First, is this SCSI interface.
@@ -5655,8 +5663,8 @@ if [[ $1 == "NVM" ]] && [[ "$(echo "${smartdata5}" | jq -Mre '.nvme_total_capaci
 			temp="$(echo "${smartdata5}" | jq -Mre '.ata_smart_attributes.table[]? | select(.id == 194) | .raw.value | values')"
 # If Temp is still not there, look at the raw -x data and hope it shows up.
 		else	json_error_log=$json_error_log$'\n'"$(echo $1" "$serial" .temperature.current not in json")"
-			if [[ "$(smartctl "${dev_args[@]}" -x | grep "Current Temperature:" | awk '{print $3}' | cut -d '/' -f2)" != "?" ]]; then
-				temp=$(smartctl "${dev_args[@]}" -x | grep "Current Temperature:" | awk '{print $3}' | cut -d '/' -f2)
+			if [[ "$(smartctl "${dev_args[@]}" -x /dev/${drive} | grep "Current Temperature:" | awk '{print $3}' | cut -d '/' -f2)" != "?" ]]; then
+				temp=$(smartctl "${dev_args[@]}" -x /dev/${drive} | grep "Current Temperature:" | awk '{print $3}' | cut -d '/' -f2)
 			else
 				temp=$Non_Exist_Value
 			fi
@@ -6468,8 +6476,8 @@ if [[ "$reAlloc" != "" ]] && [[ "$reAlloc" != "0" ]]; then convert_to_decimal $r
 	get_json_data		# Save data for -dump routine
 	if [[ "$dump_all" != "0" ]]; then	# Dump '-dump | email'
 		"$(echo "$smartdata" > /tmp/${tempfilepath}${drivetype}_${drive}_${serial}_a.txt)" 2> /dev/null
-		smartctl "${dev_args[@]}" -x > /tmp/${tempfilepath}${drivetype}_${drive}_${serial}_x.txt
-		smartctl "${dev_args[@]}" -l farm > /tmp/${tempfilepath}${drivetype}_${drive}_${serial}.farm
+		smartctl "${dev_args[@]}" -x /dev/${drive} > /tmp/${tempfilepath}${drivetype}_${drive}_${serial}_x.txt
+		smartctl "${dev_args[@]}" -l farm /dev/${drive} > /tmp/${tempfilepath}${drivetype}_${drive}_${serial}.farm
 	fi
 
 
@@ -6485,39 +6493,39 @@ Check_power_on_time ()
 	{
 	# Check every drive.
 	for drive in ${smartdrives[@]}; do
-		dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1))
-		smartdata5="$(smartctl "${dev_args[@]}" -x --json=u)"
+		dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+		smartdata5="$(smartctl "${dev_args[@]}" -x --json=u /dev/${drive})"
 		if [[ "$(echo "${smartdata5}" | jq -Mre '.power_on_time.hours | values')" ]]; then
 			onHours="$(echo "${smartdata5}" | jq -Mre '.power_on_time.hours | values')"
 		else
 			if [[ "$Run_SMART_No_power_on_time" == "yes" ]]; then
-				smartctl "${dev_args[@]}" -t short
+				smartctl "${dev_args[@]}" -t short /dev/${drive}
 				smartctl_test_running="true"
 				echo "Drive "$drive" being tested."
 			fi
 		fi > /dev/null 2<&1
 	done
 	for drive in ${smartdrivesSSD[@]}; do
-		dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1))
-		smartdata5="$(smartctl "${dev_args[@]}" -x --json=u)"
+		dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+		smartdata5="$(smartctl "${dev_args[@]}" -x --json=u /dev/${drive})"
 		if [[ "$(echo "${smartdata5}" | jq -Mre '.power_on_time.hours | values')" ]]; then
 			onHours="$(echo "${smartdata5}" | jq -Mre '.power_on_time.hours | values')"
 		else
 			if [[ "$Run_SMART_No_power_on_time" == "yes" ]]; then
-				smartctl "${dev_args[@]}" -t short
+				smartctl "${dev_args[@]}" -t short /dev/${drive}
 				smartctl_test_running="true"
 				echo "Drive "$drive" being tested."
 			fi
 		fi > /dev/null 2<&1
 	done
 	for drive in ${smartdrivesNVM[@]}; do
-		dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1))
-		smartdata5="$(smartctl "${dev_args[@]}" -x --json=u)"
+		dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+		smartdata5="$(smartctl "${dev_args[@]}" -x --json=u /dev/${drive})"
 		if [[ "$(echo "${smartdata5}" | jq -Mre '.power_on_time.hours | values')" ]]; then
 			onHours="$(echo "${smartdata5}" | jq -Mre '.power_on_time.hours | values')"
 		else
 			if [[ "$Run_SMART_No_power_on_time" == "yes" ]]; then
-				smartctl "${dev_args[@]}" -t short
+				smartctl "${dev_args[@]}" -t short /dev/${drive}
 				smartctl_test_running="true"
 				echo "Drive "$drive" being tested."
 			fi
@@ -7048,7 +7056,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "detailed_report" | tee -a /tmp/multi
 		else
 			echo "5) S.M.A.R.T Testing External File - (Disabled)" >> "$logfile"
 		fi
-		
+	
 		if [[ $SMART_Enabled_Ok_Msgs != "" ]]; then  # We had at least one drive changed
 			(echo "6) S.M.A.R.T. List of Drives where S.M.A.R.T. was disabled prior to running Multi-Report:<br>   Drives listed will be returned to original state at end of script:"		
 			# Print Drives Changed from Disabled to Enabled
@@ -7064,6 +7072,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "detailed_report" | tee -a /tmp/multi
 
 		elif [[ $SMART_Disabled_PASS_List == "" ]] && [[ $SMART_Normal_Disable_List == "" ]]; then   # No Disabled Errors
 				echo "6) All Drives have S.M.A.R.T. Enabled<br><br>" >> "$logfile"
+
 		else
 				(
 				echo "6) Some Drives have S.M.A.R.T. disabled.  The following drives will not be listed in the chart above."
@@ -7073,6 +7082,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "detailed_report" | tee -a /tmp/multi
 				echo " "
 				) >> "$logfile"
 		fi
+
 	fi
 	### Lets write out the error messages if there are any, Critical first followed by Warning
 
@@ -7187,10 +7197,10 @@ if [[ $Debug_Steps == "true" ]]; then echo "detailed_report" | tee -a /tmp/multi
 							drive_ident=$longgptid" -> "$drive_name
 						fi
 						if [[ "$drive_name" == *"nvd"* ]]; then	drive_name="nvme"$(echo ${drive_name} | cut -d'd' -f2); fi
-						dev_args=($(smartctl --scan-open | grep "/dev/${drive_name}" | cut -d'#' -f1))
-						serial_temp=$(smartctl "${dev_args[@]}" -a --json=u | jq -Mre '.serial_number | values' | tr -d ' ')
+						dev_args=($(smartctl --scan-open | grep "/dev/${drive_name}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+						serial_temp=$(smartctl "${dev_args[@]}" -a --json=u /dev/${drive_name} | jq -Mre '.serial_number | values' | tr -d ' ')
 						if [[ $serial_temp == "" ]]; then serial_temp=$Non_Exist_Value; fi
-						virtual_drive_test=$(smartctl "${dev_args[@]}" -a | grep -i "virtual")
+						virtual_drive_test=$(smartctl "${dev_args[@]}" -a /dev/${drive_name} | grep -i "virtual")
 						if [[ $virtual_drive_test != "" ]]; then
 							drive_ident=$(echo $drive_ident | cut -d'/' -f2)
 							drive_ident="<b>Virtual Drive</b> "$drive_ident
@@ -7227,11 +7237,11 @@ if [[ $Debug_Steps == "true" ]]; then echo "detailed_report" | tee -a /tmp/multi
 					for longgptid in $drives_in_gptid; do
 						drive_ident=$(lsblk -o +PARTUUID,NAME,LABEL | grep -w "$longgptid" | awk -F" " '{print $7 " -> " $8}')
 						drive_name=$(lsblk -o +PARTUUID,NAME,LABEL | grep -w "$longgptid" | awk -F" " '{print $8}')
-						dev_args=($(smartctl --scan-open | grep "/dev/${drive_name}" | cut -d'#' -f1))
-						serial_temp=$(smartctl "${dev_args[@]}" -a --json=u | jq -Mre '.serial_number | values' | tr -d ' ')
+						dev_args=($(smartctl --scan-open | grep "/dev/${drive_name}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+						serial_temp=$(smartctl "${dev_args[@]}" -a --json=u /dev/${drive_name} | jq -Mre '.serial_number | values' | tr -d ' ')
 
 						if [[ $serial_temp == "" ]]; then serial_temp=$Non_Exist_Value; fi
-						virtual_drive_test=$(smartctl "${dev_args[@]}" -a | grep -i "virtual")
+						virtual_drive_test=$(smartctl "${dev_args[@]}" -a /dev/${drive_name} | grep -i "virtual")
 						if [[ $virtual_drive_test != "" ]]; then
 						   drive_ident="<b>Virtual Drive</b> "$drive_ident
 						fi
@@ -7282,9 +7292,9 @@ if [[ $Debug_Steps == "true" ]]; then echo "detailed_report" | tee -a /tmp/multi
 					) >> "$logfile"
 				else
 					# Gather brand and serial number of each drive
-					dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1))
-					smartdata="$(smartctl "${dev_args[@]}" -a)"
-					smartdata5="$(smartctl "${dev_args[@]}" -x --json=u)"
+					dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+					smartdata="$(smartctl "${dev_args[@]}" -a /dev/${drive})"
+					smartdata5="$(smartctl "${dev_args[@]}" -x --json=u /dev/${drive})"
 
 # Commented out 22 March
 #					if [[ "$(echo ${smartdata5} | grep -i "SCSI")" ]]; then	# First, is this SCSI interface.
@@ -7302,7 +7312,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "detailed_report" | tee -a /tmp/multi
 					
 					serial="$(echo "${smartdata5}" | jq -Mre '.serial_number | values' | tr -d ' ')"
 					get_location $serial
-					test_ata_error="$(smartctl "${dev_args[@]}" -H -A -l error | grep "ATA Error Count" | awk '{print $4}')" 
+					test_ata_error="$(smartctl "${dev_args[@]}" -H -A -l error /dev/${drive} | grep "ATA Error Count" | awk '{print $4}')" 
 
 					modelnumber="$(echo "${modelnumber}" | sed -e 's/\ *$//g')"
 
@@ -7340,9 +7350,9 @@ if [[ $Debug_Steps == "true" ]]; then echo "detailed_report" | tee -a /tmp/multi
 					(
 						seagate="False"
 						# Create a simple header and drop the output of some basic smartctl commands
-						dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1))
+						dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
 						echo "<b>########## SMART status report for ${drive} drive (${modelnumber} : ${serial}${SMR_Note} : ${drive_location}) ##########</b>"
-						test_seagate=$(smartctl "${dev_args[@]}" -l farm -A)
+						test_seagate=$(smartctl "${dev_args[@]}" -l farm -A /dev/${drive})
 						if echo "$test_seagate" | grep -qi "Farm Log Page"; then
 							seagate="True"
 #  New Command to run on Seagate Drives ONLY.
@@ -7356,22 +7366,22 @@ if [[ $Debug_Steps == "true" ]]; then echo "detailed_report" | tee -a /tmp/multi
 							if [[ $test_ata_error -gt $ataerrors ]]; then 
 								if [[ $NVMe_Ignore_Invalid_Errors != "enable" ]]; then
 									if [[ $seagate == "True" ]]; then
-										smartctl "${dev_args[@]}" -v 1,hex48 -v 7,hex48 -H -A -l error | sed -E 's/^( *1 .*0x[0-9a-f]{4})[0-9a-f]{8}/\1/; s/^( *7 .*0x[0-9a-f]{4})[0-9a-f]{8}/\1/'
+										smartctl "${dev_args[@]}" -v 1,hex48 -v 7,hex48 -H -A -l error /dev/${drive} | sed -E 's/^( *1 .*0x[0-9a-f]{4})[0-9a-f]{8}/\1/; s/^( *7 .*0x[0-9a-f]{4})[0-9a-f]{8}/\1/'
 									else	
-										smartctl "${dev_args[@]}" ${farm_cmd}    # Lets allow all error messages
+										smartctl "${dev_args[@]}" ${farm_cmd} /dev/${drive}    # Lets allow all error messages
 									fi
 								else
-									smartctl "${dev_args[@]}" ${farm_cmd} | grep -v -i 'Invalid Field in Command'  # Hide those error messages
+									smartctl "${dev_args[@]}" ${farm_cmd} | grep -v -i /dev/${drive} 'Invalid Field in Command'  # Hide those error messages
 								fi
 							else
 								if [[ $NVMe_Ignore_Invalid_Errors != "enable" ]]; then
 									if [[ $seagate == "True" ]]; then
-										smartctl "${dev_args[@]}" -v 1,hex48 -v 7,hex48 -H -A -l error | sed -E 's/^( *1 .*0x[0-9a-f]{4})[0-9a-f]{8}/\1/; s/^( *7 .*0x[0-9a-f]{4})[0-9a-f]{8}/\1/'
+										smartctl "${dev_args[@]}" -v 1,hex48 -v 7,hex48 -H -A -l error /dev/${drive} | sed -E 's/^( *1 .*0x[0-9a-f]{4})[0-9a-f]{8}/\1/; s/^( *7 .*0x[0-9a-f]{4})[0-9a-f]{8}/\1/'
 									else	
-										smartctl "${dev_args[@]}" ${farm_cmd}    # Lets allow all error messages
+										smartctl "${dev_args[@]}" ${farm_cmd} /dev/${drive}    # Lets allow all error messages
 									fi
 								else
-									smartctl "${dev_args[@]}" ${farm_cmd} | grep -v -i 'Invalid Field in Command'   # Lets allow all error messages
+									smartctl "${dev_args[@]}" ${farm_cmd} | grep -v -i /dev/${drive} 'Invalid Field in Command'   # Lets allow all error messages
 								fi
 								echo "ATA Error Count: "$test_ata_error
 								echo " "
@@ -7379,12 +7389,12 @@ if [[ $Debug_Steps == "true" ]]; then echo "detailed_report" | tee -a /tmp/multi
 						else
 							if [[ $NVMe_Ignore_Invalid_Errors != "enable" ]]; then
 									if [[ $seagate == "True" ]]; then
-										smartctl "${dev_args[@]}" -v 1,hex48 -v 7,hex48 -H -A -l error | sed -E 's/^( *1 .*0x[0-9a-f]{4})[0-9a-f]{8}/\1/; s/^( *7 .*0x[0-9a-f]{4})[0-9a-f]{8}/\1/'
+										smartctl "${dev_args[@]}" -v 1,hex48 -v 7,hex48 -H -A -l error /dev/${drive} | sed -E 's/^( *1 .*0x[0-9a-f]{4})[0-9a-f]{8}/\1/; s/^( *7 .*0x[0-9a-f]{4})[0-9a-f]{8}/\1/'
 									else	
-										smartctl "${dev_args[@]}" ${farm_cmd}    # Lets allow all error messages
+										smartctl "${dev_args[@]}" ${farm_cmd} /dev/${drive}    # Lets allow all error messages
 									fi
 							else
-								smartctl "${dev_args[@]}" ${farm_cmd} | grep -v -i 'Invalid Field in Command'   # Lets allow all error messages
+								smartctl "${dev_args[@]}" ${farm_cmd} | grep -v -i /dev/${drive} 'Invalid Field in Command'   # Lets allow all error messages
 							fi
 						fi
 
@@ -7392,7 +7402,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "detailed_report" | tee -a /tmp/multi
 						echo "Most recent Short & Extended Tests - Listed by test number"
 
 						# Capture output once to handle both ATA and SCSI formatting
-						smart_output=$(smartctl "${dev_args[@]}" -x)
+						smart_output=$(smartctl "${dev_args[@]}" -x /dev/${drive})
 
 						if [[ "$drive" =~ "nvme" ]]; then
 						lasttest1=$(echo "$smart_output" | grep -iE "0" | grep -iE "short|long|extended" | head -n 1)
@@ -7434,11 +7444,11 @@ if [[ $Debug_Steps == "true" ]]; then echo "detailed_report" | tee -a /tmp/multi
 
 	 				# SCT Error Recovery Control Report
 					# Note: SCSI/SAS drives do not support SCTERC; check protocol first
-					scterc_check=$(smartctl "${dev_args[@]}" -i)
+					scterc_check=$(smartctl "${dev_args[@]}" -i /dev/${drive})
 					if [[ "$scterc_check" =~ [Ss][Cc][Ss][Ii] || "$scterc_check" =~ [Ss][Aa][Ss] ]]; then
 						scterc="N/A (SCSI/SAS Device)"
 					else
-						scterc=$(smartctl "${dev_args[@]}" -l scterc | tail -3 | head -2 | tr -d '\n')
+						scterc=$(smartctl "${dev_args[@]}" -l scterc /dev/${drive} | tail -3 | head -2 | tr -d '\n')
 					fi
 
 					(
@@ -7469,9 +7479,9 @@ if [[ $Debug_Steps == "true" ]]; then echo "non_smart_report" | tee -a /tmp/mult
 				# Gather model number and serial number of each drive
 				modelnumber=""
 				serial=""  
-				dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1))				
-				smartdata="$(smartctl "${dev_args[@]}" -a)"
-				smartdata5="$(smartctl "${dev_args[@]}" -x --json=u)"
+				dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))				
+				smartdata="$(smartctl "${dev_args[@]}" -a /dev/${drive})"
+				smartdata5="$(smartctl "${dev_args[@]}" -x --json=u /dev/${drive})"
 
 # Commented out 22 March
 #				if [[ "$(echo ${smartdata5} | grep -i "SCSI")" ]]; then	# First, is this SCSI interface.
@@ -7502,7 +7512,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "non_smart_report" | tee -a /tmp/mult
 					echo "<b>########## NON-SMART status report for ${drive} drive (${modelnumber} : ${serial} : ${drive_location}) ##########</b>"
 					# And we will dump everything since it's not a standard SMART device.
 					echo "<b>SMARTCTL DATA</b>"
-					smartctl "${dev_args[@]}" -a
+					smartctl "${dev_args[@]}" -a /dev/${drive}
 					echo "<br>"
 					if [ $softver == "Linux" ]; then
 						echo "<b>FDISK DATA</b>"
@@ -8819,8 +8829,8 @@ if [[ $NVMelastTestHoursFake == "true" ]]; then testAge=$Non_Exist_Value; fi
 	if [[ $DeviceRedFlag == "enable" ]]; then if [[ $deviceStatusColor != $critColor ]]; then if [[ $deviceStatusColor != $warnColor ]]; then deviceStatusColor=$smrColor; fi; fi; fi
 
 	# SCT Error Recovery Control Report
-	dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1))
-	scterc="$(smartctl "${dev_args[@]}" -l scterc | tail -3 | head -2)"
+	dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+	scterc="$(smartctl "${dev_args[@]}" -l scterc /dev/${drive} | tail -3 | head -2)"
 
 	if [[ $SCT_Warning_Level == "TLER" ]]; then
 		# Warning Level TLER = Ignore Drives that do not report "seconds" or "Disable"
@@ -8831,8 +8841,8 @@ if [[ $NVMelastTestHoursFake == "true" ]]; then testAge=$Non_Exist_Value; fi
 	if [[ $SCT_Warning_Level == "TLER_No_Msg" && $SCT_Enable == "enable" ]]; then
 		if [[ $scterc =~ "Disabled" ]]; then
 			# Now we set the TLER ONLY for Disabled Drives because we do not know how it will affect other drives.
-			smartctl "${dev_args[@]}" -l scterc,"$SCT_Read_Timeout","$SCT_Write_Timeout" > /dev/null 2>&1
-			scterc="$(smartctl "${dev_args[@]}" -l scterc | tail -3 | head -2)"
+			smartctl "${dev_args[@]}" -l scterc /dev/${drive},"$SCT_Read_Timeout","$SCT_Write_Timeout" > /dev/null 2>&1
+			scterc="$(smartctl "${dev_args[@]}" -l scterc /dev/${drive} | tail -3 | head -2)"
 			if [[ $scterc =~ "seconds" ]]; then logfile_messages=$logfile_messages"$(printf "<b><span style='color:green;'>Drive "$serial" TLER is NOW ENABLED !</span></b><br>")"; fi
 			if [[ $scterc =~ "Disabled" ]]; then logfile_warning=$logfile_warning"$(printf "<b><span style='color:darkred;'>Drive "$serial" TLER is Disabled and failed to set.</span></b><br>")"; fi
 		fi
@@ -8849,8 +8859,8 @@ if [[ $NVMelastTestHoursFake == "true" ]]; then testAge=$Non_Exist_Value; fi
 	if [[ $SCT_Enable == "enable" ]]; then
 		if [[ $scterc =~ "Disabled" ]]; then
 			# Now we set the TLER ONLY for Disabled Drives because we do not know how it will affect other drives.
-			smartctl "${dev_args[@]}" -l scterc,"$SCT_Read_Timeout","$SCT_Write_Timeout" > /dev/null 2>&1
-			scterc="$(smartctl "${dev_args[@]}" -l scterc | tail -3 | head -2)"
+			smartctl "${dev_args[@]}" -l scterc /dev/${drive},"$SCT_Read_Timeout","$SCT_Write_Timeout" > /dev/null 2>&1
+			scterc="$(smartctl "${dev_args[@]}" -l scterc /dev/${drive} | tail -3 | head -2)"
 			if [[ $SCT_Warning_Level == "all" || $SCT_Warning_Level == "TLER" ]]; then logfile_warning=$logfile_warning"$(printf "<b><span style='color:green;'>Drive "$serial" TLER is NOW ENABLED !</span></b><br>")"; fi
 			if [[ $scterc =~ "Disabled" ]]; then
 				if [[ $SCT_Warning_Level == "all" || $SCT_Warning_Level == "TLER" ]]; then logfile_warning=$logfile_warning"$(printf "<b><span style='color:darkred;'>Drive "$serial" TLER is Disabled and failed to set.</span></b><br>")"; fi
@@ -8978,7 +8988,7 @@ if [[ $NVMelastTestHoursFake == "true" ]]; then testAge=$Non_Exist_Value; fi
 
 ########## UPDATE CONFIG FILE ##########
 ### This will generate or update a configuration file with any new changes.
-### The customizations will remain until the end of a major version number and then
+### The customization will remain until the end of a major version number and then
 ###   be removed in order to support the next major version number.
 ### Current updates incorporated to support version 2.1.x to 3.0.x
 
@@ -9891,7 +9901,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file" | tee -a /tmp/
 									echo "Set Value: ("$NVMtempCrit")"
 									echo " "
 									echo " "
-									echo "Press anykey to return to the previous menu."
+									echo "Press any key to return to the previous menu."
 									read -s -n 1 Keyboard_var3
 								;;
 
@@ -9927,7 +9937,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file" | tee -a /tmp/
 									echo "Set Value: ("$ZpoolFragWarn")"
 									echo " "
 									echo " "
-									echo "Press anykey to return to the previous menu."
+									echo "Press any key to return to the previous menu."
 									read -s -n 1 Keyboard_var3
 								;;
 
@@ -10061,7 +10071,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file" | tee -a /tmp/
 									echo "Set Value: ("$DeviceRedFlag")"
 									echo " "
 									echo " "
-									echo "Press anykey to return to the previous menu."
+									echo "Press any key to return to the previous menu."
 									read -s -n 1 Keyboard_var3
 								;;
 
@@ -10088,7 +10098,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file" | tee -a /tmp/
 									echo "Set Value: ("$DisableRAWdata")"
 									echo " "
 									echo " "
-									echo "Press anykey to return to the previous menu."
+									echo "Press any key to return to the previous menu."
 									read -s -n 1 Keyboard_var3
 								;;
 
@@ -10175,7 +10185,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file" | tee -a /tmp/
 									echo "Set Value: ("$ATA_Auto_Enable")"
 									echo " "
 									echo " "
-									echo "Press anykey to return to the previous menu."
+									echo "Press any key to return to the previous menu."
 									read -s -n 1 Keyboard_var3
 								;;
 								F)	# QUESTIONS UPDATED
@@ -10224,7 +10234,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file" | tee -a /tmp/
 									echo "Set Value: ("$AlertOnCriticalError")"
 									echo " "
 									echo " "
-									echo "Press anykey to return to the previous menu."
+									echo "Press any key to return to the previous menu."
 									read -s -n 1 Keyboard_var3
 								;;
 
@@ -10318,7 +10328,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file" | tee -a /tmp/
 							fi
 							echo " "
 							echo " "
-							echo "Press anykey to return to the previous menu."
+							echo "Press any key to return to the previous menu."
 							read -s -n 1 Keyboard_var3
 						;;
 
@@ -10365,7 +10375,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file" | tee -a /tmp/
 							echo "Set Value: "$From
 							echo " "
 							echo " "
-							echo "Press anykey to return to the previous menu."
+							echo "Press any key to return to the previous menu."
 							read -s -n 1 Keyboard_var3
 
 						;;
@@ -10576,7 +10586,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file" | tee -a /tmp/
 							echo "Set Value: ("$HDD_Total_Data_Written_Month")"
 							echo " "
 							echo " "
-							echo "Press anykey to return to the previous menu."
+							echo "Press any key to return to the previous menu."
 							read -s -n 1 Keyboard_var3
 						;;
 
@@ -10730,7 +10740,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file" | tee -a /tmp/
 							echo "Set Value: ("$SSD_Total_Data_Written")"
 							echo " "
 							echo " "
-							echo "Press anykey to return to the previous menu."
+							echo "Press any key to return to the previous menu."
 							read -s -n 1 Keyboard_var3
 						;;
 
@@ -10866,7 +10876,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file" | tee -a /tmp/
 							echo "Set Value: ("$NVM_Total_Data_Written")"
 							echo " "
 							echo " "
-							echo "Press anykey to return to the previous menu."
+							echo "Press any key to return to the previous menu."
 							read -s -n 1 Keyboard_var3
 						;;
 
@@ -10962,7 +10972,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file" | tee -a /tmp/
 							echo "Set Value: "$lastTestTypeHoursIdent
 							echo " "
 							echo " "
-							echo "Press anykey to return to the previous menu."
+							echo "Press any key to return to the previous menu."
 							read -s -n 1 Keyboard_var3
 						;;
 
@@ -11046,7 +11056,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file" | tee -a /tmp/
 							echo "Set Value: ("$Enable_SMART_Messages")"
 							echo " "
 							echo " "
-							echo "Press anykey to return to the previous menu."
+							echo "Press any key to return to the previous menu."
 							read -s -n 1 Keyboard_var3
 						;;
 
@@ -11146,7 +11156,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file" | tee -a /tmp/
 							fi
 							echo " "
 							echo " "
-							echo "Press anykey to return to the previous menu."
+							echo "Press any key to return to the previous menu."
 							read -s -n 1 Keyboard_var3
 						;;
 
@@ -11202,7 +11212,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file" | tee -a /tmp/
 							fi
 							echo " "
 							echo " "
-							echo "Press anykey to return to the previous menu."
+							echo "Press any key to return to the previous menu."
 							read -s -n 1 Keyboard_var3
 						;;
 
@@ -11757,7 +11767,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file" | tee -a /tmp/
 							echo " "
 							echo " "
 							echo "You may enter or edit a location of each drive."
-							echo "This is useful for knowing where a specific drive is physially located"
+							echo "This is useful for knowing where a specific drive is physically located"
 							echo "when this drive needs to be removed."
 							echo " "
 							echo "The script will allow you to either enter the data directly or by"
@@ -11956,7 +11966,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file" | tee -a /tmp/
 							echo "            Advanced Configuration Settings - Override S.M.A.R.T. Drive Disabled for Testing"
 							echo " "
 							echo " "
-							echo "If a drive had it's S.M.A.R.T. features disabled (typicaly from the TrueNAS GUI Drive Settings),"
+							echo "If a drive had it's S.M.A.R.T. features disabled (typically from the TrueNAS GUI Drive Settings),"
 							echo "then Multi-Report will not be able to pull all the needed data from the drive."
 							echo " "
 							echo "In order to let Multi-Report report completely on all drives, there is an Override which"
@@ -12002,10 +12012,10 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file" | tee -a /tmp/
 							echo " "
 							echo 'Press Return/Enter to accept the "system default" value.  This means that if'
 							echo "the system default value changes in the future, it will continue to utilize that value."
-							echo "Or you may enter a different value and this value will be hardcoded for the one drive"
+							echo "Or you may enter a different value and this value will be hard coded for the one drive"
 							echo "stored by serial number."
 							echo " "
-							echo "IMPORTANT: Do not enter a value unless you want to hardcode the value."
+							echo "IMPORTANT: Do not enter a value unless you want to hard code the value."
 							echo " "
 							echo "Example:"
 							echo "Warning Temperature defaults to (45)."
@@ -12171,8 +12181,8 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file" | tee -a /tmp/
 								wearleveladj="d"
 #								farmoffset="d"
 								echo " "
-								dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1))
-								farm_power_on_hours=$(smartctl "${dev_args[@]}" -l farm | grep -i "power on hours" | grep -vi "spindle" | cut -d ':' -f2 | tr -d ' ')
+								dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+								farm_power_on_hours=$(smartctl "${dev_args[@]}" -l farm /dev/${drive} | grep -i "power on hours" | grep -vi "spindle" | cut -d ':' -f2 | tr -d ' ')
 								if [[ ! "$(echo $Custom_Drives_List | grep $serial)" ]]; then
 									echo "The drive serial number "$serial" is not in the Custom Drive Config database."
 									echo " "
@@ -12683,13 +12693,13 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file" | tee -a /tmp/
 							echo " "
 							echo "As I understand it, valid drives could have a substantial difference between"
 							echo "the SMART Power On Hours and the FARM Power On Hours.  I didn't want to make"
-							echo "an unchangable value incase this is true.  A refurbished drive may have a"
-							echo "significant descrepancy."
+							echo "an unchangeable value in case this is true.  A refurbished drive may have a"
+							echo "significant discrepancy."
 							echo " "
 							echo "With all that said, and with some help, the default value is 6 hours."
 							echo 'Rationale: The SMART and FARM Power On Hours "should" be identical in a perfect world.'
 							echo "I understand that FARM data remains with the drive from cradle to grave, or in other"
-							echo "words, it does not get reset if it is a refursished drive like SMART does.  This certainly will"
+							echo "words, it does not get reset if it is a refurbished drive like SMART does.  This certainly will"
 							echo "cause an issue.  Here you can change the default value to compensate for refurbished drives, however"
 							echo "erroring on the side of caution, the default being 6 hours will warn you if you had a used drive,"
 							echo "well that is the objective.  Set the value to whatever pleases you."
@@ -12952,7 +12962,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file" | tee -a /tmp/
 							echo " "
 							echo "1) Test Mode 1 = Test various drives as defined by parameters."
 							echo "                 This can be Weekly or Monthly and based on authorized days."
-							echo "2) Test Mode 2 = Test ALL Drives everytime the script is run."
+							echo "2) Test Mode 2 = Test ALL Drives every time the script is run."
 							echo "3) Test Mode 3 = Test NO Drives"
 							echo " "
 							echo "Current value:"$Short_Test_Mode
@@ -13040,7 +13050,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file" | tee -a /tmp/
 							echo "of the drives in the specific time period, the value will be"
 							echo "adjusted for you.  Leaving a value of '1' is perfectly acceptable"
 							echo "as the Robot will make adjustments to ensure all drives are tested"
-							echo "wihtin the given time period."
+							echo "within the given time period."
 							echo " "
 							echo "Current Value:"$Short_Drives_to_Test_Per_Day
 							echo " "
@@ -13070,7 +13080,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file" | tee -a /tmp/
 							echo "  B) 'Month' - Tests all the drives in a months (28 day) period"
 							echo " "
 							echo "NOTE: There are three values which establish the Test Mode 1 periodicity"
-							echo "  Drives to Test Per Day, Drive testing Period, and Authiorized Test Days of the Week"
+							echo "  Drives to Test Per Day, Drive testing Period, and Authorized Test Days of the Week"
 							echo "  All three values are used to determine how many drive must be tested to complete"
 							echo "  the required allowed testing time."
 							echo " "
@@ -13164,7 +13174,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file" | tee -a /tmp/
 							echo "Time Delay to Allow Testing to Complete"
 							echo " "
 							echo "This allows you to set a delay after all the SMART Short Self-tests"
-							echo "were commenced.  The intension is to allow all SHORT tests to"
+							echo "were commenced.  The intention is to allow all SHORT tests to"
 							echo "complete before returning control back to the Multi-Report script"
 							echo "so the test results are included in the report."
 							echo " "
@@ -13313,7 +13323,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file" | tee -a /tmp/
 							elif [[ $Keyboard_var3 == "b" ]]; then
 								Long_SMART_Testing_Order="Serial"
 							else
-								echo "Using curent setting."
+								echo "Using current setting."
 								sleep 1
 							fi
 							echo " "
@@ -13365,7 +13375,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file" | tee -a /tmp/
 							echo "  B) 'Month' - Tests all the drives in a months (28 day) period"
 							echo " "
 							echo "NOTE: There are three values which establish the Test Mode 1 periodicity"
-							echo "  Drives to Test Per Day, Drive testing Period, and Authiorized Test Days of the Week"
+							echo "  Drives to Test Per Day, Drive testing Period, and Authorized Test Days of the Week"
 							echo "  All three values are used to determine how many drive must be tested to complete"
 							echo "  the required allowed testing time."
 							echo " "
@@ -13588,7 +13598,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file" | tee -a /tmp/
 						echo "By default if a SCRUB is in progress, no SMART Long tests will be run on the drives"
 						echo "within that pool."
 						echo " "
-						echo "You can change this behaviour:"
+						echo "You can change this behavior:"
 						echo "You can set the amount of time estimated remaining for a SCRUB and if a SCRUB"
 						echo "can complete within this time limit, the SMART Long Test will be allowed to run."
 						echo "NOTE: While a SMART Self-test is considered a low priority, it will still add"
@@ -13621,9 +13631,9 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file" | tee -a /tmp/
 						echo " "
 						echo "By default if a SCRUB or RESILVER is in progress, no SMART LONG tests will be run."
 						echo " "
-						echo "You can change this behaviour by enabling the Override option."
+						echo "You can change this behavior by enabling the Override option."
 						echo "If you enable the override option then SMART Long tests will be allowed to run"
-						echo "during any RESILVER or SCRUB operation in progress.  I personnaly do not"
+						echo "during any RESILVER or SCRUB operation in progress.  I personally do not"
 						echo "recommend this however it is your system, your data, you can do what you want."
 						echo " "
 						echo "-- Do you want to enable the SCRUB/RESILVER Override?"
@@ -13793,11 +13803,11 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file" | tee -a /tmp/
 							echo "Disk Layout is a feature which allows the user to generate a graphic map"
 							echo "which will help identify the physical location of a drive."
 							echo " "
-							echo "After enabling the feature, then runthe script one time.  You will be presented"
+							echo "After enabling the feature, then run the script one time.  You will be presented"
 							echo "with a URL in which you will be able to configure your Disk Layout map."
 							echo " "
 							echo "Each time you run Multi-Report, the Disk Layout chart will be inserted between"
-							echo "the bottom of the original charts and begining of the Text Section."
+							echo "the bottom of the original charts and beginning of the Text Section."
 							echo " "
 							echo " "
 							echo "Press any key to continue"
@@ -13828,13 +13838,13 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file" | tee -a /tmp/
 					echo " "
 					echo "When asked a question, there should be a list of valid options within parenthesis ()"
 					echo " "
-					echo "Most of the questions will have (enable or disable) as the listed valid responces"
+					echo "Most of the questions will have (enable or disable) as the listed valid responses"
 					echo "however Enter/Return key is also a valid answer to retain the current value."
 					echo " "
 					echo "Read the questions before answering them."
 					echo " "
 					echo "What if you made a mistake?"
-					echo "1. Complete answering any questions in the curent section, until returned"
+					echo "1. Complete answering any questions in the current section, until returned"
 					echo "   to a menu.  The go through the section you made a mistake on again."
 					echo "   Nothing is saved until you tell it to Write the configuration file."
 					echo " "
@@ -14217,7 +14227,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "display_help" | tee -a /tmp/multi_re
 	echo "      -enable_smr_alarm    This will reactivate SMR alarms."
 	echo " "
 	echo "      -tardrivedata  This switch will collect all the drives JSON and FARM data and create"
-	echo "                     a .tgz file in the scrpt runing directory.  This is only expected to be"
+	echo "                     a .tgz file in the scrpt running directory.  This is only expected to be"
 	echo "                     used when a -dump email does not collect all the drive data due to a"
 	echo "                     script running error.  Joe will specifically ask for this data if needed."
 	echo " "
@@ -14268,7 +14278,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "display_help" | tee -a /tmp/multi_re
 	echo "      advanced configuration screen, ensure you Write and changes you wish"
 	echo "      to retain.  Not writing will abort the changes."
 	echo " "
-	echo "      S)pencer Integrations allows you to enable/disable the Spencer external"
+	echo "      S)pencer Integration's allows you to enable/disable the Spencer external"
 	echo "      script and adjust some minimal settings.  Out of the box, Spencer is"
 	echo "      enabled if the script is present."
 	echo " "
@@ -14585,7 +14595,7 @@ zfs
 zpool
 )
 
-auxillary_commands=( # Auxillary Commands - Just the basic commands I expect anyone to have
+auxillary_commands=( # Auxiliary Commands - Just the basic commands I expect anyone to have
 awk
 )
 
@@ -14605,7 +14615,7 @@ fi
 # Test if the commands are usable
 for command in "${required_commands[@]}"; do
 	if ! type "${command}" &> /dev/null; then
-		echo "'${command}' You either do not have elevated privledges (like root) or the REQUIRED file is missing." >&2
+		echo "'${command}' You either do not have elevated privileges (like root) or the REQUIRED file is missing." >&2
 		exit 1
 	fi
 done
@@ -14613,12 +14623,12 @@ done
 # Test if the auxillary_commands are usable
 for command in "${auxillary_commands[@]}"; do
 	if ! type "${command}" &> /dev/null; then
-		echo "'${command}' You either do not have elevated privledges (like root) or an AUXILLARY file is missing." >&2
+		echo "'${command}' You either do not have elevated privileges (like root) or an AUXILLARY file is missing." >&2
 		exit 1
 	fi
 done
 
-if ! [[ "$1" == "-config" || "$1" == "-help" || "$1" == "-delete" || "$1" == "-s" || "$1" == "" || "$1" == "-dump" || "$1" == "-purge" || "$1" == "-h" || "$1" == "-t" || "$1" == "-m" || "$1" == "-u7zip" || "$1" == "-update" || "$1" == "-update_selftest" || "$1" == "-update_sendemail" || "$1" == "-update_smr" || "$1" == "-update_all" || "$1" == "-ignore_lock" || "$1" == "-cleanup" || "$1" == "-scsismart" || "$1" == "-update_smr" || "$1" == "-check_smr"  || "$1" == "-disable_smr" || "$1" == "-enable_smr" || "$1" == "-disable_smr_alarm" || "$1" == "-enable_smr_alarm" || "$1" == "-disable_farm" || "$1" == "-enable_farm" || "$1" == "-tardrivedata"  || "$1" == "-test_sendemail" || "$1" == "-check_for_updates" || "$1" == "-update_render" || "-dev" || "-debug_sendemail" || "$1" == "-report_only" ]]; then
+if ! [[ "$1" == "-config" || "$1" == "-help" || "$1" == "-delete" || "$1" == "-s" || "$1" == "" || "$1" == "-dump" || "$1" == "-purge" || "$1" == "-h" || "$1" == "-t" || "$1" == "-m" || "$1" == "-u7zip" || "$1" == "-update" || "$1" == "-update_selftest" || "$1" == "-update_sendemail" || "$1" == "-update_smr" || "$1" == "-update_all" || "$1" == "-ignore_lock" || "$1" == "-cleanup" || "$1" == "-scsismart" || "$1" == "-update_smr" || "$1" == "-check_smr"  || "$1" == "-disable_smr" || "$1" == "-enable_smr" || "$1" == "-disable_smr_alarm" || "$1" == "-enable_smr_alarm" || "$1" == "-disable_farm" || "$1" == "-enable_farm" || "$1" == "-tardrivedata"  || "$1" == "-test_sendemail" || "$1" == "-check_for_updates" || "$1" == "-update_render" || "-dev" || "-debug_sendemail" || "$1" == "-report_only" || "-no_test" ]]; then
 	echo '"'$1'" is not a valid option.'
 	echo "Use -h for help and look under OPTIONS."
 	echo " "
@@ -14790,7 +14800,7 @@ fi
 
 if [[ "$1" == "-test_sendemail" ]]; then
 	python3 sendemail.py --test_mode
-    echo "Check to see if you recieved an email."
+    echo "Check to see if you received an email."
 	exit 1
 fi
 
@@ -14926,6 +14936,11 @@ if [[ "$1" == "-dev" ]]; then
 	External_SMART_Testing="disable"
 	echo "Enabling Debug_Steps --> Shows which functions are being executed, along with additional data for troubleshooting."
 	Debug_Steps="true"
+fi
+
+if [[ "$1" == "-no_test" ]]; then
+	echo "In No Test Mode - SMART Tests will not be run."
+	External_SMART_Testing="disable"
 fi
 
 if [[ "$1" == "-t" ]]; then
@@ -15136,7 +15151,7 @@ if [[ $External_SMART_Testing == "enable" ]]; then
 			fi
 		fi
 	else
-		echo "The file '$External_Script_Name' does not exist, no SMART Testing Occuring." | tee -a /tmp/multi_report_debug.txt
+		echo "The file '$External_Script_Name' does not exist, no SMART Testing Occurring." | tee -a /tmp/multi_report_debug.txt
 		No_External_File="true"
 	fi
 fi
@@ -15328,7 +15343,7 @@ fi
 cleanup_files
 # For some odd reason this cannot be left in the cleanup_files function or the attachment never happens.  Very odd.  Look into this.
 if test -e "/tmp/Old_multi_report_config.txt"; then rm "/tmp/Old_multi_report_config.txt"; fi
-# There are here becasue it was simple.  Will more to appropriate cleanup area later.
+# There are here because it was simple.  Will more to appropriate cleanup area later.
 if test -e "/tmp/Multi-Report"; then rm -R "/tmp/Multi-Report"; fi
 if test -e "/tmp/multi_report_update.txt"; then	rm "/tmp/multi_report_update.txt"; fi
 
