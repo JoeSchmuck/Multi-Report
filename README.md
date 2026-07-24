@@ -45,6 +45,8 @@ This script has many benefits being a seperate script:
 
 # Quick Start Guide
 
+This script emails a daily report, and as such it requires your TrueNAS server be set up to send email.  Configure that in System -> General Settings, in the panel for **Email.**
+
 * If you don't already have one, create a dataset to store your scripts.  The remaining instructions will assume your pool is named `tank`, and the dataset is named `scripts`.
 * At the shell, change into that directory: `cd /mnt/tank/scripts`
 * Clone this repository: `git clone https://github.com/JoeSchmuck/Multi-Report`
