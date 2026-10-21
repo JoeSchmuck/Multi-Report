@@ -2,15 +2,15 @@
 
 Bug-Fix - Multi-Report version 3.32
 
-# CHANGE LOG
-# V3.32 (19 October 2026)
-#
-# - Maintenance Release
-# - Updated to use the full file path for disklayout_config.json and the related .html files.
-# - Fixed the Last Extended Test POH in the SMART Report Section.
-# - Updated `dev_args` GREP command to fix reading sdaa, sdab... (Thanks Aleksey K.)
-# - Fixed TLER not being set.
-# - Changed the Disk Layout tracking to use pcie values, json file update to version "0.4".
+CHANGE LOG
+V3.32 (19 October 2026)
+
+- Maintenance Release
+- Updated to use the full file path for disklayout_config.json and the related .html files.
+- Fixed the Last Extended Test POH in the SMART Report Section.
+- Updated `dev_args` GREP command to fix reading sdaa, sdab... (Thanks Aleksey K.)
+- Fixed TLER not being set.
+- Changed the Disk Layout tracking to use pcie values, json file update to version "0.4".
 
 ==============================================================================
 
