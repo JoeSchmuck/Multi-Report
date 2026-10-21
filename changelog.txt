@@ -1,5 +1,5 @@
 # CHANGE LOGS FOR MULTI-REPORT AND DRIVE-SELFTEST
 
 The change logs are at the begining of each script.
-Reference the scripts for further information.
+Reference the scripts for further details.
 
