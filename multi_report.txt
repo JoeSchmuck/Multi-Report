@@ -2,7 +2,7 @@
 # shellcheck disable=SC1075,SC2027,SC2034,SC2128,SC2002,SC2004,SC2086,SC2162
 LANG="en_US.UTF-8"
 
-##### Version 3.31
+##### Version 3.32
 
 ###### Get Config File Name and Location
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
@@ -84,6 +84,15 @@ fi
 
 # Version
 ### Changelog:
+
+# V3.32 (19 October 2026)
+#
+# - Maintenance Release
+# - Updated to use the full file path for disklayout_config.json and the related .html files.
+# - Fixed the Last Extended Test POH in the SMART Report Section.
+# - Updated `dev_args` GREP command to fix reading sdaa, sdab... (Thanks Aleksey K.)
+# - Fixed TLER not being set.
+# - Changed the Disk Layout tracking to use pcie values, json file update to version "0.4".
 
 # V3.31 (11 April 2026)
 #
@@ -1068,7 +1077,7 @@ logfile_header="/tmp/${tempfilepath}smart_report_header.tmp"
 logfile_temp="/tmp/${tempfilepath}smart_report_temp.tmp"
 boundary="gc0p4Jq0M2Yt08jU534c0p"
 
-CurrentFilename="multi_report_v3.31_2026_04_11.txt"
+CurrentFilename="multi_report_v3.32_2026_10_19.txt"
 valid_config_version_date="2026-03-30"	# Configuration file valid date
 progverdate="$(echo $CurrentFilename | cut -d '_' -f4,5,6 | cut -d '.' -f1 | sed -r 's/[_]+/-/g')"
 progname="Multi-Report "$(echo $CurrentFilename | cut -d '_' -f3)" dtd:"
@@ -1150,6 +1159,7 @@ disk_layout_version=0.3							# Format Major.Minor (Changed 23 Nov 2025)
 disk_layout_html_file="$SCRIPT_DIR/case_email_snippet.html"
 disk_layout_json_file="$SCRIPT_DIR/disklayout_config.json"
 tmpfile="/tmp/mapper.tmp"
+disk_color="/tmp/disk_color.txt"
 
 
 # Define arrays
@@ -1157,7 +1167,7 @@ declare -a disk_layout_slot						# The Grid Slot number (probably replaces the B
 declare -a disk_layout_name						# Drive ID
 declare -a disk_layout_type						# Drive Type (hdd/nvme)
 declare -a disk_layout_serial					# Drive Serial Number
-declare -a disk_layout_model						# Drive Model
+declare -a disk_layout_model					# Drive Model
 declare -a disk_layout_capacity					# Drive Capacity
 declare -a disk_layout_uuid						# Drive UUID (if exist)
 declare -a disk_layout_addr						# HCTL of the drive data connector
@@ -1292,14 +1302,475 @@ fi
 
 trap 'rm -rf /tmp/multi_report.lock' EXIT 	# Remove the lock directory on exit
 
+json_version_update() {
+if ! test -e "$disk_layout_json_file"; then 
+    echo "No Disk Layout Config Exists, Creating the file..."
+    
+    # Ensure the parent directory path exists first
+    mkdir -p "$(dirname "$disk_layout_json_file")"
+    
+    # Write the minimum required structural skeleton
+    cat << 'JSON_INIT' > "$disk_layout_json_file"
+{
+  "version": [
+    {
+      "version": "0.4"
+    }
+  ],
+  "bays": []
+}
+JSON_INIT
+fi
+
+export disk_layout_json_file
+set -euo pipefail
+
+python3 - << 'EOF'
+import os
+import re
+import sys
+import json
+import glob
+import subprocess
+
+JSON_FILE = os.environ.get("disk_layout_json_file")
+
+def run_cmd(cmd):
+    try:
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+        return res.stdout.decode("utf-8", errors="ignore").strip()
+    except Exception: return ""
+
+def scan_current_hardware():
+    """Scans the system to map clean, normalized Serial Numbers to current hardware addresses."""
+    discovered_topology = {} # Key: Serial Number (Upper), Value: Hardware Address
+    discovered_hardware = {} # Key: Hardware Address, Value: Device Node
+    
+    # 1. Enclosure scanning path
+    enclosure_path = "/sys/class/enclosure"
+    if os.path.isdir(enclosure_path):
+        for enc in glob.glob(os.path.join(enclosure_path, "*")):
+            enc_name = os.path.basename(enc)
+            for slot_dir in glob.glob(os.path.join(enc, "*")):
+                slot_base = os.path.basename(slot_dir)
+                if "slot" in slot_base.lower() or "bay" in slot_base.lower():
+                    hw_addr = f"enclosure:{enc_name}:{slot_base.replace(' ', '_')}"
+                    block_glob = glob.glob(os.path.join(slot_dir, "device", "block", "*"))
+                    if block_glob:
+                        block_dev = os.path.basename(block_glob[0])
+                        if os.path.exists(f"/dev/{block_dev}"):
+                            discovered_hardware[hw_addr] = block_dev
+
+    # 2. Standalone Udev connection routing path
+    dev_nodes = [os.path.basename(p) for p in glob.glob("/dev/sd[a-z]") + glob.glob("/dev/sd[a-z][a-z]") + glob.glob("/dev/nvme[0-9]n[0-9]")]
+    for dev in dev_nodes:
+        udev_out = run_cmd(["udevadm", "info", "--query=property", f"/dev/{dev}"])
+        id_path = ""
+        for line in udev_out.splitlines():
+            if line.startswith("ID_PATH="):
+                id_path = line.split("=", 1)[1]
+                break
+        if id_path and dev not in discovered_hardware.values():
+            discovered_hardware[f"path:{id_path}"] = dev
+
+    # 3. Query smartctl to extract the authoritative Serial Number matching each topology path
+    for hw_addr, dev_node in discovered_hardware.items():
+        smart_out = run_cmd(["sudo", "smartctl", "-i", f"/dev/{dev_node}"])
+        serial = ""
+        for line in smart_out.splitlines():
+            if "serial number:" in line.lower():
+                serial = line.split()[-1].strip().upper()
+                break
+        if serial:
+            discovered_topology[serial] = hw_addr
+
+    return discovered_topology
+def migrate_database():
+    if not os.path.exists(JSON_FILE):
+        print(f"Error: Database configuration target file '{JSON_FILE}' does not exist.")
+        sys.exit(1)
+
+    with open(JSON_FILE, "r") as f:
+        try:
+            data = json.load(f)
+        except Exception as e:
+            print(f"Error: Failed to parse layout JSON structure: {e}")
+            sys.exit(1)
+
+    # Validate database array structures
+    version_block = data.get("version", [])
+    if not version_block or not isinstance(version_block, list):
+        print("Error: Invalid or missing version schema array blocks.")
+        sys.exit(1)
+
+    current_version = version_block[0].get("version", "")
+    if current_version != "0.3":
+        # print(f"Skipping Migration: Layout database is at version '{current_version}'. No changes applied.")
+        return
+
+    print("--> [UPGRADING] Version 0.3 detected. Updating to current version...")
+
+    # Fetch live hardware metrics to map active storage endpoints
+    current_topology = scan_current_hardware()
+    bays_list = data.get("bays", [])
+    updated_count = 0
+
+    # Remap connection paths based on drive serial numbers
+    for bay in bays_list:
+        db_serial = str(bay.get("serial", "")).strip().upper()
+        if not db_serial or db_serial in ["", "UNKNOWN", "EMPTY"]:
+            continue
+
+        # Look up if this specific drive serial is currently online
+        if db_serial in current_topology:
+            new_address = current_topology[db_serial]
+            old_address = bay.get("address", "")
+            if old_address != new_address:
+                bay["address"] = new_address
+                updated_count += 1
+
+    # Bump metadata parameters cleanly to version 0.4
+    version_block[0]["version"] = "0.4"
+    data["bays"] = bays_list
+
+    # Save mutated layout objects back to file safely
+    with open(JSON_FILE, "w") as f:
+        json.dump(data, f, indent=2)
+
+    print(f"--> [SUCCESS] Migration complete. Incremented version to 0.4. Updated {updated_count} drive connection paths.")
+
+if __name__ == "__main__":
+    if os.geteuid() != 0:
+        sys.stderr.write("Error: This utility script must be executed as root (sudo).\n")
+        sys.exit(1)
+    migrate_database()
+
+EOF
+set +u
+}
+
+generate_disklayout_json() {
+export disk_layout_json_file
+set -euo pipefail
+
+python3 - << 'EOF'
+
+import os
+import re
+import sys
+import json
+import glob
+import subprocess
+from datetime import datetime
+
+JSON_FILE = os.environ.get("disk_layout_json_file")
+COLOR_FILE = "/tmp/disk_color.txt"
+
+def run_cmd(cmd):
+    try:
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+        return res.stdout.decode("utf-8", errors="ignore").strip()
+    except Exception: return ""
+
+def initialize_json():
+    if not os.path.exists(JSON_FILE) or os.path.getsize(JSON_FILE) == 0:
+        # print("--> [INIT] disk_layout.json not found or empty. Creating fresh template...")
+        base = {"version": [{"version": "0.4", "last_updated": ""}], "high_contrast": "false", "bays": [], "case": None}
+        with open(JSON_FILE, "w") as f: json.dump(base, f, indent=2)
+
+def get_zfs_pools():
+    zfs_map = {}
+    print("--> [ZFS] Parsing ZFS pool layouts...")
+    for pool_name in run_cmd(["zpool", "list", "-H", "-o", "name"]).splitlines():
+        if not pool_name.strip(): continue
+        status_out = run_cmd(["zpool", "status", pool_name.strip()])
+        for line in status_out.splitlines():
+            parts = line.strip().split()
+            if parts and ("sd" in parts[0] or "nvme" in parts[0] or len(parts[0]) == 36):
+                dev = parts[0]
+                zfs_map[dev] = pool_name.strip()
+                # Safely split NVMe partitions (p1/p2) or clear digits out of SATA node strings
+                clean_dev = dev.split("p")[0] if dev.startswith("nvme") else "".join([c for c in dev if not c.isdigit()])
+                zfs_map[clean_dev] = pool_name.strip()
+    return zfs_map
+def scan_hardware_topology():
+    print("--> [SCAN] Starting storage topology hardware scan...")
+    discovered = {}
+    enclosure_path = "/sys/class/enclosure"
+    if os.path.isdir(enclosure_path):
+        for enc in glob.glob(os.path.join(enclosure_path, "*")):
+            enc_name = os.path.basename(enc)
+            for slot_dir in glob.glob(os.path.join(enc, "*")):
+                slot_base = os.path.basename(slot_dir)
+                if "slot" in slot_base.lower() or "bay" in slot_base.lower():
+                    hw_addr = f"enclosure:{enc_name}:{slot_base.replace(' ', '_')}"
+                    block_glob = glob.glob(os.path.join(slot_dir, "device", "block", "*"))
+                    if block_glob:
+                        block_dev = os.path.basename(block_glob[0])
+                        if os.path.exists(f"/dev/{block_dev}"): discovered[hw_addr] = block_dev
+
+    dev_nodes = [os.path.basename(p) for p in glob.glob("/dev/sd[a-z]") + glob.glob("/dev/sd[a-z][a-z]") + glob.glob("/dev/nvme[0-9]n[0-9]")]
+    for dev in dev_nodes:
+        udev_out = run_cmd(["udevadm", "info", "--query=property", f"/dev/{dev}"])
+        id_path = ""
+        for line in udev_out.splitlines():
+            if line.startswith("ID_PATH="): id_path = line.split("=", 1)[1]; break
+        if id_path and dev not in discovered.values(): discovered[f"path:{id_path}"] = dev
+    return discovered
+
+def load_custom_drive_colors():
+    color_map = {}
+    if not os.path.exists(COLOR_FILE): return color_map
+    try:
+        with open(COLOR_FILE, "r") as f:
+            for line in f:
+                line_strip = line.strip()
+                if not line_strip or line_strip.startswith("#"): continue
+                cleaned_line = line_strip.strip('"').strip("'")
+                if ":" in cleaned_line:
+                    serial, color = cleaned_line.split(":", 1)
+                    clean_serial = serial.strip().strip('"').strip("'").upper()
+                    clean_color = color.strip().strip('"').strip("'").lower()
+                    if clean_serial: color_map[clean_serial] = clean_color
+    except Exception as e: pass # print(f"--> [WARNING] Color file error: {e}")
+    return color_map
+def harvest_metrics(hw_address_map, zfs_pools):
+    # print("--> [METRICS] Collecting properties for active disk drives...")
+    custom_colors = load_custom_drive_colors()
+    metrics_store = {}
+
+    def run_cmd_local(cmd):
+        try:
+            return subprocess.check_output(cmd, text=True, stderr=subprocess.DEVNULL)
+        except Exception:
+            return ""
+
+    def build_device_map(pools):
+        device_map = {}
+
+        def add(identifier, pool_name):
+            if not identifier:
+                return
+            if identifier.startswith("/"):
+                try:
+                    identifier = os.path.realpath(identifier)
+                except OSError:
+                    pass
+            device_map[identifier] = pool_name
+            device_map[os.path.basename(identifier)] = pool_name
+
+        for key, value in pools.items():
+            if isinstance(value, (list, tuple, set)):
+                for dev in value:
+                    add(dev, key)
+            else:
+                add(key, value)
+
+        return device_map
+
+    def get_identifiers(dev_node):
+        """Return {identifier: label}, where label is 'whole disk' or 'Partition N'."""
+        dev_full = f"/dev/{dev_node}"
+        real_dev = os.path.realpath(dev_full)
+        ids = {dev_node: "whole disk", dev_full: "whole disk", real_dev: "whole disk"}
+
+        part_labels = {}  # realpath -> label
+        part_glob = f"{dev_full}p*" if dev_node.startswith("nvme") else f"{dev_full}*"
+        for part in sorted(glob.glob(part_glob)):
+            suffix = part[len(dev_full):]
+            m = re.fullmatch(r"p?(\d+)", suffix)
+            if not m:
+                continue  # skips look-alikes such as sdaa1 when scanning sda
+            label = f"Partition {m.group(1)}"
+            part_labels[os.path.realpath(part)] = label
+            ids.setdefault(part, label)
+            ids.setdefault(os.path.basename(part), label)
+
+            for id_type in ("PARTUUID", "UUID", "PARTLABEL", "LABEL"):
+                value = run_cmd_local(["blkid", "-s", id_type, "-o", "value", part]).strip()
+                if value:
+                    ids.setdefault(value, label)
+
+        for link in glob.glob("/dev/disk/by-id/*"):
+            try:
+                real = os.path.realpath(link)
+            except OSError:
+                continue
+            if real == real_dev:
+                label = "whole disk"
+            elif real in part_labels:
+                label = part_labels[real]
+            else:
+                continue
+            ids.setdefault(link, label)
+            ids.setdefault(os.path.basename(link), label)
+
+        return ids
+
+    def find_pool(dev_node):
+        """Return (pool_name, partition_label), or (None, None)."""
+        device_map = build_device_map(zfs_pools)
+        ids = get_identifiers(dev_node)
+
+        for ident, label in ids.items():
+            if ident in device_map:
+                return device_map[ident], label
+
+        zpool_out = run_cmd_local(["sudo", "zpool", "status", "-v", "-p"])
+        current_pool = None
+
+        for line in zpool_out.splitlines():
+            pool_match = re.match(r"\s*pool:\s+(\S+)", line)
+            if pool_match:
+                current_pool = pool_match.group(1)
+                continue
+
+            tokens = line.split()
+            if not tokens or current_pool is None:
+                continue
+            token = tokens[0]
+            candidates = [token, os.path.basename(token)]
+            if token.startswith("/"):
+                candidates.append(os.path.realpath(token))
+            for cand in candidates:
+                if cand in ids:
+                    return current_pool, ids[cand]
+
+        return None, None
+
+    for hw_addr, dev_node in hw_address_map.items():
+        dev_full = f"/dev/{dev_node}"
+        smart_out = run_cmd(["sudo", "smartctl", "-i", "-A", dev_full])
+
+        serial = "UNKNOWN"
+        for line in smart_out.splitlines():
+            if "serial number:" in line.lower():
+                serial = line.split()[-1].strip().upper()
+                break
+
+        dtype = "nvme" if dev_node.startswith("nvme") else (
+            "ssd" if "solid state device" in smart_out.lower() else "hdd"
+        )
+
+        model = "UNKNOWN"
+        for line in smart_out.splitlines():
+            if "device model:" in line.lower() or "model number:" in line.lower():
+                m_parts = line.split(":", 1)
+                if len(m_parts) >= 2:
+                    model = m_parts[1].strip()
+                break
+
+        capacity = "UNKNOWN"
+        for line in smart_out.splitlines():
+            if "user capacity:" in line.lower() or "total nvm capacity:" in line.lower():
+                if "[" in line and "]" in line:
+                    try:
+                        capacity = line.split("[")[1].split("]")[0].strip()
+                    except Exception:
+                        c_parts = line.split(":", 1)
+                        if len(c_parts) >= 2:
+                            capacity = c_parts[1].strip()
+                else:
+                    c_parts = line.split(":", 1)
+                    if len(c_parts) >= 2:
+                        capacity = c_parts[1].strip()
+                break
+
+        uuid = ""
+        search_pattern = f"{dev_full}p*" if dev_node.startswith("nvme") else f"{dev_full}*"
+        for part in glob.glob(search_pattern):
+            if part[-1].isdigit():
+                found_uid = run_cmd(["blkid", "-s", "PARTUUID", "-o", "value", part]).strip()
+                if found_uid and not uuid:
+                    uuid = found_uid
+
+        pool = find_pool(dev_node) or "No Pool Assigned"
+
+        temp = "UNKNOWN"
+        for line in smart_out.splitlines():
+            if "temperature" in line.lower() and "c" in line.lower():
+                digits = [s for s in line.split() if s.isdigit()]
+                if digits:
+                    temp = digits[-1]
+                    break
+            elif "airflow_temperature_cel" in line.lower():
+                parts = line.split()
+                if len(parts) >= 10:
+                    temp = parts[9].strip()
+                    break
+
+        drive_color = custom_colors.get(serial, "green")
+
+        metrics_store[hw_addr] = {
+            "pool": pool,
+            "drive_id": dev_node,
+            "type": dtype,
+            "serial": serial,
+            "model": model,
+            "capacity": capacity,
+            "uuid": uuid,
+            "drive_color": drive_color,
+            "drive_temp": temp,
+        }
+
+        #print(
+        #    f"    Parsed -> ID: {dev_node} | Serial: {serial} | "
+        #    f"Pool: {pool} | Color: {drive_color}"
+        #)
+
+    return metrics_store
+
+def merge_and_persist(scanned_drives):
+    # print("--> Merging metrics...")
+    with open(JSON_FILE, "r") as f: data = json.load(f)
+    new_bays = []
+    processed = set()
+    for bay in data.get("bays", []):
+        addr = bay.get("address")
+        if not addr: continue
+        processed.add(addr)
+        if addr in scanned_drives: bay.update(scanned_drives[addr])
+        else:
+            for k in ["pool","drive_id","type","serial","model","capacity","uuid","drive_color","drive_temp"]: bay[k] = ""
+        new_bays.append(bay)
+    for addr, metrics in scanned_drives.items():
+        if addr not in processed:
+            slots = [int(b["slot"]) for b in new_bays if str(b.get("slot", "")).isdigit()]
+            next_slot = str(max(slots) + 1) if slots else "1"
+            # print(f"    Adding new configuration entry for slot: {next_slot} ({addr})")
+            nb = {"slot": next_slot, "address": addr}
+            nb.update(metrics)
+            new_bays.append(nb)
+    data["bays"] = new_bays
+    if isinstance(data.get("version"), list) and len(data["version"]) > 0:
+        data["version"][0]["last_updated"] = datetime.now().strftime("%a %b %d %H:%M:%S %Z %Y")
+    with open(JSON_FILE, "w") as f: json.dump(data, f, indent=2)
+    # print("--> [TIMESTAMP] Database updated successfully.")
+
+def main():
+    initialize_json()
+    pools = get_zfs_pools()
+    hw_map = scan_hardware_topology()
+    metrics = harvest_metrics(hw_map, pools)
+    merge_and_persist(metrics)
+    print(f"--> [UPDATE COMPLETE] Database written at: {JSON_FILE}")
+
+if __name__ == "__main__":
+    if os.geteuid() != 0: sys.stderr.write("Error: Must run as root.\n"); sys.exit(1)
+    main()
+
+EOF
+set +u
+}
+
 
 disk_layout_join_chart() {
 if [[ $Debug_Steps == "true" ]]; then echo "disk_layout_join_chart" | tee -a /tmp/multi_report_debug.txt; fi
 output=$logfile
-page1="page1.html"
-page3="page3.html"
+page1="$SCRIPT_DIR/page1.html"
+page3="$SCRIPT_DIR/page3.html"
 
-page_emclient="Disk_layout.html" # This holds the content from render_email_snippet
+page_emclient="$SCRIPT_DIR/Disk_layout.html" # This holds the content from render_email_snippet
 
 {
 echo "<!DOCTYPE html>"
@@ -1317,9 +1788,17 @@ cat "$page1"
 echo "<hr style='margin:40px 0;'>"
 echo "<h2>Drive Layout Visualization</h2>"
 	
-if [[ ${disk_layout_slot[0]} == "X" || ${disk_layout_slot[0]} == "" ]]; then
-	echo "YOUR CONFIG FILE IS NOT COMPLETE."
-	echo "Visit https://joeschmuck.github.io/Multi-Report_Hub/ to assign your drives to a location."
+if [ -f "$disk_layout_json_file" ]; then
+    # Read the top-level 'case' key status cleanly using jq
+    case_status=$(jq -r '.case' "$disk_layout_json_file")
+
+    if [ "$case_status" = "null" ]; then
+        echo "Your ${disk_layout_json_file} Config file is not complete."
+		echo "Visit https://joeschmuck.github.io/Multi-Report_Hub/ and use the"
+		echo "Disk Layout Configurator Tool to configure the drive bay layout."
+    fi
+else
+    echo "Error: $disk_layout_json_file does not exist."
 fi
 
 echo "<table role=\"presentation\" border=\"0\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\" style=\"mso-table-lspace:0pt; mso-table-rspace:0pt; border-collapse:collapse; display:table; margin-top: -15px !important;\" align=\"left\">"
@@ -1352,8 +1831,8 @@ echo "</body>"
 echo "</html>"
 } > "$output"
 
-if test -e "page1.html"; then rm "page1.html"; fi
-if test -e "page3.html"; then rm "page3.html"; fi
+if test -e "$SCRIPT_DIR/page1.html"; then rm "$SCRIPT_DIR/page1.html"; fi
+if test -e "$SCRIPT_DIR/page3.html"; then rm "$SCRIPT_DIR/page3.html"; fi
 
 }
 
@@ -1373,8 +1852,8 @@ fi
 # Output filenames
 base="${input_file%.*}"
 ext="${input_file##*.}"
-part1="page1.html"
-part2="page3.html"
+part1="$SCRIPT_DIR/page1.html"
+part2="$SCRIPT_DIR/page3.html"
 
 # Use awk to split at the "Multi-Report Text Section"
 awk -v out1="$part1" -v out2="$part2" '
@@ -1400,14 +1879,16 @@ if [[ $Debug_Steps == "true" ]]; then echo "disk_layout_join_html"; fi
 #create_attachment_file Disk_layout.html
 
 if test -f $disk_layout_html_file; then
-	cat $disk_layout_html_file > Disk_layout.html
-	(echo "create_attachment_file Disk_layout.html Disk_layout.html" >> /tmp/attachment_files.txt)
+	cat $disk_layout_html_file > $SCRIPT_DIR/Disk_layout.html
+	(echo "create_attachment_file $SCRIPT_DIR/Disk_layout.html Disk_layout.html" >> /tmp/attachment_files.txt)
 fi
 
 }
 
+####### ---->>>> Ensure we also delete this file in the cleanup. <<<< Done
 
 disk_layout_set_values() {
+# Called from write_table function
 if [[ $Debug_Steps == "true" ]]; then echo "disk_layout_set_values"; fi
 # This will load the Temp and Color values into the arrays.
 
@@ -1419,115 +1900,13 @@ else
 	temp_color="none"
 fi
 
-# Initialize values
+#if [[ "$serial" == "2F4920060284" ]]; then temp_color="red"; fi
 
-array_index=0  # Tracks the index for the arrays (only increments for valid drives)
-array_size=${#disk_layout_serial[@]}
+echo $serial":"$temp_color >> ${disk_color}
 
-# Loop through ALL lines looking for a serial number match
-while [[ $array_index -le $array_size ]]; do
-	# Read each array value and locate a match.
-	if [[ "${disk_layout_serial[array_index]}" == "$serial" ]]; then
-		disk_layout_temperature[array_index]=$temp
-		disk_layout_color[array_index]=$temp_color
-		return
-	fi
-    (( array_index++ ))
-done
 }
 
 
-disk_layout_collect_drive_data() {
-# Commands we use in this function:  lsscsi, lsblk, 
-if [[ $Debug_Steps == "true" ]]; then echo "disk_layout_collect_drive_data"; fi
-# Initialize temporary arrays for new data collection
-live_hardware_name=()
-live_hardware_type=()
-live_hardware_serial=()
-live_hardware_model=()
-live_hardware_capacity=()
-live_hardware_uuid=()
-live_hardware_addr=()
-live_hardware_pool=()
-declare -gA live_serial_to_index_map # Clear and set map globally
-declare -gA live_addr_to_serial      # Clear and set map globally
-
-lsscsi_line=1
-array_index=0
-total_lsscsi_count=$(lsscsi | wc -l)
-
-while [[ $lsscsi_line -le $total_lsscsi_count ]]; do
-
-    disk_layout_DEVICE_NAME=$(lsscsi | awk '{print $NF}' | cut -d'/' -f3 | head -n ${lsscsi_line} | tail -n 1)
-	disk_layout_DEVICE_DISK=$(lsscsi | awk '{print $2}' | head -n ${lsscsi_line} | tail -n 1)
-	
-    if [[ -z "$disk_layout_DEVICE_NAME" ]] || [[ "$disk_layout_DEVICE_DISK" != "disk" ]]; then
-        (( lsscsi_line++ ))
-        continue
-    fi
-
-# The sed line removes single and double quotes.
-    disk_layout_MODEL_NAME=$(lsblk -n -d -o MODEL "/dev/${disk_layout_DEVICE_NAME}" | sed "s/[\"']//g")
-
-    if echo "$disk_layout_MODEL_NAME" | grep -qvi "vmware\|virtual"; then
-        # Collect live hardware data into temporary arrays
-        live_hardware_name[array_index]="$disk_layout_DEVICE_NAME"
-        live_hardware_model[array_index]="$disk_layout_MODEL_NAME"
-        current_serial=$(lsblk -n -d -o SERIAL "/dev/${disk_layout_DEVICE_NAME}" | tr -d ' ')
-		live_hardware_serial[array_index]="$current_serial"
-        disk_layout_CAP_ADDR_LINE=$(lsscsi -s | head -n ${lsscsi_line} | tail -n 1)
-        live_hardware_capacity[array_index]=$(echo "$disk_layout_CAP_ADDR_LINE" | sed 's/\( \/dev\/[a-z]\+\)$//' | awk '{print $NF}')
-		pool_names="$(zpool status | grep "pool:" | awk -F" " '{print $2}')"
-
-		for temp_pool in $pool_names; do
-			# Looking for match with pool name, result is UUID
-			temp_pool_uuid_match="$(lsblk -n -o LABEL,PARTUUID /dev/${disk_layout_DEVICE_NAME} | grep "$temp_pool" | awk -F" " '{print $2}')"
-			if [[ "$temp_pool_uuid_match" != "" ]]; then break; else temp_pool=""; temp_pool_uuid_match=""; fi
-		done
-		live_hardware_uuid[array_index]=$temp_pool_uuid_match
-
-		if [[ -n "$temp_pool" ]]; then
-			temp_pool_name=$(lsblk -n -o LABEL,PARTUUID "/dev/${disk_layout_DEVICE_NAME}" | grep "${live_hardware_uuid[array_index]}" | grep "$temp_pool_uuid_match" | awk -F" " '{print $1}')
-		else
-			temp_pool_name=""
-		fi
-
-		if [[ -z "$temp_pool_name" ]]; then
-            live_hardware_pool[array_index]="No Pool Assigned"
-        else
-		    live_hardware_pool[array_index]="$temp_pool_name"
-        fi
-
-        if [[ ${live_hardware_name[array_index]} == *"nvm"* ]]; then
-            temp_name=$(basename "${live_hardware_name[array_index]}")
-            current_addr=$(basename "$(readlink -f /sys/block/$temp_name/device/device)" 2>/dev/null)
-            live_hardware_type[array_index]="nvme"
-        else
-            current_addr=$(echo "$disk_layout_CAP_ADDR_LINE" | cut -d'[' -f2 | cut -d']' -f1)
-            live_hardware_type[array_index]="hdd"
-        fi
-        live_hardware_addr[array_index]="$current_addr"
-
-        # Populate the live lookup maps
-        live_serial_to_index_map["$current_serial"]="$array_index"
-        live_addr_to_serial["$current_addr"]="$current_serial"
-
-		if [[ $Debug_Steps == "true" ]]; then
-			echo
-			echo "disk_layout_DEVICE_DISK="$disk_layout_DEVICE_DISK
-			echo "live_hardware_name[array_index]="${live_hardware_name[array_index]}
-			echo "live_hardware_model[array_index]="${live_hardware_model[array_index]}
-			echo "live_hardware_serial[array_index]="${live_hardware_serial[array_index]}
-			echo "live_hardware_capacity[array_index]="${live_hardware_capacity[array_index]}
-			echo "live_hardware_uuid[array_index]="${live_hardware_uuid[array_index]}
-			echo "live_hardware_pool[array_index]="${live_hardware_pool[array_index]}
-			echo "======================================================================"
-		fi
-        (( array_index++ ))
-    fi
-    (( lsscsi_line++ ))
-done
-}
 
 disk_layout_read_json_file() {
 if [[ $Debug_Steps == "true" ]]; then echo "disk_layout_read_json_file"; fi	
@@ -1750,6 +2129,20 @@ disk_layout_reconcile_data() {
 
 
 disk_layout_write_json_file() {
+
+# === PATCH FOR TRUENAS SCALE BOOT POOL CONTROL CHARACTERS ===
+    local clean_val
+    for i in "${!disk_layout_uuid[@]}"; do
+        clean_val=$(echo "${disk_layout_uuid[$i]}" | xargs | tr -d '\000-\037')
+        disk_layout_uuid["$i"]="$clean_val"
+    done
+    for i in "${!disk_layout_pool[@]}"; do
+        clean_val=$(echo "${disk_layout_pool[$i]}" | xargs | tr -d '\000-\037')
+        disk_layout_pool["$i"]="$clean_val"
+    done
+    # ============================================================
+
+
 if [[ $Debug_Steps == "true" ]]; then echo "disk_layout_write_json_file"; fi
     local disk_layout_name_count=${#disk_layout_slot[@]} # Use slot count now, as it reflects all entries
     local disk_layout_read_version=$disk_layout_version
@@ -1889,7 +2282,7 @@ SMART_check_status ()
 	if [[ $smart_act_temp != "" ]]; then smart_act=$smart_act_temp; fi
 	
 	for i in $smart_act; do
-		dev_args=($(smartctl --scan-open | grep "/dev/${i}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+		dev_args=($(smartctl --scan-open | grep -E "/dev/${i}" | cut -d'#' -f1 | cut -d' ' -f2,3))
 		# Is a drive Virtual?
 		if smartctl -a "${dev_args[@]} /dev/${i}" | grep -q "virtual"; then continue; fi
 		# Roll through all the drives, find out disabled & Available then record it.
@@ -1938,7 +2331,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "SMART_activate"; fi
 	if [[ $1 == "Enable" ]]; then
 	# Record Drives Disabled so we can turn them on and later turn them off, original setup.
 		for i in $smart_act; do
-			dev_args=($(smartctl --scan-open | grep "/dev/${i}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+			dev_args=($(smartctl --scan-open | grep -E "/dev/${i}" | cut -d'#' -f1 | cut -d' ' -f2,3))
 			# Roll through all the drives, find out disabled & Available then record it.
 			test_smart=$(smartctl "${dev_args[@]}" -a /dev/${i} | grep -i "SMART support")
 			# Search for "Disabled"
@@ -1970,7 +2363,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "SMART_activate"; fi
 	if [[ $1 == "Disable" ]]; then
 		echo "List if Drives where S.M.A.R.T. was disabled before Multi-Report was run:"
 		for i in $SMART_Temp_Enable_PASS_List; do
-			dev_args=($(smartctl --scan-open | grep "/dev/${i}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+			dev_args=($(smartctl --scan-open | grep -E "/dev/${i}" | cut -d'#' -f1 | cut -d' ' -f2,3))
 			# Roll through all the changed drives
 			smart_msg=$(smartctl "${dev_args[@]}" --smart=off /dev/${i} | tail -n 1 | cut -d'.' -f1)
 			# Verify no errors
@@ -1998,7 +2391,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "run_smart_data_command"; fi
     IFS_RESTORE=$IFS
     IFS=","
     for dr in $drive_connection_types; do
-		dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+		dev_args=($(smartctl --scan-open | grep -E "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
         if [[ $dr == "none" ]]; then
             driveConnectionType=$dr
             # No interface parameter passed
@@ -2113,7 +2506,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "get_API_Drives_and_tar"; fi
     smartdrives=${drives_name[@]}
     index=0
     for i in ${drives_name[@]}; do
-		dev_args=($(smartctl --scan-open | grep "${drives_name[$index]}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+		dev_args=($(smartctl --scan-open | grep -E "${drives_name[$index]}" | cut -d'#' -f1 | cut -d' ' -f2,3))
 		smartctl $dev_args "${dev_args[@]}" -x --json=u /dev/${drive} > /tmp/multi_report_drive_data/JSON/${drives_type[index]}_${drives_name[$index]}_${drives_serial[$index]}.json
 		smartctl $dev_args "${dev_args[@]}" -l farm /dev/${drive} > /tmp/multi_report_drive_data/FARM/${drives_type[index]}_${drives_name[$index]}_${drives_serial[$index]}.farm
 		echo "API SUBSYSTEM - "${drives_subsystem[$index]} > /tmp/multi_report_drive_data/SUBSYSTEM/${drives_type[index]}_${drives_name[$index]}_${drives_serial[$index]}.txt
@@ -2146,7 +2539,7 @@ check_farm_data_original () {
 if [[ $Debug_Steps == "true" ]]; then echo "check_farm_data"; fi
 
 # Check if FARM data is available.
-	dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+	dev_args=($(smartctl --scan-open | grep -E "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
 	farm_data=$(smartctl "${dev_args[@]}" -l farm /dev/${drive})
 
 	if $farm_data | grep -i "serial"; then
@@ -2179,7 +2572,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "check_farm_data: $drive" | tee -a /t
 #echo "Start of FARM routine"
 #return
 # Check if FARM data is available.  If it is, a serial number will be available.
-	dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))	
+	dev_args=($(smartctl --scan-open | grep -E "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))	
 	if [[ $testfilepath == "" ]]; then
 		# The real drive data
 		farm_data=$(smartctl "${dev_args[@]}" -l farm /dev/${drive})
@@ -3468,7 +3861,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "remove_duplicate" | tee -a /tmp/mult
 
 	# Get drive serial number
 	for i in ${duplicate_list}; do  # Drive ID's
-		dev_args=($(smartctl --scan-open | grep "/dev/${i}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+		dev_args=($(smartctl --scan-open | grep -E "/dev/${i}" | cut -d'#' -f1 | cut -d' ' -f2,3))
 		smartdata5="$(smartctl "${dev_args[@]}" -x --json=u /dev/${drive})"
 
 # Commented out for 22 March
@@ -3827,10 +4220,10 @@ if [[ $Debug_Steps == "true" ]]; then echo "cleanup_files" | tee -a /tmp/multi_r
 	if test -e "/tmp/blkid.txt"; then rm "/tmp/blkid.txt"; fi
 	if test -e "/tmp/lsblk.txt"; then rm "/tmp/lsblk.txt"; fi
 	if test -e "/tmp/lsscsi.txt"; then rm "/tmp/lsscsi.txt"; fi
-	if test -e "case_email_snippet.html"; then rm "case_email_snippet.html"; fi
-	if test -e "case_render.html"; then rm "case_render.html"; fi
-	if test -e "Disk_layout.html"; then rm "Disk_layout.html"; fi
-	if test -e "case_email_outlook_snippet.html"; then rm "case_email_outlook_snippet.html"; fi
+	if test -e "$SCRIPT_DIR/case_email_snippet.html"; then rm "$SCRIPT_DIR/case_email_snippet.html"; fi
+	if test -e "$SCRIPT_DIR/case_render.html"; then rm "$SCRIPT_DIR/case_render.html"; fi
+	if test -e "$SCRIPT_DIR/Disk_layout.html"; then rm "$SCRIPT_DIR/Disk_layout.html"; fi
+	if test -e "$SCRIPT_DIR/case_email_outlook_snippet.html"; then rm "$SCRIPT_DIR/case_email_outlook_snippet.html"; fi
 
 	### Clean up Spencer File
 	if test -e "/tmp/spencer_report.txt"; then rm "/tmp/spencer_report.txt"; fi
@@ -3840,6 +4233,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "cleanup_files" | tee -a /tmp/multi_r
 	if test -e "/tmp/drive_test_timer_temp.txt"; then rm "/tmp/drive_test_timer_temp.txt"; fi
 	if test -e "/tmp/smartdrive_selftest_text.txt"; then rm "/tmp/smartdrive_selftest_text.txt"; fi
 	if test -e "/tmp/drive_selftest_tracking.csv"; then rm "/tmp/drive_selftest_tracking.csv"; fi
+	if test -e "$disk_color"; then rm "$disk_color"; fi
 
 	### Clean up complete!
 	
@@ -4033,8 +4427,8 @@ if [[ $Disklayout == "enable" ]] && [[ $softver == "Linux" ]]; then
 	split_html $logfile
 fi
 	cat $logfile >> $logfile_header
-#	cat $logfile > page0.html
-#	cat $logfile_header > page00.html
+#	cat $logfile > $SCRIPT_DIR/page0.html
+#	cat $logfile_header > $SCRIPT_DIR/page00.html
 	### Send report
 #	sendmail -t -oi < "$logfile_header"
 
@@ -4048,7 +4442,7 @@ if [[ $truenas_sendmail_support == "No" && $dump_all -eq 4 ]]; then 	# ONLY DO T
 fi
 
 if test -e "/tmp/attachment_files.txt"; then
-	create_attachment_file $logfile_header Chart.html
+	create_attachment_file $logfile_header $SCRIPT_DIR/Chart.html
 	if [[ $dump_all != "0" ]]; then
 		if [[ $softver == "Linux" ]]; then
 			tar_attachments
@@ -4114,7 +4508,7 @@ if ! test -e "/tmp/attachment.json"; then touch "/tmp/attachment.json"; touch "/
 #   then after 10 minutes it will resend once every 5 minutes for up to an hour.
 sendemail_retry_count=11
 sendemail_retry_delay=120
-#cat $logfile_header > page000.html
+#cat $logfile_header > $SCRIPT_DIR/page000.html
 #echo "Email to:"$Email
 		if [[ $dump_all -ne 0 ]] || [[ $debug_sendemail == "debug_sendemail" ]]; then
 
@@ -4261,7 +4655,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "config_backup" | tee -a /tmp/multi_r
 dump_drive_partition () {
 if [[ $Debug_Steps == "true" ]]; then echo "dump_drive_partition: $drive" | tee -a /tmp/multi_report_debug.txt; fi
 	if [[ "$drive" != "cd0" ]]; then
-		dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+		dev_args=($(smartctl --scan-open | grep -E "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
 		tempjson="$(smartctl "${dev_args[@]}" -x --json=u /dev/${drive})"
 		if [[ $(echo $tempjson) != *"Virtual"* ]]; then		# If the drive is Virtual, then skip it.
 			serial1="$(echo "${tempjson}" | jq -Mre '.serial_number | values' | tr -d ' ')"
@@ -4296,7 +4690,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "dump_drive_partition: $drive" | tee 
 
 dump_drive_data () {
 if [[ $Debug_Steps == "true" ]]; then echo "dump_drive_data $drive" | tee -a /tmp/multi_report_debug.txt; fi
-	dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+	dev_args=($(smartctl --scan-open | grep -E "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
 	if [[ "$drive" != "cd0" ]]; then
 		tempjson="$(smartctl "${dev_args[@]}" -x --json /dev/${drive})"
 		serial1="$(echo "${tempjson}" | jq -Mre '.serial_number | values' | tr -d ' ')"
@@ -4849,7 +5243,7 @@ Alt_GPTID="disable"		# Disable this change for now, until testing has been condu
 					zpool_TDW=0
 					drive_name=$(glabel status | tail -n +2 | grep "$longgptid" | awk '{print $3}' | cut -d '/' -f2 | cut -d 'p' -f1)
 					if [[ "$drive_name" == *"nvd"* ]]; then	drive_name="nvme"$(echo ${drive_name} | cut -d'd' -f2); fi
-					dev_args=($(smartctl --scan-open | grep "/dev/${drive_name}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+					dev_args=($(smartctl --scan-open | grep -E "/dev/${drive_name}" | cut -d'#' -f1 | cut -d' ' -f2,3))
 					smartdata5="$(smartctl "${dev_args[@]}" -x --json=u /dev/${drive_name})"
 					get_tdr
 					zpool_tdr_total=$(( $zpool_tdr_total + $zpool_TDR ))
@@ -4895,7 +5289,7 @@ Alt_GPTID="disable"		# Disable this change for now, until testing has been condu
 							echo "sgdisk: ARG! - My bananas are not ripe."
 						fi
 					fi > /dev/null 2<&1	# We want to not echo this to the email/screen
-					dev_args=($(smartctl --scan-open | grep "/dev/${drive_name}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+					dev_args=($(smartctl --scan-open | grep -E "/dev/${drive_name}" | cut -d'#' -f1 | cut -d' ' -f2,3))
 					smartdata5="$(smartctl "${dev_args[@]}" -x --json=u /dev/${drive_name})"
 					get_tdr
 					zpool_tdr_total=$(( $zpool_tdr_total + $zpool_TDR ))
@@ -4979,7 +5373,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "get_tdr: $drive_name" | tee -a /tmp/
 	ID242=""
 	
 	if [[ $smartdata5 == "" ]]; then
-		dev_args=($(smartctl --scan-open | grep "/dev/${drive_name}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+		dev_args=($(smartctl --scan-open | grep -E "/dev/${drive_name}" | cut -d'#' -f1 | cut -d' ' -f2,3))
 		smartdata5="$(smartctl "${dev_args[@]}" -x --json=u /dev/${drive_name})"	# The first time it is loaded.
 	fi
 # Check Model Family (For Sandforce or Marvel Controller for ID241/242)
@@ -5083,7 +5477,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "get_tdw: $drive_name" | tee -a /tmp/
 #smartdata5=""
 
 	if [[ $smartdata5 == "" ]]; then
-		dev_args=($(smartctl --scan-open | grep "/dev/${drive_name}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+		dev_args=($(smartctl --scan-open | grep -E "/dev/${drive_name}" | cut -d'#' -f1 | cut -d' ' -f2,3))
 		smartdata5="$(smartctl "${dev_args[@]}" -x --json=u /dev/${drive_name})"	# Second time to possibly load if smartdata5 is Null
 	fi
 
@@ -5153,7 +5547,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "get_tdw: $drive_name" | tee -a /tmp/
 	### RETURN THE DATA
 	zpool_TDW=$(( $zpool_TDW + $ssdtdw ))
 	#virtual_drive_test="$(echo $smartdata5 | grep -i "virtual")"
-	dev_args=($(smartctl --scan-open | grep "/dev/${drive_name}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+	dev_args=($(smartctl --scan-open | grep -E "/dev/${drive_name}" | cut -d'#' -f1 | cut -d' ' -f2,3))
 	virtual_drive_test=$(smartctl "${dev_args[@]}" -a /dev/${drive_name} | grep -i "virtual")
 
 	}
@@ -5249,7 +5643,7 @@ tdwbytes=$zpool_TD
 process_ignore_drives () {
 #if [[ $Debug_Steps == "true" ]]; then echo "process_ignore_drives" | tee -a /tmp/multi_report_debug.txt; fi
 # This causes the script to fail and introduce a fake drive, why?  if [[ $Debug_Steps == "true" ]]; then echo "process_ignore_drives" | tee -a /tmp/multi_report_debug.txt; fi
-	dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+	dev_args=($(smartctl --scan-open | grep -E "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
 	targument="$(smartctl "${dev_args[@]}" -i /dev/${drive} | grep "Serial Number:" | awk '{print $3}')";
 	s="0"
 	IFS=',' read -ra ADDR <<< "$Ignore_Drives_List"
@@ -5269,12 +5663,12 @@ if [[ $Debug_Steps == "true" ]]; then echo "get_smartHDD_listings" | tee -a /tmp
 	
 	if [ $softver != "Linux" ]; then
 		smartdrives=$(for drive in $(sysctl -n kern.disks); do
-			dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+			dev_args=($(smartctl --scan-open | grep -E "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
 			if [ "$(smartctl "${dev_args[@]}" -i /dev/${drive} | grep "SMART support is:.\s*Enabled")" ] && ! [ "$(smartctl "${dev_args[@]}" -i /dev/${drive} | grep "Solid State Device")" ]; then process_ignore_drives; fi
 		done | awk '{for (i=NF; i!=0 ; i--) print $i }' | tr ' ' '\n' | sort | tr '\n' ' ')
 	else
 		smartdrives=$(for drive in $(fdisk -l 2>/dev/null | grep "Disk /dev/sd" | cut -c 11-15 | cut -d ":" -f1 | tr '\n' ' '); do
-			dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+			dev_args=($(smartctl --scan-open | grep -E "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
 			if [ "$(smartctl "${dev_args[@]}" -i /dev/${drive} | grep "SMART support is:.\s*Enabled")" ] && ! [ "$(smartctl "${dev_args[@]}" -i /dev/${drive} | grep "Solid State Device")" ]; then process_ignore_drives; fi
 		done | awk '{for (i=NF; i!=0 ; i--) print $i }' | tr ' ' '\n' | sort | tr '\n' ' ')
 	fi > /dev/null 2<&1
@@ -5307,12 +5701,12 @@ get_smartSSD_listings () {
 if [[ $Debug_Steps == "true" ]]; then echo "get_smartSSD_listings" | tee -a /tmp/multi_report_debug.txt; fi
 	if [ $softver != "Linux" ]; then
 		smartdrivesSSD=$(for drive in $(sysctl -n kern.disks); do
-			dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+			dev_args=($(smartctl --scan-open | grep -E "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
 			if [ "$(smartctl "${dev_args[@]}" -i /dev/${drive} | grep "SMART support is:.\s*Enabled")" ] && [ "$(smartctl "${dev_args[@]}" -i /dev/${drive} | grep "Solid State Device")" ]; then process_ignore_drives; fi
 		done | awk '{for (i=NF; i!=0 ; i--) print $i }' | tr ' ' '\n' | sort | tr '\n' ' ')
 	else
 		smartdrivesSSD=$(for drive in $(fdisk -l 2>/dev/null | grep "Disk /dev/sd" | cut -c 11-15 | cut -d ":" -f1 | tr '\n' ' '); do
-			dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+			dev_args=($(smartctl --scan-open | grep -E "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
 			if [ "$(smartctl "${dev_args[@]}" -i /dev/${drive} | grep "SMART support is:.\s*Enabled")" ] && [ "$(smartctl "${dev_args[@]}" -i /dev/${drive} | grep "Solid State Device")" ]; then process_ignore_drives; fi
 		done | awk '{for (i=NF; i!=0 ; i--) print $i }' | tr ' ' '\n' | sort | tr '\n' ' ')
 	fi > /dev/null 2<&1
@@ -5347,14 +5741,14 @@ nvme_drive=""
 if [[ $Debug_Steps == "true" ]]; then echo "get_smartNVM_listings" | tee -a /tmp/multi_report_debug.txt; fi
 	if [ $softver != "Linux" ]; then
 		smartdrivesNVM=$(for drive in $(sysctl -n kern.disks); do
-			dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+			dev_args=($(smartctl --scan-open | grep -E "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
 			if [ "$(smartctl "${dev_args[@]}" -i /dev/${drive} | grep "NVM")" ]; then process_ignore_drives; fi
 		done | awk '{for (i=NF; i!=0 ; i--) print $i }' | tr ' ' '\n' | sort | tr '\n' ' ')
 		### Convert nvdx to nvmexx in smartdrivesNVM ###
 	else
 		smartdrivesNVM=$(fdisk -l 2>/dev/null | grep "Disk /dev/nvm" | cut -d ':' -f 1 | cut -d '/' -f 3 | tr '\n' ' ')
 		for drive in $smartdrivesNVM; do
-			dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+			dev_args=($(smartctl --scan-open | grep -E "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
 			if [ "$(smartctl "${dev_args[@]}" -i /dev/${drive} | grep "NVM")" ]; then process_ignore_drives; fi
 		done | awk '{for (i=NF; i!=0 ; i--) print $i }' | tr ' ' '\n' | sort | tr '\n' ' '
 			### Convert nvdx to nvmexx in smartdrivesNVM ###
@@ -5401,12 +5795,12 @@ if [[ $Debug_Steps == "true" ]]; then echo "get_smartOther_listings" | tee -a /t
 
 	if [ $softver != "Linux" ]; then
 		nonsmartdrives=$(for drive in $(sysctl -n kern.disks); do
-			dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+			dev_args=($(smartctl --scan-open | grep -E "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
 			if [ ! "$(smartctl "${dev_args[@]}" -i /dev/${drive} | grep "SMART support is:.\s*Enabled")" ] && [ ! "$(smartctl "${dev_args[@]}" -i /dev/${drive} | grep "NVM")" ]; then process_ignore_drives; fi
 		done | awk '{for (i=NF; i!=0 ; i--) print $i }' | tr ' ' '\n' | sort | tr '\n' ' ')
 	else
 		nonsmartdrives=$(for drive in $(fdisk -l 2>/dev/null | grep "Disk /dev/sd" | cut -c 11-13 | tr '\n' ' '); do
-			dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+			dev_args=($(smartctl --scan-open | grep -E "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
 			if [ ! "$(smartctl "${dev_args[@]}" -i /dev/${drive} | grep "SMART support is: Enabled")" ]; then process_ignore_drives; fi
 		done | awk '{for (i=NF; i!=0 ; i--) print $i }' | tr ' ' '\n' | sort | tr '\n' ' ')
 	fi > /dev/null 2<&1
@@ -5443,7 +5837,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "get_json_data: $drive" | tee -a /tmp
 	if [[ "$drive" != "cd0" ]]; then
 		if [[ "$dump_all" != "0" ]]; then	# Routine -dump
 			# Pull a fresh JSON listing
-			dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+			dev_args=($(smartctl --scan-open | grep -E "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
 			tempjson="$(smartctl "${dev_args[@]}" -x --json=u /dev/${drive})"
 			serial1="$(echo "${tempjson}" | jq -Mre '.serial_number | values' | tr -d ' ')"
 			rpm="$(echo "${tempjson}" | jq -Mre '.rotation_rate | values')"
@@ -5466,7 +5860,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "get_drive_data: $drive" | tee -a /tm
 
 # Should only need this the one time here.
 
-dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+dev_args=($(smartctl --scan-open | grep -E "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
 
 	if [[ $Develop == "true" ]]; then
 		echo " "
@@ -5547,7 +5941,7 @@ dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1 | cut -d
 
 		if [[ $Develop == "true" ]]; then echo "Looking at Real Drive Data, Not Simulated"; fi
 		# Get drive data for json processing
-		dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+		dev_args=($(smartctl --scan-open | grep -E "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
 		smartdata5="$(smartctl "${dev_args[@]}" -x --json=u /dev/${drive})"
 		# Get drive data old school for what isn't in json yet
 		smartdata="$(smartctl "${dev_args[@]}" -a /dev/${drive})"
@@ -6493,7 +6887,7 @@ Check_power_on_time ()
 	{
 	# Check every drive.
 	for drive in ${smartdrives[@]}; do
-		dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+		dev_args=($(smartctl --scan-open | grep -E "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
 		smartdata5="$(smartctl "${dev_args[@]}" -x --json=u /dev/${drive})"
 		if [[ "$(echo "${smartdata5}" | jq -Mre '.power_on_time.hours | values')" ]]; then
 			onHours="$(echo "${smartdata5}" | jq -Mre '.power_on_time.hours | values')"
@@ -6506,7 +6900,7 @@ Check_power_on_time ()
 		fi > /dev/null 2<&1
 	done
 	for drive in ${smartdrivesSSD[@]}; do
-		dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+		dev_args=($(smartctl --scan-open | grep -E "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
 		smartdata5="$(smartctl "${dev_args[@]}" -x --json=u /dev/${drive})"
 		if [[ "$(echo "${smartdata5}" | jq -Mre '.power_on_time.hours | values')" ]]; then
 			onHours="$(echo "${smartdata5}" | jq -Mre '.power_on_time.hours | values')"
@@ -6519,7 +6913,7 @@ Check_power_on_time ()
 		fi > /dev/null 2<&1
 	done
 	for drive in ${smartdrivesNVM[@]}; do
-		dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+		dev_args=($(smartctl --scan-open | grep -E "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
 		smartdata5="$(smartctl "${dev_args[@]}" -x --json=u /dev/${drive})"
 		if [[ "$(echo "${smartdata5}" | jq -Mre '.power_on_time.hours | values')" ]]; then
 			onHours="$(echo "${smartdata5}" | jq -Mre '.power_on_time.hours | values')"
@@ -6744,6 +7138,21 @@ if [[ "$Monitor" == "true" ]]; then return; fi
 # Set temp and color for Disk Layout
 if [[ "$Disklayout" == "enable" ]] && [[ $softver == "Linux" ]]; then
 	disk_layout_set_values
+	# >>>>>>>>>>>>>>>>>>>>>>>> INSERT MAPPER SCRIPT PART 1 HERE <<<<<<<<<<<<<<<<<<<<<<<<<
+	if [[ "$Disklayout" == "enable" ]] && [[ $softver == "Linux" ]]; then
+		# Do we have the file `render_case.py` ?
+		if ! test -e "${SCRIPT_DIR}/render_case.py"; then
+			if [[ "$(curl -is https://github.com | head -n 1)" ]]; then
+				# Go git the file
+				( cd ${SCRIPT_DIR} || exit 3
+				curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report_Hub/refs/heads/main/docs/DiskLayout_Editor/render_case.py
+				)
+			fi
+		fi
+
+
+	fi
+	# <<<<<<<<<<<<<<<<<<<<<<< END MAPPER SCRIPT PART 1 >>>>>>>>>>>>>>>>>>>>>>>>
 fi
 	(
 		printf "<tr style=\"background-color:%s;\">\n" $bgColor;
@@ -6948,7 +7357,7 @@ if [[ "$Monitor" == "true" ]]; then return; fi
 		echo "<br>"
 	) >> "$logfile"
 
-#cat "$logfile" > page1_to_join.html
+#cat "$logfile" > $SCRIPT_DIR/page1_to_join.html
 
 	}
 	
@@ -7197,7 +7606,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "detailed_report" | tee -a /tmp/multi
 							drive_ident=$longgptid" -> "$drive_name
 						fi
 						if [[ "$drive_name" == *"nvd"* ]]; then	drive_name="nvme"$(echo ${drive_name} | cut -d'd' -f2); fi
-						dev_args=($(smartctl --scan-open | grep "/dev/${drive_name}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+						dev_args=($(smartctl --scan-open | grep -E "/dev/${drive_name}" | cut -d'#' -f1 | cut -d' ' -f2,3))
 						serial_temp=$(smartctl "${dev_args[@]}" -a --json=u /dev/${drive_name} | jq -Mre '.serial_number | values' | tr -d ' ')
 						if [[ $serial_temp == "" ]]; then serial_temp=$Non_Exist_Value; fi
 						virtual_drive_test=$(smartctl "${dev_args[@]}" -a /dev/${drive_name} | grep -i "virtual")
@@ -7237,7 +7646,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "detailed_report" | tee -a /tmp/multi
 					for longgptid in $drives_in_gptid; do
 						drive_ident=$(lsblk -o +PARTUUID,NAME,LABEL | grep -w "$longgptid" | awk -F" " '{print $7 " -> " $8}')
 						drive_name=$(lsblk -o +PARTUUID,NAME,LABEL | grep -w "$longgptid" | awk -F" " '{print $8}')
-						dev_args=($(smartctl --scan-open | grep "/dev/${drive_name}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+						dev_args=($(smartctl --scan-open | grep -E "/dev/${drive_name}" | cut -d'#' -f1 | cut -d' ' -f2,3))
 						serial_temp=$(smartctl "${dev_args[@]}" -a --json=u /dev/${drive_name} | jq -Mre '.serial_number | values' | tr -d ' ')
 
 						if [[ $serial_temp == "" ]]; then serial_temp=$Non_Exist_Value; fi
@@ -7292,7 +7701,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "detailed_report" | tee -a /tmp/multi
 					) >> "$logfile"
 				else
 					# Gather brand and serial number of each drive
-					dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+					dev_args=($(smartctl --scan-open | grep -E "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
 					smartdata="$(smartctl "${dev_args[@]}" -a /dev/${drive})"
 					smartdata5="$(smartctl "${dev_args[@]}" -x --json=u /dev/${drive})"
 
@@ -7350,7 +7759,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "detailed_report" | tee -a /tmp/multi
 					(
 						seagate="False"
 						# Create a simple header and drop the output of some basic smartctl commands
-						dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+						dev_args=($(smartctl --scan-open | grep -E "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
 						echo "<b>########## SMART status report for ${drive} drive (${modelnumber} : ${serial}${SMR_Note} : ${drive_location}) ##########</b>"
 						test_seagate=$(smartctl "${dev_args[@]}" -l farm -A /dev/${drive})
 						if echo "$test_seagate" | grep -qi "Farm Log Page"; then
@@ -7432,7 +7841,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "detailed_report" | tee -a /tmp/multi
 							if [[ "$drive" =~ "nvme" ]]; then
 								lasttest2=$(echo "$smart_output" | grep -iEA 20 "test_description" | tail -n +2 | grep -iE "$lastfind" | grep -v "$lasttest1" | head -n 1)
 							else
-								lasttest2=$(echo "$smart_output" | grep -iEA 20 "test_description" | grep -iE "$lastfind" | grep -v "$lasttest1" | head -n 2 | tail -n 1)
+								lasttest2=$(echo "$smart_output" | grep -iEA 20 "test_description" | grep -iE "$lastfind" | grep -v "$lasttest1" | head -n 1 | tail -n 1)
 							fi
 							if [[ -n "$lasttest2" ]]; then
 								echo "$lasttest2"
@@ -7479,7 +7888,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "non_smart_report" | tee -a /tmp/mult
 				# Gather model number and serial number of each drive
 				modelnumber=""
 				serial=""  
-				dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))				
+				dev_args=($(smartctl --scan-open | grep -E "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))				
 				smartdata="$(smartctl "${dev_args[@]}" -a /dev/${drive})"
 				smartdata5="$(smartctl "${dev_args[@]}" -x --json=u /dev/${drive})"
 
@@ -7562,7 +7971,7 @@ while IFS= read -r line; do
 	if [[ "$(echo $src_file | grep -i ".json")" ]]; then new_directory="JSON"; fi
 	if [[ "$(echo $src_file | grep -i "config.txt")" ]]; then new_directory="CONFIG"; fi
 	if [[ "$(echo $src_file | grep -i ".html")" ]]; then new_directory="DISK_LAYOUT"; fi
-	if [[ "$(echo $src_file | grep -i "disklayout_config.json")" ]]; then new_directory="DISK_LAYOUT"; fi
+	if [[ "$(echo $src_file | grep -i "$disk_layout_json_file")" ]]; then new_directory="DISK_LAYOUT"; fi
 	if [[ "$(echo $src_file | grep -i "lsscsi.txt")" ]]; then new_directory="DISK_LAYOUT"; fi
 	if [[ "$(echo $src_file | grep -i "blkid.txt")" ]]; then new_directory="DISK_LAYOUT"; fi
 	if [[ "$(echo $src_file | grep -i "lsblk.txt")" ]]; then new_directory="DISK_LAYOUT"; fi
@@ -7786,16 +8195,16 @@ if [[ $Debug_Steps == "true" ]]; then echo "attach_files" | tee -a /tmp/multi_re
 			fi
 		fi	
 
-		if test -e "disklayout_config.json"; then
+		if test -e "$disk_layout_json_file"; then
 			if [[ "$truenas_sendmail_support" == "No" ]]; then
-				(echo "create_attachment_file disklayout_config.json disklayout_config.json" >> /tmp/attachment_files.txt)
+				(echo "create_attachment_file $disk_layout_json_file disklayout_config.json" >> /tmp/attachment_files.txt)
 			else
 				(
 				echo "--${boundary}"
 				echo "Content-Type: text/html"
 				echo "Content-Transfer-Encoding: base64"
 				echo "Content-Disposition: attachment; filename=disklayout_config.json"
-				base64 "disklayout_config.json"
+				base64 "$disk_layout_json_file"
 				) >> "$logfile"
 			fi
 		fi			
@@ -8829,7 +9238,7 @@ if [[ $NVMelastTestHoursFake == "true" ]]; then testAge=$Non_Exist_Value; fi
 	if [[ $DeviceRedFlag == "enable" ]]; then if [[ $deviceStatusColor != $critColor ]]; then if [[ $deviceStatusColor != $warnColor ]]; then deviceStatusColor=$smrColor; fi; fi; fi
 
 	# SCT Error Recovery Control Report
-	dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+	dev_args=($(smartctl --scan-open | grep -E "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
 	scterc="$(smartctl "${dev_args[@]}" -l scterc /dev/${drive} | tail -3 | head -2)"
 
 	if [[ $SCT_Warning_Level == "TLER" ]]; then
@@ -8840,9 +9249,9 @@ if [[ $NVMelastTestHoursFake == "true" ]]; then testAge=$Non_Exist_Value; fi
 
 	if [[ $SCT_Warning_Level == "TLER_No_Msg" && $SCT_Enable == "enable" ]]; then
 		if [[ $scterc =~ "Disabled" ]]; then
-			# Now we set the TLER ONLY for Disabled Drives because we do not know how it will affect other drives.
-			smartctl "${dev_args[@]}" -l scterc /dev/${drive},"$SCT_Read_Timeout","$SCT_Write_Timeout" > /dev/null 2>&1
-			scterc="$(smartctl "${dev_args[@]}" -l scterc /dev/${drive} | tail -3 | head -2)"
+			#Now we set the TLER ONLY for Disabled Drives because we do not know how it will affect other drives.
+			smartctl "${dev_args[@]}" -l scterc,${SCT_Read_Timeout},${SCT_Write_Timeout} /dev/${drive} > /dev/null 2>&1
+			scterc="$(smartctl "${dev_args[@]}" -l scterc /dev/"${drive}" | tail -3 | head -2)"
 			if [[ $scterc =~ "seconds" ]]; then logfile_messages=$logfile_messages"$(printf "<b><span style='color:green;'>Drive "$serial" TLER is NOW ENABLED !</span></b><br>")"; fi
 			if [[ $scterc =~ "Disabled" ]]; then logfile_warning=$logfile_warning"$(printf "<b><span style='color:darkred;'>Drive "$serial" TLER is Disabled and failed to set.</span></b><br>")"; fi
 		fi
@@ -8858,9 +9267,11 @@ if [[ $NVMelastTestHoursFake == "true" ]]; then testAge=$Non_Exist_Value; fi
 
 	if [[ $SCT_Enable == "enable" ]]; then
 		if [[ $scterc =~ "Disabled" ]]; then
+
 			# Now we set the TLER ONLY for Disabled Drives because we do not know how it will affect other drives.
-			smartctl "${dev_args[@]}" -l scterc /dev/${drive},"$SCT_Read_Timeout","$SCT_Write_Timeout" > /dev/null 2>&1
-			scterc="$(smartctl "${dev_args[@]}" -l scterc /dev/${drive} | tail -3 | head -2)"
+			smartctl "${dev_args[@]}" -l scterc,${SCT_Read_Timeout},${SCT_Write_Timeout} /dev/${drive} > /dev/null 2>&1
+			scterc="$(smartctl "${dev_args[@]}" -l scterc /dev/"${drive}" | tail -3 | head -2)"
+
 			if [[ $SCT_Warning_Level == "all" || $SCT_Warning_Level == "TLER" ]]; then logfile_warning=$logfile_warning"$(printf "<b><span style='color:green;'>Drive "$serial" TLER is NOW ENABLED !</span></b><br>")"; fi
 			if [[ $scterc =~ "Disabled" ]]; then
 				if [[ $SCT_Warning_Level == "all" || $SCT_Warning_Level == "TLER" ]]; then logfile_warning=$logfile_warning"$(printf "<b><span style='color:darkred;'>Drive "$serial" TLER is Disabled and failed to set.</span></b><br>")"; fi
@@ -12181,7 +12592,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "generate_config_file" | tee -a /tmp/
 								wearleveladj="d"
 #								farmoffset="d"
 								echo " "
-								dev_args=($(smartctl --scan-open | grep "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
+								dev_args=($(smartctl --scan-open | grep -E "/dev/${drive}" | cut -d'#' -f1 | cut -d' ' -f2,3))
 								farm_power_on_hours=$(smartctl "${dev_args[@]}" -l farm /dev/${drive} | grep -i "power on hours" | grep -vi "spindle" | cut -d ':' -f2 | tr -d ' ')
 								if [[ ! "$(echo $Custom_Drives_List | grep $serial)" ]]; then
 									echo "The drive serial number "$serial" is not in the Custom Drive Config database."
@@ -15023,32 +15434,7 @@ if [[ "$3" == "-config" ]] && [[ "$1" == "-t" ]]; then
 	exit 0
 fi
 
-# >>>>>>>>>>>>>>>>>>>>>>>> INSERT MAPPER SCRIPT PART 1 HERE <<<<<<<<<<<<<<<<<<<<<<<<<
-if [[ "$Disklayout" == "enable" ]] && [[ $softver == "Linux" ]]; then
-	# Do we have the file `render_case.py` ?
-	if ! test -e "${SCRIPT_DIR}/render_case.py"; then
-		if [[ "$(curl -is https://github.com | head -n 1)" ]]; then
-			# Go git the file
-			( cd ${SCRIPT_DIR} || exit 3
-			curl -LJOs https://raw.githubusercontent.com/JoeSchmuck/Multi-Report_Hub/refs/heads/main/docs/DiskLayout_Editor/render_case.py
-			)
-		fi
-	fi
 
-# Before we go and grab individual drive data, we need to initialize the Mapper Arrays
-
-	# Read the array if it exists, this preserves the slot and cage configuration
-	if test -e "$disk_layout_json_file"; then
-#		echo $disk_layout_json_file" exists, reading the file...." | tee -a debug.txt
-		disk_layout_read_json_file
-	fi
-	
-	# Collect the drive data regardless of if the disklayout_config.json file exists or not.
-	# At a minimum this will gather data for a new file.
-		disk_layout_collect_drive_data
-		disk_layout_reconcile_data
-fi
-# <<<<<<<<<<<<<<<<<<<<<<< END MAPPER SCRIPT PART 1 >>>>>>>>>>>>>>>>>>>>>>>>
 
 #>>>>>>>>>>>>>>>>>>>>>>> INSERT ATTACH FILE HERE <<<<<<<<<<<<<<<<<<<<<<<<<<<
 
@@ -15249,13 +15635,20 @@ fi
 
 if [[ "$Disklayout" == "enable" ]] && [[ $softver == "Linux" ]]; then
 	# Write the arrays to the disklayout_config.json file.  This will create a new file if one didn't previously exist.
-	disk_layout_write_json_file
+#	disk_layout_write_json_file
 	
 	# Remove any duplicates and clear those slot numbers.
 #	disk_layout_remove_duplicates
-	
+	# Check if the json file is an older version, if yes, update it.
+	OLD_OPTIONS=$(shopt -p -o)
+	json_version_update
+	eval "$OLD_OPTIONS"
+	# Let's make our json file.
+	OLD_OPTIONS=$(shopt -p -o)
+	generate_disklayout_json
+	eval "$OLD_OPTIONS"
 	# Generate the HTML file
-	python3 render_case.py --config "$disk_layout_json_file" > /dev/null 2<&1
+	python3 $SCRIPT_DIR/render_case.py --config "$disk_layout_json_file" > /dev/null 2<&1
 	exit_code=$?
 	if [[ "$exit_code" != 0 ]]; then
 		echo "<><><><><><><><><><><><><><><><><><><><><>"
