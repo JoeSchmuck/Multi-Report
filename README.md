@@ -1,10 +1,16 @@
 # Multi-Report and Drive-Selftest for TrueNAS 13+ Core/Scale
 
-Bug-Fix - Multi-Report version 3.29
+Bug-Fix - Multi-Report version 3.32
 
-Bug-Fix - Drive-Selftest Version 1.09
-
---- View the Change Logs within the scripts for details.
+# CHANGE LOG
+# V3.32 (19 October 2026)
+#
+# - Maintenance Release
+# - Updated to use the full file path for disklayout_config.json and the related .html files.
+# - Fixed the Last Extended Test POH in the SMART Report Section.
+# - Updated `dev_args` GREP command to fix reading sdaa, sdab... (Thanks Aleksey K.)
+# - Fixed TLER not being set.
+# - Changed the Disk Layout tracking to use pcie values, json file update to version "0.4".
 
 ==============================================================================
 
