@@ -2,7 +2,7 @@
 # shellcheck disable=SC1075,SC2027,SC2034,SC2128,SC2002,SC2004,SC2086,SC2162
 LANG="en_US.UTF-8"
 
-##### Version 3.33
+##### Version 3.34
 
 ###### Get Config File Name and Location
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
@@ -85,9 +85,16 @@ fi
 # Version
 ### Changelog:
 
+# V3.34 (24 October 2026)
+#
+# - Thanks for @Randrage, @jonathan-a-tyler, and @kckopp for providing the fixes so rapidly and validating them.
+# - Fixed a few other bugs CORE related (boot-pool Zpool TDR/TDW), and addressing Zpool PARTUUID to SERIAL to LOCATION not containing all the data.
+# - Fixed the CLI evaluation, it was technically incorrect even though it worked.
+# - Fixed Last SMART Test Performed for SAS/SCSI drives.
+
 # V3.33 (21 October 2026)
 #
-# - Hopfully actually fixed the `dev_args` GREP command to fix reading sdaa, sdab...
+# - Hopefully actually fixed the `dev_args` GREP command to fix reading sdaa, sdab...
 
 # V3.32 (19 October 2026)
 #
@@ -1081,7 +1088,7 @@ logfile_header="/tmp/${tempfilepath}smart_report_header.tmp"
 logfile_temp="/tmp/${tempfilepath}smart_report_temp.tmp"
 boundary="gc0p4Jq0M2Yt08jU534c0p"
 
-CurrentFilename="multi_report_v3.33_2026_10_21.txt"
+CurrentFilename="multi_report_v3.34_2026_10_24.txt"
 valid_config_version_date="2026-03-30"	# Configuration file valid date
 progverdate="$(echo $CurrentFilename | cut -d '_' -f4,5,6 | cut -d '.' -f1 | sed -r 's/[_]+/-/g')"
 progname="Multi-Report "$(echo $CurrentFilename | cut -d '_' -f3)" dtd:"
@@ -1688,7 +1695,8 @@ def harvest_metrics(hw_address_map, zfs_pools):
                 if found_uid and not uuid:
                     uuid = found_uid
 
-        pool = find_pool(dev_node) or "No Pool Assigned"
+        pool_name, _ = find_pool(dev_node)
+        pool = pool_name or "No Pool Assigned"
 
         temp = "UNKNOWN"
         for line in smart_out.splitlines():
@@ -3866,7 +3874,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "remove_duplicate" | tee -a /tmp/mult
 	# Get drive serial number
 	for i in ${duplicate_list}; do  # Drive ID's
 		dev_args=($(smartctl --scan-open | grep -E "^/dev/${i}[[:space:]]" | cut -d'#' -f1 | cut -d' ' -f2,3))
-		smartdata5="$(smartctl "${dev_args[@]}" -x --json=u /dev/${drive})"
+		smartdata5="$(smartctl "${dev_args[@]}" -x --json=u /dev/${i})"
 
 # Commented out for 22 March
 #		if [[ "$(echo ${smartdata5} | grep -i "SCSI")" ]]; then	# First, is this SCSI interface.
@@ -4943,9 +4951,10 @@ if [[ $Debug_Steps == "true" ]]; then echo "zpool_report" | tee -a /tmp/multi_re
 	fi
 
 	poolNum=0			# Alternate background in pools table
-	tempIFS=$IFS
+#	tempIFS=$IFS					# Removed 23 Oct 2026
 	IFS=$'\n'
 	for pool in $pools; do
+		IFS=$' \t\n'				# Added 23 Oct 2026
 		scrub_errors=0
 		# zpool health summary
 		pool_length=$(wc -w <<< $pool)
@@ -5232,22 +5241,35 @@ Alt_GPTID="disable"		# Disable this change for now, until testing has been condu
 				if [[ $(zpool status "$pool" | grep "nvd") ]]; then
 					drives_in_gptid=$drives_in_gptid$(zpool status "$pool" | grep "nvd" | awk '{print $1}' | cut -d " " -f1 | cut -d "p" -f1)  # NVM
 				fi
-				if [[ $(zpool status "$pool" | grep -v "data" | grep " da") ]]; then
-					drive_da=$(zpool status "$pool" | grep -v "data" | grep " da0" | awk '{print $1}' | cut -d " " -f1 | cut -d "p" -f1)  # daX
+				if [[ $(zpool status "$pool" | grep -v "data" | grep -E '^[[:space:]]+da[0-9]+') ]]; then
+					drive_da=$(zpool status "$pool" | grep -v "data" | grep -E '^[[:space:]]+da[0-9]+' | awk '{print $1}' | cut -d " " -f1 | cut -d "p" -f1)  # daX
 					drive_da=$(glabel status | tail -n +2 | grep " $drive_da" | awk '{print $1}')
-					drives_in_gptid=$drives_in_gptid$drive_da
-				fi		
+					drives_in_gptid=$drives_in_gptid$'\n'$drive_da
+				fi
+# Added 23 Oct 2026
+				if [[ $(zpool status "$pool" | grep -v "data" | grep -E '^[[:space:]]+ada[0-9]+') ]]; then
+					drive_da=$(zpool status "$pool" | grep -v "data" | grep -E '^[[:space:]]+ada[0-9]+' | awk '{print $1}' | cut -d " " -f1)  # adaX + partition
+					drive_da=$(gpart list | grep -A 10 "$drive_da" | grep "rawuuid" | cut -d':' -f2 | cut -d' ' -f2)
+					drives_in_gptid=$drives_in_gptid$'\n'$drive_da
+				fi				
 
-				
 				zpool_list=$(zpool status -v "$pool")
 				zpool_tdr_total=0
 				zpool_tdw_total=0
 				for longgptid in $drives_in_gptid; do
 					zpool_TDR=0
 					zpool_TDW=0
-					drive_name=$(glabel status | tail -n +2 | grep "$longgptid" | awk '{print $3}' | cut -d '/' -f2 | cut -d 'p' -f1)
+# Removed 23 Oct 2026	drive_name=$(glabel status | tail -n +2 | grep "$longgptid" | awk '{print $3}' | cut -d '/' -f2 | cut -d 'p' -f1)  
+# Added 23 Oct 2026					
+					if [[ $(echo $zpool_list | grep "$longgptid") ]]; then   # gptid in glabel
+						drive_name=$(glabel status | tail -n +2 | grep "$longgptid" | awk '{print $3}' | cut -d 'p' -f1)
+					else   # Not in glabel
+						longgptid_temp=$(echo $longgptid | cut -d '/' -f2)
+						drive_name=$(gpart list | grep -B 7 "$longgptid_temp" | grep "Name" | awk '{print $3}' | cut -d "p" -f1)
+					fi
+
 					if [[ "$drive_name" == *"nvd"* ]]; then	drive_name="nvme"$(echo ${drive_name} | cut -d'd' -f2); fi
-					dev_args=($(smartctl --scan-open | grep -E "^/dev/${drive_name}[[:space:]]" | cut -d'#' -f1 | cut -d' ' -f2,3))
+					IFS=' ' read -ra dev_args <<< "$(smartctl --scan-open | grep -E "^/dev/${drive_name}[[:space:]]" | cut -d'#' -f1 | cut -d' ' -f2,3)"
 					smartdata5="$(smartctl "${dev_args[@]}" -x --json=u /dev/${drive_name})"
 					get_tdr
 					zpool_tdr_total=$(( $zpool_tdr_total + $zpool_TDR ))
@@ -5293,7 +5315,7 @@ Alt_GPTID="disable"		# Disable this change for now, until testing has been condu
 							echo "sgdisk: ARG! - My bananas are not ripe."
 						fi
 					fi > /dev/null 2<&1	# We want to not echo this to the email/screen
-					dev_args=($(smartctl --scan-open | grep -E "^/dev/${drive_name}[[:space:]]" | cut -d'#' -f1 | cut -d' ' -f2,3))
+					IFS=' ' read -ra dev_args <<< "$(smartctl --scan-open | grep -E "^/dev/${drive_name}[[:space:]]" | cut -d'#' -f1 | cut -d' ' -f2,3)"
 					smartdata5="$(smartctl "${dev_args[@]}" -x --json=u /dev/${drive_name})"
 					get_tdr
 					zpool_tdr_total=$(( $zpool_tdr_total + $zpool_TDR ))
@@ -5350,8 +5372,8 @@ Alt_GPTID="disable"		# Disable this change for now, until testing has been condu
 		) >> "$logfile"
 		fi
 	done
-	IFS=$tempIFS
-
+#	IFS=$tempIFS				# Removed 23 Oct 2026
+	IFS=$' \t\n'				# Added 23 Oct 2026
 	# End of zpool status table
 	if [[ "$Monitor" == "false" ]]; then
 		echo "</table>" >> "$logfile"
@@ -5377,7 +5399,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "get_tdr: $drive_name" | tee -a /tmp/
 	ID242=""
 	
 	if [[ $smartdata5 == "" ]]; then
-		dev_args=($(smartctl --scan-open | grep -E "^/dev/${drive_name}[[:space:]]" | cut -d'#' -f1 | cut -d' ' -f2,3))
+		IFS=' ' read -ra dev_args <<< "$(smartctl --scan-open | grep -E "^/dev/${drive_name}[[:space:]]" | cut -d'#' -f1 | cut -d' ' -f2,3)"
 		smartdata5="$(smartctl "${dev_args[@]}" -x --json=u /dev/${drive_name})"	# The first time it is loaded.
 	fi
 # Check Model Family (For Sandforce or Marvel Controller for ID241/242)
@@ -5481,7 +5503,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "get_tdw: $drive_name" | tee -a /tmp/
 #smartdata5=""
 
 	if [[ $smartdata5 == "" ]]; then
-		dev_args=($(smartctl --scan-open | grep -E "^/dev/${drive_name}[[:space:]]" | cut -d'#' -f1 | cut -d' ' -f2,3))
+		IFS=' ' read -ra dev_args <<< "$(smartctl --scan-open | grep -E "^/dev/${drive_name}[[:space:]]" | cut -d'#' -f1 | cut -d' ' -f2,3)"
 		smartdata5="$(smartctl "${dev_args[@]}" -x --json=u /dev/${drive_name})"	# Second time to possibly load if smartdata5 is Null
 	fi
 
@@ -5551,7 +5573,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "get_tdw: $drive_name" | tee -a /tmp/
 	### RETURN THE DATA
 	zpool_TDW=$(( $zpool_TDW + $ssdtdw ))
 	#virtual_drive_test="$(echo $smartdata5 | grep -i "virtual")"
-	dev_args=($(smartctl --scan-open | grep -E "^/dev/${drive_name}[[:space:]]" | cut -d'#' -f1 | cut -d' ' -f2,3))
+	IFS=' ' read -ra dev_args <<< "$(smartctl --scan-open | grep -E "^/dev/${drive_name}[[:space:]]" | cut -d'#' -f1 | cut -d' ' -f2,3)"
 	virtual_drive_test=$(smartctl "${dev_args[@]}" -a /dev/${drive_name} | grep -i "virtual")
 
 	}
@@ -7571,6 +7593,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "detailed_report" | tee -a /tmp/multi
 			(
 			IFS=$'\n'
 			for pool in $pools; do
+			IFS=$' \t\n'				# Added 23 Oct 2026
 			this_disk_errors=""
 				###### FREEBSD VERSION OF THIS SECTION
 				if [ $softver != "Linux" ]; then
@@ -7610,7 +7633,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "detailed_report" | tee -a /tmp/multi
 							drive_ident=$longgptid" -> "$drive_name
 						fi
 						if [[ "$drive_name" == *"nvd"* ]]; then	drive_name="nvme"$(echo ${drive_name} | cut -d'd' -f2); fi
-						dev_args=($(smartctl --scan-open | grep -E "^/dev/${drive_name}[[:space:]]" | cut -d'#' -f1 | cut -d' ' -f2,3))
+						IFS=' ' read -ra dev_args <<< "$(smartctl --scan-open | grep -E "^/dev/${drive_name}[[:space:]]" | cut -d'#' -f1 | cut -d' ' -f2,3)"
 						serial_temp=$(smartctl "${dev_args[@]}" -a --json=u /dev/${drive_name} | jq -Mre '.serial_number | values' | tr -d ' ')
 						if [[ $serial_temp == "" ]]; then serial_temp=$Non_Exist_Value; fi
 						virtual_drive_test=$(smartctl "${dev_args[@]}" -a /dev/${drive_name} | grep -i "virtual")
@@ -7650,7 +7673,7 @@ if [[ $Debug_Steps == "true" ]]; then echo "detailed_report" | tee -a /tmp/multi
 					for longgptid in $drives_in_gptid; do
 						drive_ident=$(lsblk -o +PARTUUID,NAME,LABEL | grep -w "$longgptid" | awk -F" " '{print $7 " -> " $8}')
 						drive_name=$(lsblk -o +PARTUUID,NAME,LABEL | grep -w "$longgptid" | awk -F" " '{print $8}')
-						dev_args=($(smartctl --scan-open | grep -E "^/dev/${drive_name}[[:space:]]" | cut -d'#' -f1 | cut -d' ' -f2,3))
+						IFS=' ' read -ra dev_args <<< "$(smartctl --scan-open | grep -E "^/dev/${drive_name}[[:space:]]" | cut -d'#' -f1 | cut -d' ' -f2,3)"
 						serial_temp=$(smartctl "${dev_args[@]}" -a --json=u /dev/${drive_name} | jq -Mre '.serial_number | values' | tr -d ' ')
 
 						if [[ $serial_temp == "" ]]; then serial_temp=$Non_Exist_Value; fi
@@ -7845,7 +7868,8 @@ if [[ $Debug_Steps == "true" ]]; then echo "detailed_report" | tee -a /tmp/multi
 							if [[ "$drive" =~ "nvme" ]]; then
 								lasttest2=$(echo "$smart_output" | grep -iEA 20 "test_description" | tail -n +2 | grep -iE "$lastfind" | grep -v "$lasttest1" | head -n 1)
 							else
-								lasttest2=$(echo "$smart_output" | grep -iEA 20 "test_description" | grep -iE "$lastfind" | grep -v "$lasttest1" | head -n 1 | tail -n 1)
+# Replaced 24 Oct 2026			lasttest2=$(echo "$smart_output" | grep -iEA 20 "test_description" | grep -iE "$lastfind" | grep -v "$lasttest1" | head -n 1 | tail -n 1)
+								lasttest2=$(echo "$smart_output" | grep -iEA 21 "test_description|LBA_first_err" | grep -iE "^[[:space:]]*#[[:space:]]*[0-9]+.*($lastfind)" | grep -v "$lasttest1" | head -n 1)
 							fi
 							if [[ -n "$lasttest2" ]]; then
 								echo "$lasttest2"
@@ -15043,7 +15067,7 @@ for command in "${auxillary_commands[@]}"; do
 	fi
 done
 
-if ! [[ "$1" == "-config" || "$1" == "-help" || "$1" == "-delete" || "$1" == "-s" || "$1" == "" || "$1" == "-dump" || "$1" == "-purge" || "$1" == "-h" || "$1" == "-t" || "$1" == "-m" || "$1" == "-u7zip" || "$1" == "-update" || "$1" == "-update_selftest" || "$1" == "-update_sendemail" || "$1" == "-update_smr" || "$1" == "-update_all" || "$1" == "-ignore_lock" || "$1" == "-cleanup" || "$1" == "-scsismart" || "$1" == "-update_smr" || "$1" == "-check_smr"  || "$1" == "-disable_smr" || "$1" == "-enable_smr" || "$1" == "-disable_smr_alarm" || "$1" == "-enable_smr_alarm" || "$1" == "-disable_farm" || "$1" == "-enable_farm" || "$1" == "-tardrivedata"  || "$1" == "-test_sendemail" || "$1" == "-check_for_updates" || "$1" == "-update_render" || "-dev" || "-debug_sendemail" || "$1" == "-report_only" || "-no_test" ]]; then
+if ! [[ "$1" == "-config" || "$1" == "-help" || "$1" == "-delete" || "$1" == "-s" || "$1" == "" || "$1" == "-dump" || "$1" == "-purge" || "$1" == "-h" || "$1" == "-t" || "$1" == "-m" || "$1" == "-u7zip" || "$1" == "-update" || "$1" == "-update_selftest" || "$1" == "-update_sendemail" || "$1" == "-update_smr" || "$1" == "-update_all" || "$1" == "-ignore_lock" || "$1" == "-cleanup" || "$1" == "-scsismart" || "$1" == "-update_smr" || "$1" == "-check_smr"  || "$1" == "-disable_smr" || "$1" == "-enable_smr" || "$1" == "-disable_smr_alarm" || "$1" == "-enable_smr_alarm" || "$1" == "-disable_farm" || "$1" == "-enable_farm" || "$1" == "-tardrivedata"  || "$1" == "-test_sendemail" || "$1" == "-check_for_updates" || "$1" == "-update_render" || "$1" == "-dev" || "$1" == "-debug_sendemail" || "$1" == "-report_only" || "$1" == "-no_test" ]]; then
 	echo '"'$1'" is not a valid option.'
 	echo "Use -h for help and look under OPTIONS."
 	echo " "
